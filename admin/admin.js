@@ -50,7 +50,7 @@ async function createDefaultSettings() {
             logoUrl: 'https://i.ibb.co/N6Bfb1KW/file-00000000e020720cbb1ddc5fc4577270.png',
             bankName: 'بنك الخرطوم (بنكك)',
             bankAccount: '1234567',
-            bankAccountName: 'متجر OUD للعطور',
+            bankAccountName: 'متجر Eleven للعطور',
             lastOrderNumber: 11001000, // تخزين آخر رقم طلب الجديد
             createdAt: window.firebaseModules.serverTimestamp(),
             updatedAt: window.firebaseModules.serverTimestamp()
@@ -842,7 +842,7 @@ async function loadAdminSettings() {
                         </div>
                         <div class="form-group">
                             <label>اسم صاحب الحساب</label>
-                            <input type="text" id="bankAccountName" value="${config.bankAccountName || 'متجر OUD للعطور'}">
+                            <input type="text" id="bankAccountName" value="${config.bankAccountName || 'متجر Eleven للعطور'}">
                         </div>
                     </div>
                 </div>              
