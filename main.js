@@ -983,11 +983,8 @@ function displayProducts(products = allProducts) {
                         <i class="fas fa-box"></i> المخزون: ${formatNumber(product.stock || 0)}
                     </div>
                     <div class="product-actions">
-                        <button class="action-btn add-to-cart" onclick="addToCartWithQuantity('${product.id}', 1)">
-                            <i class="fas fa-cart-plus"></i> أضف للسلة
-                        </button>
-                        <button class="action-btn buy-now" onclick="openQuantityModal('${product.id}')">
-                            <i class="fas fa-bolt"></i> شراء مباشر
+                        <button class="action-btn add-to-cart" onclick="openQuantityModal('${product.id}')">
+                            <i class="fas fa-shopping-bag"></i> شراء
                         </button>
                         <button class="action-btn favorite-btn ${isInFavorites ? 'active' : ''}" onclick="toggleFavorite('${product.id}')">
                             <i class="fas fa-heart"></i>
@@ -1029,11 +1026,8 @@ function displayFeaturedProducts(filteredProducts = null) {
                         <span class="current-price">${formatNumber(product.price)} ${siteCurrency}</span>
                     </div>
                     <div class="product-actions">
-                        <button class="action-btn add-to-cart" onclick="addToCartWithQuantity('${product.id}', 1)">
-                            <i class="fas fa-cart-plus"></i> أضف للسلة
-                        </button>
-                        <button class="action-btn buy-now" onclick="openQuantityModal('${product.id}')">
-                            <i class="fas fa-bolt"></i> شراء مباشر
+                        <button class="action-btn add-to-cart" onclick="openQuantityModal('${product.id}')">
+                            <i class="fas fa-shopping-bag"></i> شراء
                         </button>
                         <button class="action-btn favorite-btn" onclick="toggleFavorite('${product.id}')">
                             <i class="fas fa-heart"></i>
@@ -2088,11 +2082,8 @@ function displayFilteredProducts(products) {
                         ${product.originalPrice ? `<span class="original-price">${formatNumber(product.originalPrice)} ${siteCurrency}</span>` : ''}
                     </div>
                     <div class="product-actions">
-                        <button class="action-btn add-to-cart" onclick="addToCartWithQuantity('${product.id}', 1)">
-                            <i class="fas fa-cart-plus"></i> أضف للسلة
-                        </button>
-                        <button class="action-btn buy-now" onclick="openQuantityModal('${product.id}')">
-                            <i class="fas fa-bolt"></i> شراء مباشر
+                        <button class="action-btn add-to-cart" onclick="openQuantityModal('${product.id}')">
+                            <i class="fas fa-shopping-bag"></i> شراء
                         </button>
                         <button class="action-btn favorite-btn ${isInFavorites ? 'active' : ''}" onclick="toggleFavorite('${product.id}')">
                             <i class="fas fa-heart"></i>

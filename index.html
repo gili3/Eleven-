@@ -54,7 +54,7 @@
     <link href="https://fonts.googleapis.com/css2?family=Cairo:wght@300;400;500;600;700;800&display=swap" rel="stylesheet">
     
     <!-- CSS -->
-    <link rel="stylesheet" href="style.css?v=2">
+    <link rel="stylesheet" href="style.css?v=1">
     <style>
         /* شاشة التحميل الأولية لمنع الوميض */
         #initialLoader {
@@ -974,12 +974,12 @@
                             <i class="fas fa-plus"></i>
                         </button>
                     </div>
-                    <div class="quantity-actions" style="display: flex; gap: 10px; margin-top: 20px;">
-                        <button class="btn-primary" id="buyNowFromModal" style="flex: 1; background: var(--primary-color);">
-                            <i class="fas fa-bolt"></i> شراء مباشر
+                    <div class="quantity-actions" style="display: flex; flex-direction: column; gap: 10px; margin-top: 20px;">
+                        <button class="btn-secondary" id="addToCartFromModal" style="width: 100%; background: var(--secondary-color); color: white; border: none; padding: 15px;">
+                            <i class="fas fa-cart-plus"></i> إضافة للسلة
                         </button>
-                        <button class="btn-secondary" id="addToCartFromModal" style="flex: 1; background: var(--secondary-color); color: white; border: none;">
-                            <i class="fas fa-cart-plus"></i> أضف للسلة
+                        <button class="btn-primary" id="buyNowFromModal" style="width: 100%; background: var(--primary-color); padding: 15px;">
+                            <i class="fas fa-bolt"></i> إكمال الطلب (شراء مباشر)
                         </button>
                     </div>
                 </div>
@@ -1005,7 +1005,7 @@
     <div id="toastContainer"></div>
     
     <!-- JavaScript -->
-    <script src="main.js?v=2"></script>
+    <script src="main.js?v=1"></script>
     
     <button id="backToTop" class="back-to-top" style="position: fixed; bottom: 20px; left: 20px; width: 45px; height: 45px; border-radius: 50%; background: var(--primary-color); color: white; border: none; cursor: pointer; display: none; z-index: 999; box-shadow: 0 4px 10px rgba(0,0,0,0.2); transition: all 0.3s ease; display: flex; align-items: center; justify-content: center;">
         <i class="fas fa-arrow-up"></i>

@@ -808,13 +808,15 @@ body {
 
 .product-actions {
     display: flex;
+    flex-direction: column;
     gap: 10px;
     margin-top: auto;
     padding-top: 15px;
+    align-items: center;
 }
 
 .action-btn {
-    flex: 1;
+    width: 100%;
     padding: 12px;
     border: none;
     border-radius: 8px;
@@ -862,13 +864,17 @@ body {
 }
 
 .favorite-btn {
-    background: var(--light-color);
-    color: var(--dark-color);
-    border: 2px solid var(--border-color);
-    flex: 0 0 auto;
-    width: 44px;
-    height: 44px;
-    border-radius: 8px;
+    background: transparent;
+    color: var(--gray-color);
+    border: none;
+    width: auto;
+    height: auto;
+    padding: 5px;
+    font-size: 20px;
+}
+
+.favorite-btn.active {
+    color: #e74c3c;
 }
 
 .favorite-btn.active {
