@@ -846,7 +846,19 @@ body {
 }
 
 .buy-now {
-    display: none;
+    background: var(--primary-color);
+    color: white;
+    flex: 2;
+}
+
+.buy-now:hover {
+    background: #333333;
+    transform: translateY(-2px);
+}
+
+.buy-now:active {
+    background: var(--button-press-color) !important;
+    transform: scale(0.98) !important;
 }
 
 .favorite-btn {
