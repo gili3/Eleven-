@@ -1648,13 +1648,12 @@ body.menu-open {
 
 .modal-content {
     background: white;
-    border-radius: 24px;
-    max-width: 480px;
-    width: 92%;
+    border-radius: 20px;
+    max-width: 500px;
+    width: 100%;
     max-height: 90vh;
     overflow-y: auto;
-    animation: modalSlideIn 0.5s cubic-bezier(0.175, 0.885, 0.32, 1.275);
-    box-shadow: 0 20px 60px rgba(0,0,0,0.15);
+    animation: modalSlideIn 0.3s ease;
 }
 
 @keyframes modalSlideIn {
@@ -3531,66 +3530,4 @@ button:active,
     .receipt-preview {
         max-width: 200px;
     }
-}
-/* تحسينات الأزرار العصرية - نافذة إتمام الطلب */
-#confirmOrderBtn:hover:not(:disabled) {
-    background: linear-gradient(135deg, #333 0%, #555 100%) !important;
-    transform: translateY(-3px);
-    box-shadow: 0 8px 25px rgba(0,0,0,0.2) !important;
-}
-
-#confirmOrderBtn:active:not(:disabled) {
-    transform: translateY(-1px);
-    box-shadow: 0 4px 10px rgba(0,0,0,0.15) !important;
-}
-
-#confirmOrderBtn:disabled {
-    background: #e0e0e0 !important;
-    color: #999 !important;
-    cursor: not-allowed;
-    box-shadow: none !important;
-    transform: none !important;
-}
-
-#cancelCheckoutBtn:hover {
-    background: #f5f5f5 !important;
-    border-color: #ccc !important;
-    color: #333 !important;
-}
-
-.modal-footer button {
-    transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1) !important;
-}
-
-/* تحسينات PWA والجوال */
-@media (max-width: 768px) {
-    body {
-        -webkit-tap-highlight-color: transparent;
-        user-select: none;
-    }
-    
-    /* منع التمرير الأفقي */
-    html, body {
-        overflow-x: hidden;
-        position: relative;
-    }
-
-    /* تحسين الأزرار للمس */
-    button, .btn, a {
-        min-height: 44px;
-        min-width: 44px;
-    }
-}
-
-/* إخفاء شريط التمرير في WebView */
-::-webkit-scrollbar {
-    display: none;
-}
-
-/* دعم الشاشات ذات النتوء (Notch) */
-body {
-    padding-top: env(safe-area-inset-top);
-    padding-bottom: env(safe-area-inset-bottom);
-    padding-left: env(safe-area-inset-left);
-    padding-right: env(safe-area-inset-right);
 }
