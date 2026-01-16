@@ -4,6 +4,12 @@
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
     <title id="dynamicTitle">Eleven Store</title>
+    <link rel="manifest" href="manifest.json">
+    <meta name="theme-color" content="#c9a24d">
+    <meta name="apple-mobile-web-app-capable" content="yes">
+    <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+    <meta name="apple-mobile-web-app-title" content="Eleven Store">
+    <link rel="apple-touch-icon" href="https://cdn-icons-png.flaticon.com/512/3081/3081840.png">
     
     <!-- Firebase Modular SDK -->
     <script type="module">
@@ -43,8 +49,16 @@
             uploadBytesResumable
         };
         console.log("✅ Firebase Modules Loaded and Assigned to window.firebaseModules");
-        // إطلاق حدث مخصص لإعلام main.js بأن Firebase جاهز
         window.dispatchEvent(new CustomEvent('firebase-ready'));
+    </script>
+    <script>
+        if ('serviceWorker' in navigator) {
+            window.addEventListener('load', () => {
+                navigator.serviceWorker.register('sw.js')
+                    .then(reg => console.log('Service Worker registered'))
+                    .catch(err => console.log('Service Worker registration failed', err));
+            });
+        }
     </script>
     
     <!-- Font Awesome -->
@@ -54,7 +68,7 @@
     <link href="https://fonts.googleapis.com/css2?family=Cairo:wght@300;400;500;600;700;800&display=swap" rel="stylesheet">
     
     <!-- CSS -->
-    <link rel="stylesheet" href="style.css?v=3">
+    <link rel="stylesheet" href="style.min.css">
     <style>
         /* شاشة التحميل الأولية لمنع الوميض */
         #initialLoader {
@@ -248,6 +262,33 @@
             background: var(--secondary-color);
             color: white;
             border-color: var(--secondary-color);
+        }
+        
+        /* شريط تقدم الرفع */
+        .upload-progress {
+            display: none;
+            margin-top: 15px;
+        }
+        
+        .progress-bar {
+            height: 6px;
+            background: #eee;
+            border-radius: 3px;
+            overflow: hidden;
+        }
+        
+        .progress-fill {
+            height: 100%;
+            background: var(--secondary-color);
+            width: 0%;
+            transition: width 0.3s;
+        }
+        
+        .progress-text {
+            text-align: center;
+            margin-top: 5px;
+            font-size: 12px;
+            color: var(--gray-color);
         }
         
         /* رسالة النجاح */
@@ -482,32 +523,36 @@
                 
                 <!-- الشعار -->
                 <div class="logo">
-                    <img id="siteLogo" src="https://i.ibb.co/N6Bfb1KW/file-00000000e020720cbb1ddc5fc4577270.png" alt="Eleven">
+                    <img id="siteLogo" src="https://i.ibb.co/N6Bfb1KW/file-00000000e020720cbb1ddc5fc4577270.png" alt="Eleven" loading="lazy">
                     <h1 id="siteStoreName">Eleven</h1>
                 </div>
                 
-              <!-- أيقونات التنقل -->
-<div class="nav-icons">
-    <!-- شريط البحث -->
-    <div class="search-container">
-        <input type="text" id="searchInput" placeholder="ابحث عن منتج...">
-        <button id="searchBtn"><i class="fas fa-search"></i></button>
-    </div>
-    
-    <!-- السلة -->
-    <button class="nav-icon cart-icon" id="cartBtn" title="سلة التسوق">
-        <i class="fas fa-shopping-cart"></i>
-        <span class="cart-count">0</span>
-    </button>
-</div>
+                <!-- أيقونات التنقل -->
+                <div class="nav-icons">
+                    <!-- شريط البحث -->
+                    <div class="search-container">
+                        <input type="text" id="searchInput" placeholder="ابحث عن منتج...">
+                        <button id="searchBtn"><i class="fas fa-search"></i></button>
+                    </div>
+                    
+                    <!-- الوضع الليلي -->
+                    
+                    
+                    <!-- السلة -->
+                    <button class="nav-icon cart-icon" id="cartBtn" title="سلة التسوق">
+                        <i class="fas fa-shopping-cart"></i>
+                        <span class="cart-count">0</span>
+                    </button>
+                </div>
             </div>
         </header>
 
         <!-- القائمة الجانبية -->
+        <div class="nav-overlay" id="navOverlay"></div>
         <nav class="mobile-nav" id="mobileNav">
             <div class="mobile-nav-header">
                 <div class="user-info">
-                    <img id="mobileUserImage" src="https://i.ibb.co/nNx4v1x5/images-1.png" alt="صورة المستخدم">
+                    <img id="mobileUserImage" src="https://i.ibb.co/nNx4v1x5/images-1.png" alt="صورة المستخدم" loading="lazy">
                     <div>
                         <h3 id="mobileUserName">زائر</h3>
                         <p id="mobileUserEmail">ليس لديك حساب</p>
@@ -528,13 +573,12 @@
                 <li id="adminMobileLink" style="display: none;">
                     <a href="#" data-section="admin"><i class="fas fa-cog"></i> لوحة التحكم</a>
                 </li>
+                <li class="logout-item">
+                    <a href="#" id="mobileLogoutBtn" class="logout-link">
+                        <i class="fas fa-sign-out-alt"></i> تسجيل الخروج
+                    </a>
+                </li>
             </ul>
-            
-            <div class="mobile-nav-footer">
-                <button id="mobileLogoutBtn" class="logout-btn">
-                    <i class="fas fa-sign-out-alt"></i> تسجيل الخروج
-                </button>
-            </div>
         </nav>
 
         <!-- المحتوى الرئيسي -->
@@ -635,10 +679,10 @@
                     
                     <div class="cart-summary">
                         <div class="coupon-section">
-                            <label for="couponCode">كود الخصم:</label>
+                            <label for="couponInput">كود الخصم:</label>
                             <div class="coupon-input-container">
-                                <input type="text" id="couponCode" placeholder="أدخل الكود هنا">
-                                <button id="applyCouponBtn" class="btn-secondary">تطبيق</button>
+                                <input type="text" id="couponInput" placeholder="أدخل الكود هنا">
+                                <button id="applyCouponBtn" onclick="applyCoupon()" class="btn-secondary">تطبيق</button>
                             </div>
                             <div id="appliedCouponInfo"></div>
                         </div>
@@ -646,13 +690,17 @@
                             <span>إجمالي المنتجات:</span>
                             <span id="cartSubtotal">0 SDG</span>
                         </div>
+                        <div class="summary-item" id="discountRow" style="display: none; color: var(--success-color);">
+                            <span>الخصم:</span>
+                            <span id="discountAmount">0 SDG</span>
+                        </div>
                         <div class="summary-item">
                             <span>رسوم الشحن:</span>
-                            <span id="shippingCost">0 SDG</span>
+                            <span id="cartShipping">0 SDG</span>
                         </div>
                         <div class="summary-item total">
                             <span>المجموع الكلي:</span>
-                            <span id="totalAmount">0 SDG</span>
+                            <span id="cartTotal">0 SDG</span>
                         </div>
                         
                         <div class="shipping-note" id="shippingNote">
@@ -919,18 +967,32 @@
                     </div>
                 </div>
                 
-                <div class="receipt-upload-container">
-                    <label for="receiptInput" class="upload-label">
-                        <i class="fas fa-camera"></i>
-                        <span>اضغط لرفع صورة الإيصال</span>
-                        <small style="display: block; margin-top: 5px; color: #666;">يدعم جميع أنواع الصور (JPG, PNG, WebP)</small>
+                <div class="receipt-upload-container" style="background: #f9f9f9; padding: 20px; border-radius: 15px; border: 2px dashed #ddd; text-align: center; transition: all 0.3s ease;">
+                    <label for="receiptInput" class="upload-label" style="cursor: pointer; display: block;">
+                        <div id="uploadPlaceholder">
+                            <i class="fas fa-cloud-upload-alt" style="font-size: 40px; color: var(--secondary-color); margin-bottom: 10px;"></i>
+                            <h4 style="margin-bottom: 5px;">ارفع صورة إيصال التحويل</h4>
+                            <p style="font-size: 13px; color: #777;">اضغط هنا لاختيار الصورة من جهازك</p>
+                        </div>
                         <input type="file" id="receiptInput" accept="image/*" style="display: none;" onchange="previewReceipt(this)" required>
                     </label>
-                    <div id="receiptPreviewContainer" style="display: none; margin-top: 15px; position: relative;">
-                        <img id="receiptPreviewImg" src="" alt="إيصال" style="width: 100%; max-width: 300px; border-radius: 10px; border: 1px solid #ddd; display: block; margin: 0 auto;">
-                        <button id="removeReceiptBtn" style="position: absolute; top: 10px; right: 10px; background: rgba(231, 76, 60, 0.8); color: white; border: none; border-radius: 50%; width: 30px; height: 30px; cursor: pointer; display: flex; align-items: center; justify-content: center;" onclick="removeReceiptPreview()">
-                            <i class="fas fa-times"></i>
-                        </button>
+                    
+                    <!-- شريط تقدم الرفع -->
+                    <div class="upload-progress" id="uploadProgress" style="display: none; margin-top: 15px;">
+                        <div class="progress-bar" style="height: 8px; background: #eee; border-radius: 4px; overflow: hidden;">
+                            <div class="progress-fill" id="progressFill" style="height: 100%; background: var(--secondary-color); width: 0%; transition: width 0.3s;"></div>
+                        </div>
+                        <div class="progress-text" id="progressText" style="font-size: 12px; margin-top: 5px; color: #666;">0%</div>
+                    </div>
+                    
+                    <div id="receiptPreviewContainer" style="display: none; margin-top: 10px; position: relative; animation: fadeIn 0.3s ease;">
+                        <div style="position: relative; display: inline-block;">
+                            <img id="receiptPreviewImg" src="" alt="إيصال" style="width: 100%; max-width: 250px; border-radius: 12px; box-shadow: 0 5px 15px rgba(0,0,0,0.1); border: 3px solid white;">
+                            <button id="removeReceiptBtn" style="position: absolute; -top: 10px; -right: 10px; top: -10px; right: -10px; background: #ff4757; color: white; border: none; border-radius: 50%; width: 32px; height: 32px; cursor: pointer; display: flex; align-items: center; justify-content: center; box-shadow: 0 2px 5px rgba(0,0,0,0.2); z-index: 10;" onclick="removeReceiptPreview()">
+                                <i class="fas fa-times"></i>
+                            </button>
+                        </div>
+                        <p style="font-size: 12px; color: #27ae60; margin-top: 8px;"><i class="fas fa-check-circle"></i> تم اختيار الصورة بنجاح</p>
                     </div>
                 </div>
 
@@ -949,9 +1011,13 @@
                     <textarea id="orderNotes" placeholder="أي ملاحظات تود إضافتها للطلب..."></textarea>
                 </div>
             </div>
-            <div class="modal-footer">
-                <button class="btn-secondary" id="cancelCheckoutBtn">إلغاء</button>
-                <button class="btn-primary" id="confirmOrderBtn" disabled><i class="fas fa-credit-card"></i> تأكيد الطلب وإرسال</button>
+            <div class="modal-footer" style="display: flex; gap: 12px; padding: 20px; background: #fff; border-top: 1px solid #eee; border-radius: 0 0 20px 20px;">
+                <button class="btn-secondary" id="cancelCheckoutBtn" style="flex: 1; padding: 14px; border-radius: 12px; font-weight: 600; border: 1px solid #ddd; background: #fff; color: #555; transition: all 0.3s ease; display: flex; align-items: center; justify-content: center; gap: 8px;">
+                    <i class="fas fa-times"></i> إلغاء
+                </button>
+                <button class="btn-primary" id="confirmOrderBtn" disabled style="flex: 2; padding: 14px; border-radius: 12px; font-weight: 700; border: none; background: linear-gradient(135deg, #1c1c1c 0%, #444 100%); color: #fff; transition: all 0.3s ease; display: flex; align-items: center; justify-content: center; gap: 10px; box-shadow: 0 4px 15px rgba(0,0,0,0.15); cursor: pointer;">
+                    <i class="fas fa-paper-plane"></i> تأكيد وإرسال الطلب
+                </button>
             </div>
         </div>
     </div>
@@ -1005,7 +1071,7 @@
     <div id="toastContainer"></div>
     
     <!-- JavaScript -->
-    <script src="main.js?v=3"></script>
+    <script src="main.min.js"></script>
     
     <button id="backToTop" class="back-to-top" style="position: fixed; bottom: 20px; left: 20px; width: 45px; height: 45px; border-radius: 50%; background: var(--primary-color); color: white; border: none; cursor: pointer; display: none; z-index: 999; box-shadow: 0 4px 10px rgba(0,0,0,0.2); transition: all 0.3s ease; display: flex; align-items: center; justify-content: center;">
         <i class="fas fa-arrow-up"></i>
