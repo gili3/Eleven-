@@ -2,23 +2,23 @@
   "name": "Eleven Store",
   "short_name": "Eleven",
   "description": "Eleven Store - Modern Shopping Experience",
-  "start_url": "https://eleven-sd.com",
+  "start_url": "/index.html",
   "display": "standalone",
   "background_color": "#ffffff",
   "theme_color": "#c9a24d",
   "orientation": "portrait",
   "icons": [
     {
-      "src": "https://eleven-sd.com/icons/icon-192.png",
+      "src": "https://cdn-icons-png.flaticon.com/512/3081/3081840.png",
       "sizes": "192x192",
       "type": "image/png",
-      "purpose": "any"
+      "purpose": "any maskable"
     },
     {
-      "src": "https://eleven-sd.com/icons/icon-512.png",
+      "src": "https://cdn-icons-png.flaticon.com/512/3081/3081840.png",
       "sizes": "512x512",
       "type": "image/png",
-      "purpose": "any"
+      "purpose": "any maskable"
     }
   ]
 }

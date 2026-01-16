@@ -1382,6 +1382,7 @@ function previewReceipt(input) {
 // ======================== دالة رفع الصورة المحسنة ========================
 
 async function uploadReceiptImage(file) {
+    console.log('🚀 بدء عملية الرفع للملف:', file.name, 'الحجم:', file.size, 'النوع:', file.type);
     try {
         if (!file) {
             throw new Error('لم يتم اختيار ملف');
@@ -1425,25 +1426,51 @@ async function uploadReceiptImage(file) {
             uploadProgress.style.display = 'block';
         }
         
-        // رفع الملف
-        const uploadTask = window.firebaseModules.uploadBytesResumable(storageRef, file);
+        // رفع الملف مع إعدادات Metadata لتحسين التوافق
+        const metadata = {
+            contentType: file.type,
+            customMetadata: {
+                'originalName': file.name,
+                'uploadedFrom': 'MobileApp'
+            }
+        };
+
+        // تحويل الملف إلى Blob لضمان التوافق مع متصفحات الهاتف
+        const blob = new Blob([file], { type: file.type });
+        console.log('📦 تم تحويل الملف إلى Blob بنجاح');
+
+        const uploadTask = window.firebaseModules.uploadBytesResumable(storageRef, blob, metadata);
         
-        // تحسين مراقبة الرفع لضمان الاستقرار
         return new Promise((resolve, reject) => {
+            const timeout = setTimeout(() => {
+                uploadTask.cancel();
+                reject(new Error('انتهت مهلة الرفع (60 ثانية). يرجى التأكد من جودة الإنترنت.'));
+            }, 60000);
+
             uploadTask.on('state_changed',
                 (snapshot) => {
                     const progress = (snapshot.bytesTransferred / snapshot.totalBytes) * 100;
+                    console.log('📊 تقدم الرفع:', Math.round(progress) + '%');
                     if (progressFill) progressFill.style.width = progress + '%';
                     if (progressText) progressText.textContent = Math.round(progress) + '%';
                 },
                 (error) => {
-                    console.error('❌ Upload error:', error);
+                    clearTimeout(timeout);
+                    console.error('❌ خطأ Firebase Storage:', error.code, error.message);
+                    
+                    let msg = 'فشل الرفع: ';
+                    if (error.code === 'storage/unauthorized') msg += 'غير مسموح بالرفع (تحقق من قواعد الأمان)';
+                    else if (error.code === 'storage/retry-limit-exceeded') msg += 'فشل الاتصال المتكرر';
+                    else msg += error.message;
+                    
+                    alert(msg); // استخدام alert لضمان رؤية الخطأ على الهاتف
                     reject(error);
                 },
                 async () => {
+                    clearTimeout(timeout);
                     try {
                         const downloadURL = await window.firebaseModules.getDownloadURL(uploadTask.snapshot.ref);
-                        console.log('✅ تم الرفع بنجاح:', downloadURL);
+                        console.log('✅ رابط التحميل:', downloadURL);
                         resolve({
                             url: downloadURL,
                             name: fileName,
@@ -1452,6 +1479,7 @@ async function uploadReceiptImage(file) {
                             uploadedAt: new Date().toISOString()
                         });
                     } catch (e) {
+                        console.error('❌ خطأ في الحصول على الرابط:', e);
                         reject(e);
                     }
                 }
