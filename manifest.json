@@ -2,7 +2,7 @@
   "name": "Eleven Store",
   "short_name": "Eleven",
   "description": "Eleven Store - Modern Shopping Experience",
-  "start_url": "/index.html",
+  "start_url": "https://eleven-sd.com",
   "display": "standalone",
   "background_color": "#ffffff",
   "theme_color": "#c9a24d",
