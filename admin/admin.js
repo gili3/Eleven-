@@ -698,20 +698,73 @@ async function updateOrderStatus(orderId, newStatus) {
         const orderData = orderDoc.data();
         const oldStatus = orderData.status;
 
+        if (oldStatus === newStatus) return;
+
         await window.firebaseModules.updateDoc(orderRef, {
             status: newStatus,
             updatedAt: window.firebaseModules.serverTimestamp()
         });
+
+        // --- منطق إدارة المخزون المطور ---
+        const confirmedStatuses = ['paid', 'processing', 'shipped', 'delivered'];
+        const isNowConfirmed = confirmedStatuses.includes(newStatus);
+        const wasConfirmed = confirmedStatuses.includes(oldStatus);
+
+        // 1. الخصم من المخزون عند التحول من حالة غير مؤكدة إلى حالة مؤكدة
+        if (isNowConfirmed && !wasConfirmed) {
+            console.log("📉 جاري خصم المنتجات من المخزون...");
+            if (orderData.items && Array.isArray(orderData.items)) {
+                for (const item of orderData.items) {
+                    try {
+                        const productId = item.id || item.productId;
+                        if (!productId) continue;
+                        
+                        const productRef = window.firebaseModules.doc(adminDb, "products", productId);
+                        const qty = parseInt(item.quantity) || 1;
+                        
+                        await window.firebaseModules.updateDoc(productRef, {
+                            stock: window.firebaseModules.increment(-qty),
+                            updatedAt: window.firebaseModules.serverTimestamp()
+                        });
+                        console.log(`✅ تم خصم ${qty} من المنتج ${productId}`);
+                    } catch (e) {
+                        console.error(`❌ خطأ في خصم المخزون للمنتج ${item.id}:`, e);
+                    }
+                }
+            }
+        }
+
+        // 2. إعادة المنتجات للمخزون عند الإلغاء من حالة كانت مؤكدة
+        if (newStatus === 'cancelled' && wasConfirmed) {
+            console.log("📈 جاري إعادة المنتجات للمخزون...");
+            if (orderData.items && Array.isArray(orderData.items)) {
+                for (const item of orderData.items) {
+                    try {
+                        const productId = item.id || item.productId;
+                        if (!productId) continue;
+
+                        const productRef = window.firebaseModules.doc(adminDb, "products", productId);
+                        const qty = parseInt(item.quantity) || 1;
+
+                        await window.firebaseModules.updateDoc(productRef, {
+                            stock: window.firebaseModules.increment(qty),
+                            updatedAt: window.firebaseModules.serverTimestamp()
+                        });
+                        console.log(`✅ تم إعادة ${qty} للمنتج ${productId}`);
+                    } catch (e) {
+                        console.error(`❌ خطأ في إعادة المخزون للمنتج ${item.id}:`, e);
+                    }
+                }
+            }
+        }
 
         // إرسال إشعار تغيير الحالة للعميل
         if (orderData.userId && orderData.userId !== 'guest') {
             await sendOrderStatusNotification(orderData, newStatus);
         }
 
-        // إذا تم تغيير الحالة إلى "مدفوع" (تأكيد الطلب) ولم يكن مؤكداً من قبل
-        const confirmedStatuses = ['paid', 'processing', 'shipped', 'delivered'];
-        if (confirmedStatuses.includes(newStatus) && !confirmedStatuses.includes(oldStatus)) {
-            // تحديث إحصائيات المستخدم
+        // تحديث إحصائيات المستخدم
+        if (isNowConfirmed && !wasConfirmed) {
             if (orderData.userId && orderData.userId !== 'guest') {
                 try {
                     const userRef = window.firebaseModules.doc(adminDb, "users", orderData.userId);
@@ -729,7 +782,7 @@ async function updateOrderStatus(orderId, newStatus) {
         showToast('تم تحديث حالة الطلب بنجاح', 'success');
         
         loadAdminOrders();
-        loadAdminStats(); // تحديث الإحصائيات في لوحة التحكم
+        loadAdminStats(); 
     } catch (error) {
         console.error('❌ خطأ في تحديث حالة الطلب:', error);
         showToast('حدث خطأ أثناء تحديث الحالة', 'error');
