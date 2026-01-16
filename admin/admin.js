@@ -705,55 +705,40 @@ async function updateOrderStatus(orderId, newStatus) {
             updatedAt: window.firebaseModules.serverTimestamp()
         });
 
-        // --- منطق إدارة المخزون المطور ---
+        // --- منطق إدارة المخزون ---
+        
+        // 1. الخصم من المخزون عند التحول إلى "تم الدفع" (أو أي حالة مؤكدة) من حالة غير مؤكدة
         const confirmedStatuses = ['paid', 'processing', 'shipped', 'delivered'];
         const isNowConfirmed = confirmedStatuses.includes(newStatus);
         const wasConfirmed = confirmedStatuses.includes(oldStatus);
 
-        // 1. الخصم من المخزون عند التحول من حالة غير مؤكدة إلى حالة مؤكدة
         if (isNowConfirmed && !wasConfirmed) {
-            console.log("📉 جاري خصم المنتجات من المخزون...");
-            if (orderData.items && Array.isArray(orderData.items)) {
-                for (const item of orderData.items) {
-                    try {
-                        const productId = item.id || item.productId;
-                        if (!productId) continue;
-                        
-                        const productRef = window.firebaseModules.doc(adminDb, "products", productId);
-                        const qty = parseInt(item.quantity) || 1;
-                        
-                        await window.firebaseModules.updateDoc(productRef, {
-                            stock: window.firebaseModules.increment(-qty),
-                            updatedAt: window.firebaseModules.serverTimestamp()
-                        });
-                        console.log(`✅ تم خصم ${qty} من المنتج ${productId}`);
-                    } catch (e) {
-                        console.error(`❌ خطأ في خصم المخزون للمنتج ${item.id}:`, e);
-                    }
+            console.log("📉 خصم المنتجات من المخزون...");
+            for (const item of orderData.items) {
+                try {
+                    const productRef = window.firebaseModules.doc(adminDb, "products", item.id);
+                    await window.firebaseModules.updateDoc(productRef, {
+                        stock: window.firebaseModules.increment(-item.quantity),
+                        updatedAt: window.firebaseModules.serverTimestamp()
+                    });
+                } catch (e) {
+                    console.error(`Error updating stock for product ${item.id}:`, e);
                 }
             }
         }
 
         // 2. إعادة المنتجات للمخزون عند الإلغاء من حالة كانت مؤكدة
         if (newStatus === 'cancelled' && wasConfirmed) {
-            console.log("📈 جاري إعادة المنتجات للمخزون...");
-            if (orderData.items && Array.isArray(orderData.items)) {
-                for (const item of orderData.items) {
-                    try {
-                        const productId = item.id || item.productId;
-                        if (!productId) continue;
-
-                        const productRef = window.firebaseModules.doc(adminDb, "products", productId);
-                        const qty = parseInt(item.quantity) || 1;
-
-                        await window.firebaseModules.updateDoc(productRef, {
-                            stock: window.firebaseModules.increment(qty),
-                            updatedAt: window.firebaseModules.serverTimestamp()
-                        });
-                        console.log(`✅ تم إعادة ${qty} للمنتج ${productId}`);
-                    } catch (e) {
-                        console.error(`❌ خطأ في إعادة المخزون للمنتج ${item.id}:`, e);
-                    }
+            console.log("📈 إعادة المنتجات للمخزون...");
+            for (const item of orderData.items) {
+                try {
+                    const productRef = window.firebaseModules.doc(adminDb, "products", item.id);
+                    await window.firebaseModules.updateDoc(productRef, {
+                        stock: window.firebaseModules.increment(item.quantity),
+                        updatedAt: window.firebaseModules.serverTimestamp()
+                    });
+                } catch (e) {
+                    console.error(`Error returning stock for product ${item.id}:`, e);
                 }
             }
         }
