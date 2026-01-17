@@ -1436,10 +1436,10 @@ async function uploadReceiptImage(file) {
         };
 
         // تحويل الملف إلى Blob لضمان التوافق مع متصفحات الهاتف
-        const blob = new Blob([file], { type: file.type });
+        
         console.log('📦 تم تحويل الملف إلى Blob بنجاح');
 
-        const uploadTask = window.firebaseModules.uploadBytesResumable(storageRef, blob, metadata);
+        const uploadTask = window.firebaseModules.uploadBytesResumable(storageRef, file, metadata);
         
         return new Promise((resolve, reject) => {
             const timeout = setTimeout(() => {
