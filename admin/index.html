@@ -9,7 +9,7 @@
     <script type="module">
         import { initializeApp } from "https://www.gstatic.com/firebasejs/10.7.1/firebase-app.js";
         import { getFirestore, doc, collection, getDoc, getDocs, setDoc, updateDoc, deleteDoc, query, where, orderBy, onSnapshot, serverTimestamp, addDoc, increment } from "https://www.gstatic.com/firebasejs/10.7.1/firebase-firestore.js";
-        import { getStorage } from "https://www.gstatic.com/firebasejs/10.7.1/firebase-storage.js";
+        import { getStorage, ref, uploadBytes, getDownloadURL, uploadBytesResumable } from "https://www.gstatic.com/firebasejs/10.7.1/firebase-storage.js";
 
         window.firebaseModules = {
             initializeApp,
@@ -28,12 +28,18 @@
             onSnapshot,
             serverTimestamp,
             increment,
-            getStorage
+            getStorage,
+            ref,
+            uploadBytes,
+            getDownloadURL,
+            uploadBytesResumable
         };
+        console.log("✅ Firebase Modules Loaded in Admin");
     </script>
     
     <!-- Font Awesome -->
     <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
+    <link rel="stylesheet" href="../image-upload-fix.css">
     
     <!-- Google Fonts -->
     <link href="https://fonts.googleapis.com/css2?family=Cairo:wght@300;400;500;600;700;800&display=swap" rel="stylesheet">
@@ -1689,8 +1695,34 @@
                 </div>
                 
                 <div class="form-group">
-                    <label for="productImage">رابط صورة المنتج *</label>
-                    <input type="text" id="productImage" placeholder="https://example.com/image.jpg" required>
+                    <label for="productImage">صورة المنتج *</label>
+                    <div class="image-upload-wrapper">
+                        <div class="image-upload-container" id="productImageUploadContainer" onclick="document.getElementById('productImageFile').click()">
+                            <div class="upload-placeholder" id="productImagePlaceholder">
+                                <i class="fas fa-image"></i>
+                                <span>ارفع صورة المنتج</span>
+                                <p>اضغط هنا لاختيار الصورة</p>
+                            </div>
+                            <div class="image-preview-container" id="productImagePreviewContainer">
+                                <img id="productImagePreview" src="" alt="معاينة">
+                                <button type="button" class="remove-image-btn" onclick="event.stopPropagation(); removeProductImagePreview()">
+                                    <i class="fas fa-times"></i>
+                                </button>
+                            </div>
+                            <input type="file" id="productImageFile" accept="image/*" style="display: none;" onchange="handleProductImageUpload(this)">
+                        </div>
+                        
+                        <div class="upload-progress-container" id="productUploadProgressContainer">
+                            <div class="progress-info">
+                                <span id="productUploadStatus">جاري الرفع...</span>
+                                <span id="productProgressText">0%</span>
+                            </div>
+                            <div class="progress-bar-wrapper">
+                                <div class="progress-bar-fill" id="productProgressFill"></div>
+                            </div>
+                        </div>
+                        <input type="hidden" id="productImage" required>
+                    </div>
                 </div>
                 
                 <div class="form-checkboxes">
@@ -1742,6 +1774,6 @@
         </div>
     </div>
 
-    <script src="admin.min.js"></script>
+    <script src="admin.js?v=8"></script>
 </body>
 </html>
