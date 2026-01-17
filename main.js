@@ -1319,10 +1319,7 @@ function clearCart() {
 
 // ======================== دالة معاينة الإيصال المحسنة ========================
 
-// متغير عالمي لتخزين بيانات الإيصال المرفوع
-let uploadedReceiptData = null;
-
-async function previewReceipt(input) {
+function previewReceipt(input) {
     const preview = document.getElementById('receiptPreviewContainer');
     const previewImg = document.getElementById('receiptPreviewImg');
     const confirmBtn = document.getElementById('confirmOrderBtn');
@@ -1352,53 +1349,32 @@ async function previewReceipt(input) {
             return;
         }
         
-        // 1. عرض المعاينة المحلية فوراً
         const reader = new FileReader();
+        
         reader.onload = function(e) {
             previewImg.src = e.target.result;
             preview.style.display = 'block';
             if (uploadPlaceholder) uploadPlaceholder.style.display = 'none';
             if (container) {
                 container.style.borderStyle = 'solid';
-                container.style.borderColor = '#3498db';
-                container.style.background = '#f0f7ff';
-            }
-        };
-        reader.readAsDataURL(file);
-
-        // 2. البدء في الرفع التلقائي إلى Firebase
-        try {
-            if (confirmBtn) {
-                confirmBtn.disabled = true;
-                confirmBtn.innerHTML = '<i class="fas fa-spinner fa-spin"></i> جاري رفع الإيصال...';
+                container.style.borderColor = '#27ae60';
+                container.style.background = '#f0fff4';
             }
             
-            uploadedReceiptData = await uploadReceiptImage(file);
-            
-            if (uploadedReceiptData) {
-                showToast('تم رفع الإيصال بنجاح', 'success');
-                if (container) {
-                    container.style.borderColor = '#27ae60';
-                    container.style.background = '#f0fff4';
-                }
-                if (confirmBtn) {
-                    confirmBtn.disabled = false;
-                    confirmBtn.style.opacity = '1';
-                    confirmBtn.innerHTML = '<i class="fas fa-paper-plane"></i> إرسال الطلب الآن';
-                }
-            }
-        } catch (uploadError) {
-            console.error('خطأ في الرفع التلقائي:', uploadError);
-            showToast('فشل الرفع التلقائي. سيتم المحاولة مرة أخرى عند إرسال الطلب', 'warning');
             if (confirmBtn) {
                 confirmBtn.disabled = false;
+                confirmBtn.style.opacity = '1';
                 confirmBtn.innerHTML = '<i class="fas fa-paper-plane"></i> إرسال الطلب الآن';
             }
-        }
+            
+            if (uploadProgress) uploadProgress.style.display = 'none';
+        };
+        
+        reader.readAsDataURL(file);
         
     } catch (error) {
-        console.error('خطأ في معالجة الصورة:', error);
-        showToast('حدث خطأ في معالجة الصورة', 'error');
+        console.error('خطأ في معاينة الصورة:', error);
+        showToast('حدث خطأ في معاينة الصورة', 'error');
         input.value = '';
     }
 }
@@ -1431,28 +1407,11 @@ async function uploadReceiptImage(file) {
         
         // التأكد من تهيئة Storage
         if (!firebaseStorage) {
-            try {
-                // محاولة استخدام الدالة المتاحة
-                const firebase = typeof initializeFirebase === 'function' ? initializeFirebase() : initializeFirebaseApp();
-                if (!firebase || !firebase.storage) {
-                    throw new Error('تعذر الاتصال بخدمة التخزين');
-                }
-                firebaseStorage = firebase.storage;
-            } catch (e) {
-                console.error('خطأ في تهيئة Firebase داخل الرفع:', e);
-                // محاولة الحصول على الموديول مباشرة من window إذا فشلت الدالة
-                if (window.firebaseModules && window.firebaseModules.getStorage) {
-                    try {
-                        const app = window.firebaseModules.initializeApp(firebaseConfig, 'UploadRetryApp');
-                        firebaseStorage = window.firebaseModules.getStorage(app);
-                    } catch (initErr) {
-                        console.error('فشل محاولة التهيئة الاحتياطية:', initErr);
-                        throw new Error('خدمة Firebase Storage غير متوفرة');
-                    }
-                } else {
-                    throw new Error('خدمة Firebase Storage غير متوفرة');
-                }
+            const firebase = initializeFirebase();
+            if (!firebase || !firebase.storage) {
+                throw new Error('تعذر الاتصال بخدمة التخزين');
             }
+            firebaseStorage = firebase.storage;
         }
 
         // إنشاء المرجع
@@ -1575,7 +1534,6 @@ function removeReceiptPreview() {
         confirmBtn.disabled = true;
         confirmBtn.innerHTML = '<i class="fas fa-credit-card"></i> تأكيد الطلب وإرسال';
     }
-    uploadedReceiptData = null;
 }
 
 // ======================== دالة التحقق قبل الطلب ========================
@@ -1649,16 +1607,14 @@ async function confirmOrder() {
             }
         }
         
-    // 2. استخدام الإيصال المرفوع مسبقاً أو رفعه الآن إذا لم يكتمل
-    let receiptData = uploadedReceiptData;
-    if (!receiptData) {
+        // 2. رفع صورة الإيصال باستخدام الدالة المحسنة
+        let receiptData = null;
         if (receiptFile) {
             showToast('جاري رفع صورة الإيصال...', 'info');
             receiptData = await uploadReceiptImage(receiptFile);
         } else {
             throw new Error('لم يتم رفع صورة الإيصال');
         }
-    }
         
         // 3. حساب المبلغ الإجمالي
         const itemsToOrder = directPurchaseItem ? [directPurchaseItem] : cartItems;
