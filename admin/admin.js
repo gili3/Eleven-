@@ -278,6 +278,17 @@ function removeProductImagePreview() {
 async function handleProductImageUpload(input) {
     if (input.files && input.files[0]) {
         const file = input.files[0];
+        
+        // التحقق من الملف قبل الرفع
+        if (!file.type.startsWith("image/")) {
+            alert("الملف ليس صورة");
+            return;
+        }
+        if (file.size > 5 * 1024 * 1024) {
+            alert("الصورة كبيرة جداً (الحد الأقصى 5 ميجابايت)");
+            return;
+        }
+
         const preview = document.getElementById('productImagePreview');
         const previewContainer = document.getElementById('productImagePreviewContainer');
         const progressContainer = document.getElementById('productUploadProgressContainer');
@@ -286,12 +297,14 @@ async function handleProductImageUpload(input) {
         const statusText = document.getElementById('productUploadStatus');
         const saveBtn = document.getElementById('saveProductBtn');
         
-        previewContainer.style.display = 'block';
-        preview.src = URL.createObjectURL(file);
-        document.getElementById('productImagePlaceholder').style.display = 'none';
-        document.getElementById('productImageUploadContainer').classList.add('has-image');
-        progressContainer.style.display = 'block';
-        statusText.textContent = 'جاري الرفع...';
+        if (previewContainer) previewContainer.style.display = 'block';
+        if (preview) preview.src = URL.createObjectURL(file);
+        const placeholder = document.getElementById('productImagePlaceholder');
+        if (placeholder) placeholder.style.display = 'none';
+        const uploadContainer = document.getElementById('productImageUploadContainer');
+        if (uploadContainer) uploadContainer.classList.add('has-image');
+        if (progressContainer) progressContainer.style.display = 'block';
+        if (statusText) statusText.textContent = 'جاري الرفع...';
         
         isUploading = true;
         if (saveBtn) saveBtn.disabled = true;
@@ -301,41 +314,36 @@ async function handleProductImageUpload(input) {
             const path = `products/${timestamp}_${file.name.replace(/[^a-zA-Z0-9.]/g, '_')}`;
             const storageRef = window.firebaseModules.ref(adminStorage, path);
             
+            // Metadata إلزامي لمتصفح Chrome لضمان استقرار الرفع
             const metadata = {
-                contentType: file.type || 'image/jpeg',
-                customMetadata: {
-                    'originalName': file.name || 'product.jpg',
-                    'uploadedFrom': 'AdminPanel'
-                }
+                contentType: file.type,
+                cacheControl: "public,max-age=31536000"
             };
             
-            const blob = file instanceof Blob ? file : new Blob([file], { type: file.type || 'image/jpeg' });
-            const uploadTask = window.firebaseModules.uploadBytesResumable(storageRef, blob, metadata);
+            console.log('🚀 بدء الرفع المباشر لمتصفح Chrome:', file.name, file.type);
             
-            uploadTask.on('state_changed', 
-                (snapshot) => {
-                    const progress = (snapshot.bytesTransferred / snapshot.totalBytes) * 100;
-                    if (progressFill) progressFill.style.width = progress + '%';
-                    if (progressText) progressText.textContent = Math.round(progress) + '%';
-                }, 
-                (error) => {
-                    showToast('فشل الرفع: ' + error.message, 'error');
-                    isUploading = false;
-                    if (saveBtn) saveBtn.disabled = false;
-                }, 
-                async () => {
-                    const downloadURL = await window.firebaseModules.getDownloadURL(uploadTask.snapshot.ref);
-                    document.getElementById('productImage').value = downloadURL;
-                    statusText.textContent = '✅ تم الرفع بنجاح';
-                    showToast('تم رفع الصورة بنجاح', 'success');
-                    isUploading = false;
-                    if (saveBtn) saveBtn.disabled = false;
-                }
-            );
-        } catch (error) {
-            console.error(error);
+            // استخدام uploadBytes مباشرة لضمان التوافق مع Chrome
+            await window.firebaseModules.uploadBytes(storageRef, file, metadata);
+            const downloadURL = await window.firebaseModules.getDownloadURL(storageRef);
+            
+            const productImageInput = document.getElementById('productImage');
+            if (productImageInput) productImageInput.value = downloadURL;
+            
+            if (statusText) statusText.textContent = '✅ تم الرفع بنجاح';
+            if (progressFill) progressFill.style.width = '100%';
+            if (progressText) progressText.textContent = '100%';
+            
+            showToast('تم رفع الصورة بنجاح', 'success');
             isUploading = false;
             if (saveBtn) saveBtn.disabled = false;
+            setTimeout(() => { if (progressContainer) progressContainer.style.display = 'none'; }, 2000);
+            
+        } catch (error) {
+            console.error('Upload error:', error);
+            showToast('فشل الرفع: ' + error.message, 'error');
+            isUploading = false;
+            if (saveBtn) saveBtn.disabled = false;
+            if (statusText) statusText.textContent = '❌ فشل الرفع';
         }
     }
 }
@@ -520,10 +528,28 @@ async function loadAdminSettings() {
                         <input type="number" id="freeShippingLimit" value="${s.freeShippingLimit || 0}">
                     </div>
                 </div>
+                
                 <div class="form-group">
-                    <label>رابط الشعار (Logo URL)</label>
-                    <input type="text" id="logoUrl" value="${s.logoUrl || ''}">
+                    <label>شعار المتجر</label>
+                    <div class="image-upload-container" id="logoUploadContainer" onclick="document.getElementById('logoInput').click()">
+                        <div class="image-placeholder" id="logoPlaceholder" style="${s.logoUrl ? 'display:none' : ''}">
+                            <i class="fas fa-cloud-upload-alt"></i>
+                            <span>اضغط لرفع الشعار</span>
+                        </div>
+                        <div class="image-preview-container" id="logoPreviewContainer" style="${s.logoUrl ? 'display:block' : ''}">
+                            <img src="${s.logoUrl || ''}" id="logoPreview" onerror="this.src='https://via.placeholder.com/150?text=Logo'">
+                        </div>
+                        <div class="upload-progress-container" id="logoProgressContainer">
+                            <div class="progress-bar-bg">
+                                <div class="progress-bar-fill" id="logoProgressFill"></div>
+                            </div>
+                            <div class="progress-status" id="logoProgressStatus">0%</div>
+                        </div>
+                    </div>
+                    <input type="file" id="logoInput" class="hidden-input" accept="image/*" onchange="handleLogoUpload(this)">
+                    <input type="hidden" id="logoUrl" value="${s.logoUrl || ''}">
                 </div>
+
                 <div class="form-row">
                     <div class="form-group">
                         <label>اسم البنك</label>
@@ -549,6 +575,65 @@ async function loadAdminSettings() {
             `;
         }
     } catch (error) { console.error('Error loading settings:', error); }
+}
+
+async function handleLogoUpload(input) {
+    const file = input.files[0];
+    if (!file) return;
+    
+    // التحقق من الملف قبل الرفع
+    if (!file.type.startsWith("image/")) {
+        alert("الملف ليس صورة");
+        return;
+    }
+    if (file.size > 2 * 1024 * 1024) {
+        alert("شعار المتجر يجب أن يكون أقل من 2 ميجابايت");
+        return;
+    }
+
+    const container = document.getElementById('logoUploadContainer');
+    const placeholder = document.getElementById('logoPlaceholder');
+    const previewContainer = document.getElementById('logoPreviewContainer');
+    const preview = document.getElementById('logoPreview');
+    const progressContainer = document.getElementById('logoProgressContainer');
+    const progressFill = document.getElementById('logoProgressFill');
+    const progressStatus = document.getElementById('logoProgressStatus');
+    const logoUrlInput = document.getElementById('logoUrl');
+
+    if (preview) preview.src = URL.createObjectURL(file);
+    if (previewContainer) previewContainer.style.display = 'block';
+    if (placeholder) placeholder.style.display = 'none';
+    if (progressContainer) progressContainer.style.display = 'block';
+
+    try {
+        isUploading = true;
+        const timestamp = Date.now();
+        const fileName = `logo_${timestamp}_${file.name.replace(/[^a-zA-Z0-9.]/g, '_')}`;
+        const storageRef = window.firebaseModules.ref(adminStorage, `settings/${fileName}`);
+        
+        // Metadata إلزامي لمتصفح Chrome لضمان استقرار الرفع
+        const metadata = {
+            contentType: file.type,
+            cacheControl: "public,max-age=31536000"
+        };
+        
+        console.log('🚀 بدء رفع الشعار المباشر لمتصفح Chrome:', file.name);
+        
+        // استخدام uploadBytes مباشرة لضمان التوافق مع Chrome
+        await window.firebaseModules.uploadBytes(storageRef, file, metadata);
+        const downloadURL = await window.firebaseModules.getDownloadURL(storageRef);
+        
+        if (logoUrlInput) logoUrlInput.value = downloadURL;
+        showToast('تم رفع الشعار بنجاح', 'success');
+        isUploading = false;
+        if (progressContainer) progressContainer.style.display = 'none';
+        if (container) container.classList.add('has-image');
+        
+    } catch (error) {
+        console.error('Logo upload error:', error);
+        showToast('فشل رفع الشعار: ' + error.message, 'error');
+        isUploading = false;
+    }
 }
 
 async function saveAdminSettings() {
@@ -726,6 +811,7 @@ function confirmDeleteProduct(id) {
 }
 
 window.handleProductImageUpload = handleProductImageUpload;
+window.handleLogoUpload = handleLogoUpload;
 window.editProduct = editProduct;
 window.logoutAdmin = function() {
     localStorage.removeItem('currentUser');
