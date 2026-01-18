@@ -1113,7 +1113,9 @@ function buyNowFromModal() {
     
     const quantity = parseInt(document.getElementById('selectedQuantity').value) || 1;
     buyNowDirect(selectedProductForQuantity.id, quantity);
- async function addToCartWithQuantity(productId, quantity = 1) {
+}
+
+async function addToCartWithQuantity(productId, quantity = 1) {
     const product = allProducts.find(p => p.id === productId);
     if (!product) {
         showToast('المنتج غير موجود', 'error');
@@ -1155,7 +1157,10 @@ function buyNowFromModal() {
     
     // حفظ فوري في Firestore
     await saveUserDataToFirestore();
-}ems.reduce((total, item) => total + item.quantity, 0);
+}
+
+function updateCartCount() {
+    const totalItems = cartItems.reduce((total, item) => total + item.quantity, 0);
     const cartCountElements = document.querySelectorAll('.cart-count');
     
     cartCountElements.forEach(element => {
@@ -1420,24 +1425,39 @@ async function uploadReceiptImage(file) {
             cacheControl: "public,max-age=31536000"
         };
 
-        console.log('🚀 بدء رفع الإيصال المباشر لمتصفح Chrome:', file.name);
+        console.log('🚀 بدء رفع الإيصال المستقر لمتصفح Chrome:', file.name);
         
-        // استخدام uploadBytes مباشرة كما هو مطلوب في التعليمات
-        await window.firebaseModules.uploadBytes(storageRef, file, metadata);
-        const downloadURL = await window.firebaseModules.getDownloadURL(storageRef);
+        // استخدام uploadBytesResumable لضمان عدم إلغاء الرفع في Chrome
+        const uploadTask = window.firebaseModules.uploadBytesResumable(storageRef, file, metadata);
         
-        console.log('✅ رابط التحميل:', downloadURL);
-        
-        if (progressFill) progressFill.style.width = '100%';
-        if (progressText) progressText.textContent = '100%';
-        
-        return {
-            url: downloadURL,
-            name: fileName,
-            size: file.size,
-            type: file.type,
-            uploadedAt: new Date().toISOString()
-        };
+        return new Promise((resolve, reject) => {
+            uploadTask.on('state_changed', 
+                (snapshot) => {
+                    const progress = (snapshot.bytesTransferred / snapshot.totalBytes) * 100;
+                    if (progressFill) progressFill.style.width = progress + '%';
+                    if (progressText) progressText.textContent = Math.round(progress) + '%';
+                }, 
+                (error) => {
+                    console.error('❌ خطأ في الرفع:', error);
+                    reject(error);
+                }, 
+                async () => {
+                    try {
+                        const downloadURL = await window.firebaseModules.getDownloadURL(uploadTask.snapshot.ref);
+                        console.log('✅ رابط التحميل:', downloadURL);
+                        resolve({
+                            url: downloadURL,
+                            name: fileName,
+                            size: file.size,
+                            type: file.type,
+                            uploadedAt: new Date().toISOString()
+                        });
+                    } catch (e) {
+                        reject(e);
+                    }
+                }
+            );
+        });
         
     } catch (error) {
         console.error('❌ خطأ في رفع الصورة:', error);
