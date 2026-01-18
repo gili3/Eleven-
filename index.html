@@ -69,7 +69,6 @@
     
     <!-- CSS -->
     <link rel="stylesheet" href="style.css?v=8">
-    <link rel="stylesheet" href="image-upload-fix.css">
     <style>
         /* شاشة التحميل الأولية لمنع الوميض */
         html, body {
@@ -1084,12 +1083,5 @@
     <button id="backToTop" class="back-to-top" style="position: fixed; bottom: 20px; left: 20px; width: 45px; height: 45px; border-radius: 50%; background: var(--primary-color); color: white; border: none; cursor: pointer; display: none; z-index: 999; box-shadow: 0 4px 10px rgba(0,0,0,0.2); transition: all 0.3s ease; display: flex; align-items: center; justify-content: center;">
         <i class="fas fa-arrow-up"></i>
     </button>
-<script>
-if ("serviceWorker" in navigator) {
-  navigator.serviceWorker.getRegistrations().then(regs => {
-    regs.forEach(reg => reg.unregister());
-  });
-}
-</script>
 </body>
 </html>

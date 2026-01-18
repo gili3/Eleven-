@@ -1113,9 +1113,12 @@ function buyNowFromModal() {
     
     const quantity = parseInt(document.getElementById('selectedQuantity').value) || 1;
     buyNowDirect(selectedProductForQuantity.id, quantity);
+    closeQuantityModal();
 }
 
-async function addToCartWithQuantity(productId, quantity = 1) {
+// ======================== إدارة السلة ========================
+
+function addToCartWithQuantity(productId, quantity = 1) {
     const product = allProducts.find(p => p.id === productId);
     if (!product) {
         showToast('المنتج غير موجود', 'error');
@@ -1127,36 +1130,40 @@ async function addToCartWithQuantity(productId, quantity = 1) {
         return;
     }
     
+    if (quantity > product.stock) {
+        showToast(`الكمية المطلوبة غير متوفرة. المخزون الحالي: ${product.stock}`, 'warning');
+        return;
+    }
+    
     const existingItem = cartItems.find(item => item.id === productId);
     
     if (existingItem) {
-        const newQuantity = existingItem.quantity + quantity;
-        if (newQuantity > product.stock) {
-            showToast('لا توجد كمية كافية في المخزون', 'warning');
+        if (existingItem.quantity + quantity > product.stock) {
+            showToast(`لا توجد كمية كافية في المخزون. المتاح: ${product.stock - existingItem.quantity}`, 'warning');
             return;
         }
-        existingItem.quantity = newQuantity;
+        existingItem.quantity += quantity;
     } else {
         cartItems.push({
             id: product.id,
             name: product.name,
             price: product.price,
+            originalPrice: product.originalPrice,
             image: product.image,
             quantity: quantity,
             stock: product.stock
         });
     }
     
+    localStorage.setItem('cart', JSON.stringify(cartItems));
     updateCartCount();
     
-    if (document.getElementById('cart').classList.contains('active')) {
+    const cartSection = document.getElementById('cart');
+    if (cartSection && cartSection.classList.contains('active')) {
         updateCartDisplay();
     }
     
-    showToast(`تمت إضافة المنتج إلى السلة`, 'success');
-    
-    // حفظ فوري في Firestore
-    await saveUserDataToFirestore();
+    showToast(`تمت إضافة ${quantity} من المنتج إلى السلة`, 'success');
 }
 
 function updateCartCount() {
@@ -1221,7 +1228,7 @@ function updateCartDisplay() {
     updateCartSummary();
 }
 
-async function updateCartQuantity(productId, change) {
+function updateCartQuantity(productId, change) {
     const item = cartItems.find(item => item.id === productId);
     if (!item) return;
     
@@ -1239,19 +1246,19 @@ async function updateCartQuantity(productId, change) {
     }
     
     item.quantity = newQuantity;
+    localStorage.setItem('cart', JSON.stringify(cartItems));
     updateCartCount();
     updateCartDisplay();
-    await saveUserDataToFirestore();
 }
 
-async function removeFromCart(productId) {
+function removeFromCart(productId) {
     if (!confirm('هل تريد إزالة هذا المنتج من السلة؟')) return;
     
     cartItems = cartItems.filter(item => item.id !== productId);
+    localStorage.setItem('cart', JSON.stringify(cartItems));
     updateCartCount();
     updateCartDisplay();
     showToast('تم إزالة المنتج من السلة', 'info');
-    await saveUserDataToFirestore();
 }
 
 function updateCartSummary() {
@@ -1298,15 +1305,15 @@ function updateCartSummary() {
     }
 }
 
-async function clearCart() {
+function clearCart() {
     if (cartItems.length === 0) return;
     
     if (confirm('هل تريد تفريغ السلة بالكامل؟')) {
         cartItems = [];
+        localStorage.removeItem('cart');
         updateCartCount();
         updateCartDisplay();
         showToast('تم تفريغ السلة', 'info');
-        await saveUserDataToFirestore();
     }
 }
 
@@ -1375,7 +1382,7 @@ function previewReceipt(input) {
 // ======================== دالة رفع الصورة المحسنة ========================
 
 async function uploadReceiptImage(file) {
-    console.log('🚀 بدء عملية الرفع المباشر للملف:', file.name, 'الحجم:', file.size, 'النوع:', file.type);
+    console.log('🚀 بدء عملية الرفع للملف:', file.name, 'الحجم:', file.size, 'النوع:', file.type);
     try {
         if (!file) {
             throw new Error('لم يتم اختيار ملف');
@@ -1419,29 +1426,48 @@ async function uploadReceiptImage(file) {
             uploadProgress.style.display = 'block';
         }
         
-        // Metadata إلزامي لمتصفح Chrome لضمان استقرار الرفع
+        // رفع الملف مع إعدادات Metadata لتحسين التوافق
         const metadata = {
             contentType: file.type,
-            cacheControl: "public,max-age=31536000"
+            customMetadata: {
+                'originalName': file.name,
+                'uploadedFrom': 'MobileApp'
+            }
         };
 
-        console.log('🚀 بدء رفع الإيصال المستقر لمتصفح Chrome:', file.name);
+        // تحويل الملف إلى Blob لضمان التوافق مع متصفحات الهاتف
         
-        // استخدام uploadBytesResumable لضمان عدم إلغاء الرفع في Chrome
+        console.log('📦 تم تحويل الملف إلى Blob بنجاح');
+
         const uploadTask = window.firebaseModules.uploadBytesResumable(storageRef, file, metadata);
         
         return new Promise((resolve, reject) => {
-            uploadTask.on('state_changed', 
+            const timeout = setTimeout(() => {
+                uploadTask.cancel();
+                reject(new Error('انتهت مهلة الرفع (60 ثانية). يرجى التأكد من جودة الإنترنت.'));
+            }, 60000);
+
+            uploadTask.on('state_changed',
                 (snapshot) => {
                     const progress = (snapshot.bytesTransferred / snapshot.totalBytes) * 100;
+                    console.log('📊 تقدم الرفع:', Math.round(progress) + '%');
                     if (progressFill) progressFill.style.width = progress + '%';
                     if (progressText) progressText.textContent = Math.round(progress) + '%';
-                }, 
+                },
                 (error) => {
-                    console.error('❌ خطأ في الرفع:', error);
+                    clearTimeout(timeout);
+                    console.error('❌ خطأ Firebase Storage:', error.code, error.message);
+                    
+                    let msg = 'فشل الرفع: ';
+                    if (error.code === 'storage/unauthorized') msg += 'غير مسموح بالرفع (تحقق من قواعد الأمان)';
+                    else if (error.code === 'storage/retry-limit-exceeded') msg += 'فشل الاتصال المتكرر';
+                    else msg += error.message;
+                    
+                    alert(msg); // استخدام alert لضمان رؤية الخطأ على الهاتف
                     reject(error);
-                }, 
+                },
                 async () => {
+                    clearTimeout(timeout);
                     try {
                         const downloadURL = await window.firebaseModules.getDownloadURL(uploadTask.snapshot.ref);
                         console.log('✅ رابط التحميل:', downloadURL);
@@ -1453,6 +1479,7 @@ async function uploadReceiptImage(file) {
                             uploadedAt: new Date().toISOString()
                         });
                     } catch (e) {
+                        console.error('❌ خطأ في الحصول على الرابط:', e);
                         reject(e);
                     }
                 }
@@ -3159,7 +3186,7 @@ console.log('🚀 تطبيق Queen Beauty المعدل جاهز للعمل 100%!
 // ======================== نظام المزامنة السحابية (بديل التخزين المحلي) ========================
 
 async function syncUserDataFromFirestore() {
-    if (!currentUser) return;
+    if (!currentUser || isGuest) return;
     try {
         const userRef = window.firebaseModules.doc(db, "users", currentUser.uid);
         const userSnap = await window.firebaseModules.getDoc(userRef);
@@ -3167,22 +3194,7 @@ async function syncUserDataFromFirestore() {
             const data = userSnap.data();
             cartItems = data.cart || [];
             favorites = data.favorites || [];
-            
             console.log('✅ تم مزامنة البيانات من السحابة');
-            updateCartCount();
-            if (document.getElementById('cart').classList.contains('active')) {
-                updateCartDisplay();
-            }
-        } else {
-            // إنشاء وثيقة للمستخدم إذا لم تكن موجودة
-            await window.firebaseModules.setDoc(userRef, {
-                uid: currentUser.uid,
-                email: currentUser.email || '',
-                displayName: currentUser.displayName || 'مستخدم',
-                cart: [],
-                favorites: [],
-                createdAt: window.firebaseModules.serverTimestamp()
-            });
         }
     } catch (error) {
         console.error('❌ خطأ في مزامنة البيانات:', error);
@@ -3190,14 +3202,14 @@ async function syncUserDataFromFirestore() {
 }
 
 async function saveUserDataToFirestore() {
-    if (!currentUser) return;
+    if (!currentUser || isGuest) return;
     try {
         const userRef = window.firebaseModules.doc(db, "users", currentUser.uid);
-        await window.firebaseModules.setDoc(userRef, {
+        await window.firebaseModules.updateDoc(userRef, {
             cart: cartItems,
             favorites: favorites,
             lastUpdated: window.firebaseModules.serverTimestamp()
-        }, { merge: true });
+        });
         console.log('✅ تم حفظ البيانات في السحابة');
     } catch (error) {
         console.error('❌ خطأ في حفظ البيانات:', error);
