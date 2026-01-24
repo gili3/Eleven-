@@ -2,7 +2,7 @@
 // يعمل في خلفية المتصفح لاستقبال الإشعارات حتى لو كان التطبيق مغلقاً
 
 const APP_NAME = 'Eleven Store';
-const DEFAULT_ICON = 'https://i.ibb.co/N6Bfb1KW/file-00000000e020720cbb1ddc5fc4577270.png';
+const DEFAULT_ICON = 'https://i.ibb.co/fVn1SghC/file-00000000cf8071f498fc71b66e09f615.png';
 
 console.log('🔔 Professional Service Worker Loaded');
 

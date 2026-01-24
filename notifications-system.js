@@ -77,8 +77,8 @@ function showBrowserNotification(title, body, icon = '/favicon.ico', data = {}) 
 
     const options = {
         body: body,
-        icon: icon || 'https://i.ibb.co/N6Bfb1KW/file-00000000e020720cbb1ddc5fc4577270.png',
-        badge: 'https://i.ibb.co/N6Bfb1KW/file-00000000e020720cbb1ddc5fc4577270.png',
+        icon: icon || 'https://i.ibb.co/fVn1SghC/file-00000000cf8071f498fc71b66e09f615.png',
+        badge: 'https://i.ibb.co/fVn1SghC/file-00000000cf8071f498fc71b66e09f615.png',
         vibrate: [200, 100, 200],
         data: data,
         tag: data.tag || 'eleven-store-notification',
