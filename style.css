@@ -2653,6 +2653,7 @@ button {
 
 .tracking-steps {
     display: flex;
+    flex-direction: row-reverse;
     justify-content: space-between;
     position: relative;
     margin-bottom: 10px;
@@ -2723,7 +2724,7 @@ button {
 .tracking-line-fill {
     position: absolute;
     top: 15px;
-    left: 0;
+    right: 0;
     height: 3px;
     background: var(--success-color);
     z-index: 1;

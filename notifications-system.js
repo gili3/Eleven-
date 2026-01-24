@@ -1,232 +1,257 @@
-// Notifications System - Eleven Store
+// Notifications System - Eleven Store (Amazon Style Professional Edition)
 // نظام متقدم لإدارة إشعارات تحديثات حالات الطلب للعملاء والإدارة
 
-console.log('🔔 Notifications System Loaded');
+console.log('🔔 Professional Notifications System Loaded');
+
+/**
+ * تهيئة نظام الإشعارات الاحترافي
+ */
+async function initProfessionalNotifications() {
+    // طلب الإذن لإشعارات المتصفح بشكل استباقي
+    if ('Notification' in window) {
+        if (Notification.permission === 'default') {
+            try {
+                const permission = await Notification.requestPermission();
+                console.log('🔔 Notification permission result:', permission);
+            } catch (err) {
+                console.warn('⚠️ Error requesting notification permission:', err);
+            }
+        }
+    }
+    
+    setupOrderStatusListener();
+    setupGlobalNotificationsListener();
+    if (window.isAdmin || localStorage.getItem('isAdmin') === 'true') setupAdminNotificationsListener();
+}
+
+/**
+ * الاستماع للطلبات الجديدة (للمدير)
+ */
+async function setupAdminNotificationsListener() {
+    try {
+        const db = window.getFirebaseInstance ? window.getFirebaseInstance().db : null;
+        if (!db) return;
+
+        console.log('👂 Admin: Monitoring New Orders...');
+
+        window.firebaseModules.onSnapshot(
+            window.firebaseModules.query(
+                window.firebaseModules.collection(db, 'orders'),
+                window.firebaseModules.orderBy('createdAt', 'desc'),
+                window.firebaseModules.limit(1)
+            ),
+            (snapshot) => {
+                snapshot.docChanges().forEach((change) => {
+                    if (change.type === 'added') {
+                        const order = change.doc.data();
+                        const now = new Date();
+                        const createdAt = order.createdAt?.toDate ? order.createdAt.toDate() : now;
+                        
+                        // إذا كان الطلب جديداً جداً (آخر 30 ثانية)
+                        if (now - createdAt < 30000) {
+                            showBrowserNotification(
+                                '🛍️ طلب جديد مستلم!',
+                                `وصل طلب جديد برقم #${order.orderId} بقيمة ${order.total} SDG`,
+                                null,
+                                { url: window.location.origin + '/admin/index.html', tag: 'new-order' }
+                            );
+                            if (window.showToast) {
+                                window.showToast(`🛍️ طلب جديد من ${order.userName || 'عميل'}`, 'success', 10000);
+                            }
+                            playNotificationSound();
+                        }
+                    }
+                });
+            }
+        );
+    } catch (error) {
+        console.error('❌ Error in Admin Notifications Listener:', error);
+    }
+}
+
+/**
+ * عرض إشعار احترافي (Browser Push Notification)
+ */
+function showBrowserNotification(title, body, icon = '/favicon.ico', data = {}) {
+    if (!('Notification' in window) || Notification.permission !== 'granted') return;
+
+    const options = {
+        body: body,
+        icon: icon || 'https://i.ibb.co/N6Bfb1KW/file-00000000e020720cbb1ddc5fc4577270.png',
+        badge: 'https://i.ibb.co/N6Bfb1KW/file-00000000e020720cbb1ddc5fc4577270.png',
+        vibrate: [200, 100, 200],
+        data: data,
+        tag: data.tag || 'eleven-store-notification',
+        renotify: true
+    };
+
+    const notification = new Notification(title, options);
+    
+    notification.onclick = function(event) {
+        event.preventDefault();
+        window.focus();
+        if (data.url) window.location.href = data.url;
+        notification.close();
+    };
+}
 
 /**
  * الاستماع لتحديثات حالات الطلب للعميل الحالي
  */
 async function setupOrderStatusListener() {
     try {
-        if (!(window.getFirebaseInstance ? window.getFirebaseInstance().db : null) || !window.currentUser || window.currentUser.isGuest) {
-            console.warn('⚠️ قاعدة البيانات أو المستخدم غير متاح');
-            return;
-        }
+        const db = window.getFirebaseInstance ? window.getFirebaseInstance().db : null;
+        if (!db || !window.currentUser || window.currentUser.isGuest) return;
 
-        console.log('👂 Setting up Order Status Listener for user:', window.currentUser.uid);
+        console.log('👂 Monitoring Order Status for:', window.currentUser.uid);
 
-        // الاستماع للتغييرات في طلبات المستخدم
         window.firebaseModules.onSnapshot(
             window.firebaseModules.query(
-                window.firebaseModules.collection((window.getFirebaseInstance ? window.getFirebaseInstance().db : null), 'orders'),
+                window.firebaseModules.collection(db, 'orders'),
                 window.firebaseModules.where('userId', '==', window.currentUser.uid)
             ),
             (snapshot) => {
                 snapshot.docChanges().forEach((change) => {
                     const order = change.doc.data();
-                    
-                    // إذا تم تعديل الطلب (تغيير الحالة)
                     if (change.type === 'modified') {
-                        console.log('📦 Order Status Changed:', order);
                         handleOrderStatusChange(order, change.doc.id);
                     }
                 });
-            },
-            (error) => {
-                console.error('❌ خطأ في الاستماع لتحديثات الطلبات:', error);
             }
         );
     } catch (error) {
-        console.error('❌ خطأ في إعداد Order Status Listener:', error);
+        console.error('❌ Error in Order Status Listener:', error);
     }
 }
 
 /**
- * التعامل مع تغيير حالة الطلب
+ * التعامل مع تغيير حالة الطلب (Amazon Style Messages)
  */
 function handleOrderStatusChange(order, orderId) {
     const statusMessages = {
         'pending': {
-            title: '⏳ الطلب قيد الانتظار',
-            body: `تم استقبال طلبك #${order.orderId}. جاري المراجعة...`,
-            icon: '⏳'
-        },
-        'paid': {
-            title: '✅ تم تأكيد الدفع',
-            body: `تم تأكيد دفع طلبك #${order.orderId}. شكراً لك!`,
-            icon: '✅'
+            title: '📦 تم استلام طلبك',
+            body: `شكراً لتسوقك! طلبك #${order.orderId} قيد المراجعة الآن.`,
+            type: 'info',
+            browser: true
         },
         'processing': {
-            title: '🔄 جاري التجهيز',
-            body: `جاري تجهيز طلبك #${order.orderId} للشحن...`,
-            icon: '🔄'
+            title: '⚙️ جاري تجهيز طلبك',
+            body: `خبر سعيد! نحن نقوم بتجهيز طلبك #${order.orderId} الآن.`,
+            type: 'success',
+            browser: true
         },
         'shipped': {
-            title: '🚚 خرج للتوصيل',
-            body: `طلبك #${order.orderId} خرج للتوصيل. سيصل قريباً!`,
-            icon: '🚚'
+            title: '🚚 طلبك في الطريق إليك',
+            body: `تم شحن طلبك #${order.orderId}. توقع وصوله قريباً!`,
+            type: 'warning',
+            browser: true
         },
         'delivered': {
-            title: '🎉 تم التسليم',
-            body: `تم تسليم طلبك #${order.orderId} بنجاح. شكراً لتسوقك معنا!`,
-            icon: '🎉'
+            title: '🎉 تم توصيل الطلب بنجاح',
+            body: `تم تسليم طلبك #${order.orderId}. نأمل أن تنال منتجاتنا إعجابك!`,
+            type: 'success',
+            browser: true
         },
         'cancelled': {
-            title: '❌ تم إلغاء الطلب',
-            body: `تم إلغاء طلبك #${order.orderId}. يرجى التواصل معنا للمزيد من المعلومات.`,
-            icon: '❌'
+            title: '❌ تحديث بخصوص طلبك',
+            body: `تم إلغاء الطلب #${order.orderId}. يرجى التواصل معنا للتفاصيل.`,
+            type: 'error',
+            browser: true
         }
     };
 
     const status = order.status || 'pending';
-    const message = statusMessages[status] || statusMessages['pending'];
+    const msg = statusMessages[status] || statusMessages['pending'];
 
-    // عرض إشعار في التطبيق (Toast)
+    // 1. عرض Toast داخلي
     if (window.showToast) {
-        window.showToast(`${message.icon} ${message.body}`, 'info');
+        window.showToast(msg.body, msg.type, 5000);
     }
 
-    // إذا كان هناك Firebase Messaging، إرسال إشعار خارجي
-    if (window.sendNotificationToUser) {
-        window.sendNotificationToUser(
-            window.currentUser.uid,
-            message.title,
-            message.body,
-            {
-                orderId: order.orderId,
-                type: 'order_status_update',
-                status: status
-            }
-        );
+    // 2. عرض إشعار متصفح (Push)
+    if (msg.browser) {
+        showBrowserNotification(msg.title, msg.body, order.items?.[0]?.image, {
+            url: window.location.origin + '/#my-orders',
+            tag: 'order-' + orderId
+        });
     }
 
-    // تحديث صفحة الطلبات إن كانت مفتوحة
-    if (window.loadMyOrders) {
-        window.loadMyOrders();
-    }
+    // 3. تشغيل صوت خفيف
+    playNotificationSound();
 
-    // حفظ الإشعار في سجل الإشعارات
-    saveNotificationToHistory({
-        userId: window.currentUser.uid,
-        orderId: order.orderId,
-        type: 'order_status_update',
-        status: status,
-        title: message.title,
-        body: message.body,
-        timestamp: new Date(),
-        read: false
-    });
+    // 4. تحديث الواجهة
+    if (window.loadMyOrders) window.loadMyOrders();
 }
 
 /**
- * حفظ الإشعار في سجل الإشعارات
+ * إرسال إشعار عرض جديد (للمدير)
  */
-async function saveNotificationToHistory(notification) {
+async function sendPromotionNotification(title, body, imageUrl = null) {
     try {
-        if (!(window.getFirebaseInstance ? window.getFirebaseInstance().db : null)) {
-            console.warn('⚠️ قاعدة البيانات غير متاحة');
-            return;
-        }
-
-        const notificationsRef = window.firebaseModules.collection(
-            (window.getFirebaseInstance ? window.getFirebaseInstance().db : null),
-            'user_notifications'
-        );
-
+        const db = window.getFirebaseInstance ? window.getFirebaseInstance().db : null;
+        if (!db) return;
+        
+        const notificationsRef = window.firebaseModules.collection(db, 'global_notifications');
         await window.firebaseModules.addDoc(notificationsRef, {
-            ...notification,
+            title, body, imageUrl,
+            type: 'promotion',
             createdAt: window.firebaseModules.serverTimestamp()
         });
 
-        console.log('✅ تم حفظ الإشعار في السجل');
+        if (window.showToast) window.showToast('📢 تم إرسال العرض بنجاح لجميع العملاء', 'success');
     } catch (error) {
-        console.error('❌ خطأ في حفظ الإشعار:', error);
+        console.error('❌ Error sending promotion:', error);
     }
 }
 
 /**
- * الاستماع لإشعارات الإدارة (للمسؤولين فقط)
+ * الاستماع للإشعارات العامة (العروض)
  */
-async function setupAdminNotificationsListener() {
+function setupGlobalNotificationsListener() {
     try {
-        if (!(window.getFirebaseInstance ? window.getFirebaseInstance().db : null) || !window.isAdmin) {
-            console.warn('⚠️ المستخدم ليس مسؤولاً');
-            return;
-        }
+        const db = window.getFirebaseInstance ? window.getFirebaseInstance().db : null;
+        if (!db) return;
 
-        console.log('👂 Setting up Admin Notifications Listener');
-
-        // الاستماع للإشعارات الجديدة غير المقروءة
         window.firebaseModules.onSnapshot(
             window.firebaseModules.query(
-                window.firebaseModules.collection((window.getFirebaseInstance ? window.getFirebaseInstance().db : null), 'admin_notifications'),
-                window.firebaseModules.where('status', '==', 'unread'),
-                window.firebaseModules.orderBy('createdAt', 'desc')
+                window.firebaseModules.collection(db, 'global_notifications'),
+                window.firebaseModules.orderBy('createdAt', 'desc'),
+                window.firebaseModules.limit(1)
             ),
             (snapshot) => {
                 snapshot.docChanges().forEach((change) => {
                     if (change.type === 'added') {
                         const notification = change.doc.data();
-                        console.log('📬 New Admin Notification:', notification);
-                        handleAdminNotification(notification, change.doc.id);
+                        const now = new Date();
+                        const createdAt = notification.createdAt?.toDate ? notification.createdAt.toDate() : now;
+                        
+                        // إذا كان الإشعار جديداً (آخر دقيقة)
+                        if (now - createdAt < 60000) {
+                            showBrowserNotification(
+                                '🔥 عرض جديد: ' + notification.title,
+                                notification.body,
+                                notification.imageUrl,
+                                { url: window.location.origin, tag: 'promo' }
+                            );
+                            if (window.showToast) {
+                                window.showToast(`📢 ${notification.title}: ${notification.body}`, 'warning', 8000);
+                            }
+                        }
                     }
                 });
-            },
-            (error) => {
-                console.error('❌ خطأ في الاستماع لإشعارات الإدارة:', error);
             }
         );
     } catch (error) {
-        console.error('❌ خطأ في إعداد Admin Notifications Listener:', error);
+        console.error('❌ Error in Global Listener:', error);
     }
 }
 
 /**
- * التعامل مع إشعارات الإدارة
- */
-function handleAdminNotification(notification, notificationId) {
-    const adminNotificationMessages = {
-        'new_order': {
-            title: '🛍️ طلب جديد!',
-            body: `طلب جديد من ${notification.customerName}. المجموع: ${notification.total} SDG`,
-            icon: '🛍️',
-            priority: 'high'
-        },
-        'payment_received': {
-            title: '💰 تم استقبال الدفع',
-            body: `تم استقبال دفع للطلب #${notification.orderId}`,
-            icon: '💰',
-            priority: 'high'
-        },
-        'customer_message': {
-            title: '💬 رسالة من عميل',
-            body: notification.message || 'لديك رسالة جديدة',
-            icon: '💬',
-            priority: 'normal'
-        }
-    };
-
-    const type = notification.type || 'new_order';
-    const message = adminNotificationMessages[type] || adminNotificationMessages['new_order'];
-
-    // عرض إشعار في لوحة التحكم (Toast)
-    if (window.showToast) {
-        window.showToast(`${message.icon} ${message.body}`, 'warning');
-    }
-
-    // تشغيل صوت تنبيه للإدارة (اختياري)
-    playNotificationSound();
-
-    // تحديث عدد الإشعارات غير المقروءة
-    updateUnreadNotificationCount();
-}
-
-/**
- * تشغيل صوت التنبيه
+ * تشغيل صوت تنبيه احترافي
  */
 function playNotificationSound() {
     try {
-        // استخدام Web Audio API أو ملف صوتي
         const audioContext = new (window.AudioContext || window.webkitAudioContext)();
         const oscillator = audioContext.createOscillator();
         const gainNode = audioContext.createGain();
@@ -234,108 +259,20 @@ function playNotificationSound() {
         oscillator.connect(gainNode);
         gainNode.connect(audioContext.destination);
 
-        oscillator.frequency.value = 800; // تردد الصوت (Hz)
         oscillator.type = 'sine';
+        oscillator.frequency.setValueAtTime(523.25, audioContext.currentTime); // C5
+        oscillator.frequency.exponentialRampToValueAtTime(659.25, audioContext.currentTime + 0.1); // E5
+        
+        gainNode.gain.setValueAtTime(0.1, audioContext.currentTime);
+        gainNode.gain.exponentialRampToValueAtTime(0.01, audioContext.currentTime + 0.3);
 
-        gainNode.gain.setValueAtTime(0.3, audioContext.currentTime);
-        gainNode.gain.exponentialRampToValueAtTime(0.01, audioContext.currentTime + 0.5);
-
-        oscillator.start(audioContext.currentTime);
-        oscillator.stop(audioContext.currentTime + 0.5);
-    } catch (error) {
-        console.warn('⚠️ لم يتمكن من تشغيل صوت التنبيه:', error);
-    }
+        oscillator.start();
+        oscillator.stop(audioContext.currentTime + 0.3);
+    } catch (e) { /* Ignore audio errors */ }
 }
 
-/**
- * تحديث عدد الإشعارات غير المقروءة
- */
-async function updateUnreadNotificationCount() {
-    try {
-        if (!(window.getFirebaseInstance ? window.getFirebaseInstance().db : null)) return;
-
-        const snapshot = await window.firebaseModules.getDocs(
-            window.firebaseModules.query(
-                window.firebaseModules.collection((window.getFirebaseInstance ? window.getFirebaseInstance().db : null), 'admin_notifications'),
-                window.firebaseModules.where('status', '==', 'unread')
-            )
-        );
-
-        const unreadCount = snapshot.size;
-        const badge = document.getElementById('notifBadge');
-
-        if (badge) {
-            badge.textContent = unreadCount;
-            badge.style.display = unreadCount > 0 ? 'flex' : 'none';
-        }
-
-        console.log('📊 Unread Notifications Count:', unreadCount);
-    } catch (error) {
-        console.error('❌ خطأ في تحديث عدد الإشعارات:', error);
-    }
-}
-
-/**
- * تعليم الإشعار كمقروء
- */
-async function markNotificationAsRead(notificationId) {
-    try {
-        if (!(window.getFirebaseInstance ? window.getFirebaseInstance().db : null)) return;
-
-        const notifRef = window.firebaseModules.doc(
-            (window.getFirebaseInstance ? window.getFirebaseInstance().db : null),
-            'admin_notifications',
-            notificationId
-        );
-
-        await window.firebaseModules.updateDoc(notifRef, {
-            status: 'read',
-            readAt: window.firebaseModules.serverTimestamp()
-        });
-
-        console.log('✅ تم تعليم الإشعار كمقروء');
-        updateUnreadNotificationCount();
-    } catch (error) {
-        console.error('❌ خطأ في تعليم الإشعار:', error);
-    }
-}
-
-/**
- * الحصول على سجل الإشعارات للمستخدم
- */
-async function getNotificationHistory(userId, limit = 20) {
-    try {
-        if (!(window.getFirebaseInstance ? window.getFirebaseInstance().db : null)) return [];
-
-        const snapshot = await window.firebaseModules.getDocs(
-            window.firebaseModules.query(
-                window.firebaseModules.collection((window.getFirebaseInstance ? window.getFirebaseInstance().db : null), 'user_notifications'),
-                window.firebaseModules.where('userId', '==', userId),
-                window.firebaseModules.orderBy('createdAt', 'desc'),
-                window.firebaseModules.limit(limit)
-            )
-        );
-
-        const notifications = [];
-        snapshot.forEach((doc) => {
-            notifications.push({
-                id: doc.id,
-                ...doc.data()
-            });
-        });
-
-        return notifications;
-    } catch (error) {
-        console.error('❌ خطأ في جلب سجل الإشعارات:', error);
-        return [];
-    }
-}
-
-// تصدير الدوال للاستخدام العام
-window.setupOrderStatusListener = setupOrderStatusListener;
-window.setupAdminNotificationsListener = setupAdminNotificationsListener;
-window.markNotificationAsRead = markNotificationAsRead;
-window.getNotificationHistory = getNotificationHistory;
-window.playNotificationSound = playNotificationSound;
-
-console.log('✅ Notifications System Ready');
+// تشغيل النظام عند جاهزية Firebase
+window.addEventListener('firebase-ready', initProfessionalNotifications);
+window.addEventListener('load', () => {
+    if (window.firebaseApp) initProfessionalNotifications();
+});

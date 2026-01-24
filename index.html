@@ -51,15 +51,6 @@
         console.log("✅ Firebase Modules Loaded and Assigned to window.firebaseModules");
         window.dispatchEvent(new CustomEvent('firebase-ready'));
     </script>
-    <script>
-        if ('serviceWorker' in navigator) {
-            window.addEventListener('load', () => {
-                navigator.serviceWorker.register('sw.js')
-                    .then(reg => console.log('Service Worker registered'))
-                    .catch(err => console.log('Service Worker registration failed', err));
-            });
-        }
-    </script>
     
     <!-- Font Awesome -->
     <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
@@ -68,12 +59,10 @@
     <link href="https://fonts.googleapis.com/css2?family=Cairo:wght@300;400;500;600;700;800&display=swap" rel="stylesheet">
     
     <!-- CSS -->
-    <link rel="stylesheet" href="style.css?v=8">
-    
-    <!-- سيتم تحميل السكربتات في نهاية الجسم لضمان استقرار التحميل -->
+    <link rel="stylesheet" href="style.css?v=3.0">
     
     <style>
-        /* شاشة التحميل الأولية لمنع الوميض */
+        /* شاشة التحميل الأولية */
         html, body {
             height: 100%;
             margin: 0;
@@ -274,30 +263,6 @@
             border-color: var(--secondary-color);
         }
         
-        /* شريط تقدم الرفع -->
-        <div class="upload-progress" id="uploadProgress" style="display: none; margin-top: 15px;">
-            <div class="progress-bar" style="height: 8px; background: #eee; border-radius: 4px; overflow: hidden;">
-                <div class="progress-fill" id="progressFill" style="height: 100%; background: var(--secondary-color); width: 0%; transition: width 0.3s;"></div>
-            </div>
-            <div class="progress-text" id="progressText" style="font-size: 12px; margin-top: 5px; color: #666;">0%</div>
-        </div>
-        
-        <!-- رسالة النجاح -->
-        .success-message {
-            animation: slideInUp 0.5s ease;
-        }
-        
-        @keyframes slideInUp {
-            from {
-                transform: translateY(50px);
-                opacity: 0;
-            }
-            to {
-                transform: translateY(0);
-                opacity: 1;
-            }
-        }
-        
         /* تحسين التجاوب */
         @media (max-width: 768px) {
             .receipt-section {
@@ -364,6 +329,30 @@
             outline: 2px solid var(--secondary-color);
             outline-offset: 2px;
         }
+        
+        /* تحسينات تحميل الصور */
+        img.lazy {
+            background: #f0f0f0;
+            min-height: 200px;
+        }
+        
+        /* شريط تحميل المنتجات */
+        .loading-more {
+            text-align: center;
+            padding: 20px;
+            color: var(--gray-color);
+        }
+        
+        .loading-spinner-small {
+            width: 30px;
+            height: 30px;
+            border: 3px solid #f3f3f3;
+            border-top: 3px solid var(--primary-color);
+            border-radius: 50%;
+            animation: spin 1s linear infinite;
+            display: inline-block;
+            margin-right: 10px;
+        }
     </style>
     
     <!-- Favicon -->
@@ -380,7 +369,7 @@
     <div id="authScreen" class="auth-screen" style="display: none;">
         <div class="auth-container">
             <div class="auth-header">
-                <img id="authLogo" src="https://i.ibb.co/fVn1SghC/file-00000000cf8071f498fc71b66e09f615.png" alt="Eleven Logo" class="auth-logo">
+                <img id="authLogo" src="https://i.ibb.co/fVn1SghC/file-00000000cf8071f498fc71b66e09f615.png" alt="Eleven Logo" class="auth-logo" loading="lazy">
                 <h1>Eleven</h1>
                 <p>حيث تجد عطرك المفضل واكثر</p>
             </div>
@@ -406,7 +395,7 @@
                 </p>
             </div>
             
-            <!-- نموذج المصادقة بالبريد (تسجيل الدخول + إنشاء حساب) -->
+            <!-- نموذج المصادقة بالبريد -->
             <div id="emailAuthForm" class="email-auth-form" style="display: none;">
                 <div class="form-header">
                     <h2 id="authFormTitle">تسجيل الدخول</h2>
@@ -415,7 +404,7 @@
                     </button>
                 </div>
                 
-                <!-- حقول تسجيل الدخول (افتراضي) -->
+                <!-- حقول تسجيل الدخول -->
                 <div id="loginFields">
                     <div class="form-group">
                         <label for="emailInput">
@@ -441,7 +430,7 @@
                     </div>
                 </div>
                 
-                <!-- حقول إنشاء حساب جديد (مخفي افتراضي) -->
+                <!-- حقول إنشاء حساب جديد -->
                 <div id="registerFields" style="display: none;">
                     <div class="form-group">
                         <label for="registerName">
@@ -502,14 +491,13 @@
         </div>
     </div>
 
-    <!-- التطبيق الرئيسي (سيظهر بعد المصادقة) -->
+    <!-- التطبيق الرئيسي -->
     <div id="appContainer" class="app-container" style="display: none;">
         <!-- الهيدر المعدل -->
         <header class="header" id="mainHeader">
             <div class="header-content">
-                <!-- الجزء الأيمن: يختلف حسب الصفحة -->
+                <!-- الجزء الأيمن -->
                 <div class="header-right">
-                    <!-- في الصفحة الرئيسية: القائمة والسلة -->
                     <div id="homeHeaderIcons" style="display: flex; align-items: center; gap: 8px;">
                         <button class="menu-toggle" id="menuToggle">
                             <i class="fas fa-bars"></i>
@@ -520,7 +508,6 @@
                         </button>
                     </div>
                     
-                    <!-- في الصفحات الأخرى: زر الرجوع فقط -->
                     <button class="back-btn" id="backBtn" style="display: none;" onclick="goBack()">
                         <i class="fas fa-arrow-left"></i>
                     </button>
@@ -534,15 +521,12 @@
                     </div>
                 </div>
 
-                <!-- الجزء الأيسر: يختلف حسب الصفحة -->
+                <!-- الجزء الأيسر -->
                 <div class="header-left">
-                    <!-- في الصفحة الرئيسية: شريط البحث -->
                     <div class="search-container" id="homeSearchContainer" style="display: flex;">
                         <input type="text" id="searchInput" placeholder="ابحث...">
                         <button id="searchBtn"><i class="fas fa-search"></i></button>
                     </div>
-                    
-                    <!-- في الصفحات الأخرى: فاضي -->
                 </div>
             </div>
         </header>
@@ -662,9 +646,9 @@
                     <!-- سيتم تعبئتها بواسطة JavaScript -->
                 </div>
                 
-                <div class="products-loading" id="productsLoading">
-                    <div class="spinner"></div>
-                    <p>جاري تحميل المنتجات...</p>
+                <div class="loading-more" id="productsLoading" style="display: none;">
+                    <div class="loading-spinner-small"></div>
+                    <p>جاري تحميل المزيد من المنتجات...</p>
                 </div>
             </section>
 
@@ -785,7 +769,7 @@
                 <div class="profile-container">
                     <div class="profile-header">
                         <div class="profile-image-container">
-                            <img id="profileImage" src="https://i.ibb.co/nNx4v1x5/images-1.png" alt="صورة المستخدم">
+                            <img id="profileImage" src="https://i.ibb.co/nNx4v1x5/images-1.png" alt="صورة المستخدم" loading="lazy">
                             <button class="edit-image-btn" id="editImageBtn">
                                 <i class="fas fa-camera"></i>
                             </button>
@@ -963,7 +947,7 @@
             <div class="footer-content">
                 <div class="footer-section">
                     <div class="footer-logo">
-                        <img id="footerLogo" src="https://i.ibb.co/fVn1SghC/file-00000000cf8071f498fc71b66e09f615.png" alt="Eleven">
+                        <img id="footerLogo" src="https://i.ibb.co/fVn1SghC/file-00000000cf8071f498fc71b66e09f615.png" alt="Eleven" loading="lazy">
                         <h3 id="footerStoreName">Eleven</h3>
                     </div>
                     <p id="storeDescription">متجر متخصص في بيع العطور ومستحضرات التجميل الأصلية</p>
@@ -1033,7 +1017,7 @@
         </div>
     </div>
 
-    <!-- نافذة إتمام الطلب ورفع الإيصال -->
+    <!-- نافذة إتمام الطلب -->
     <div id="checkoutModal" class="modal">
         <div class="modal-content">
             <div class="modal-header">
@@ -1161,7 +1145,7 @@
             <div class="modal-body">
                 <div class="product-details-container">
                     <div class="product-details-image">
-                        <img id="modalProductImage" src="" alt="منتج">
+                        <img id="modalProductImage" src="" alt="منتج" loading="lazy">
                     </div>
                     <div class="product-details-info">
                         <h2 id="modalProductTitle"></h2>
@@ -1239,10 +1223,31 @@
     <!-- الإشعارات -->
     <div id="toastContainer"></div>
     
-    <!-- JavaScript -->
+    <!-- JavaScript Files -->
     <script src="firebase-config.js"></script>
     <script src="firebase-messaging.js"></script>
     <script src="notifications-system.js"></script>
-    <script src="main.js?v=8"></script>
+    <script src="app-core.js?v=3.0"></script>
+    <script src="auth-system.js?v=3.0"></script>
+    <script src="products-system.js?v=3.0"></script>
+    <script src="cart-system.js?v=3.0"></script>
+    <script src="orders-system.js?v=3.0"></script>
+    <script src="checkout-system.js?v=3.0"></script>
+    <script src="profile-system.js?v=3.0"></script>
+    <script src="utils.js?v=3.0"></script>
+    <script src="main.js?v=3.0"></script>
+    
+    <!-- تهيئة تحسينات الأداء بعد تحميل الصفحة -->
+    <script>
+        document.addEventListener('DOMContentLoaded', function() {
+            if (typeof initPerformanceMonitoring === 'function') {
+                setTimeout(initPerformanceMonitoring, 1000);
+            }
+            
+            if (typeof setupLightweightNotifications === 'function') {
+                setupLightweightNotifications();
+            }
+        });
+    </script>
 </body>
 </html>

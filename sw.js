@@ -1,108 +1,80 @@
-// Service Worker - Eleven Store
+// Service Worker - Eleven Store (Professional Edition)
 // يعمل في خلفية المتصفح لاستقبال الإشعارات حتى لو كان التطبيق مغلقاً
 
-console.log('🔔 Service Worker Loaded');
+const APP_NAME = 'Eleven Store';
+const DEFAULT_ICON = 'https://i.ibb.co/N6Bfb1KW/file-00000000e020720cbb1ddc5fc4577270.png';
 
-// استقبال الإشعارات من Firebase Cloud Messaging
+console.log('🔔 Professional Service Worker Loaded');
+
+// استقبال الإشعارات من Firebase Cloud Messaging أو Push API
 self.addEventListener('push', function(event) {
-    console.log('📬 Push Notification Received:', event);
+    console.log('📬 Push Notification Received');
     
-    if (!event.data) {
-        console.log('⚠️ لا توجد بيانات في الإشعار');
-        return;
+    let data = {};
+    if (event.data) {
+        try {
+            data = event.data.json();
+        } catch (e) {
+            data = { title: APP_NAME, body: event.data.text() };
+        }
     }
 
-    try {
-        const data = event.data.json();
-        console.log('📨 Notification Data:', data);
+    const options = {
+        body: data.body || 'لديك تحديث جديد من متجرنا',
+        icon: data.icon || DEFAULT_ICON,
+        badge: DEFAULT_ICON,
+        image: data.image || null, // دعم صور العروض الكبيرة
+        vibrate: [200, 100, 200],
+        tag: data.tag || 'eleven-notification',
+        renotify: true,
+        requireInteraction: data.priority === 'high',
+        data: {
+            url: data.url || '/',
+            orderId: data.orderId || null
+        },
+        actions: [
+            { action: 'open', title: 'عرض التفاصيل' },
+            { action: 'close', title: 'تجاهل' }
+        ]
+    };
 
-        const options = {
-            body: data.body || 'لديك إشعار جديد',
-            icon: data.icon || 'https://i.ibb.co/N6Bfb1KW/file-00000000e020720cbb1ddc5fc4577270.png',
-            badge: 'https://i.ibb.co/N6Bfb1KW/file-00000000e020720cbb1ddc5fc4577270.png',
-            tag: data.tag || 'notification',
-            requireInteraction: data.requireInteraction || false,
-            data: {
-                url: data.url || '/',
-                orderId: data.orderId || null,
-                type: data.type || 'general'
-            },
-            actions: [
-                {
-                    action: 'open',
-                    title: 'فتح',
-                    icon: 'https://via.placeholder.com/192?text=Open'
-                },
-                {
-                    action: 'close',
-                    title: 'إغلاق',
-                    icon: 'https://via.placeholder.com/192?text=Close'
-                }
-            ]
-        };
-
-        event.waitUntil(
-            self.registration.showNotification(data.title || 'Eleven Store', options)
-        );
-    } catch (error) {
-        console.error('❌ خطأ في معالجة الإشعار:', error);
-        
-        // إذا فشل تحليل JSON، عرض الإشعار كنص عادي
-        event.waitUntil(
-            self.registration.showNotification('Eleven Store', {
-                body: event.data.text(),
-                icon: 'https://i.ibb.co/N6Bfb1KW/file-00000000e020720cbb1ddc5fc4577270.png'
-            })
-        );
-    }
+    event.waitUntil(
+        self.registration.showNotification(data.title || APP_NAME, options)
+    );
 });
 
 // التعامل مع النقر على الإشعار
 self.addEventListener('notificationclick', function(event) {
-    console.log('✅ Notification Clicked:', event);
-    
     event.notification.close();
 
-    const urlToOpen = event.notification.data.url || '/';
-    const orderId = event.notification.data.orderId;
+    if (event.action === 'close') return;
 
-    // إذا كان هناك رقم طلب، فتح صفحة الطلب مباشرة
-    let finalUrl = urlToOpen;
-    if (orderId) {
-        finalUrl = `${urlToOpen}?orderId=${orderId}`;
-    }
+    const urlToOpen = new URL(event.notification.data.url || '/', self.location.origin).href;
 
     event.waitUntil(
         clients.matchAll({ type: 'window', includeUncontrolled: true })
             .then(function(clientList) {
-                // البحث عن نافذة مفتوحة بالفعل
+                // إذا كان التطبيق مفتوحاً، قم بالتركيز عليه وتغيير الرابط
                 for (let i = 0; i < clientList.length; i++) {
                     const client = clientList[i];
-                    if (client.url === finalUrl && 'focus' in client) {
+                    if ('focus' in client) {
+                        client.navigate(urlToOpen);
                         return client.focus();
                     }
                 }
-                // إذا لم توجد نافذة، فتح نافذة جديدة
+                // إذا لم يكن مفتوحاً، افتح نافذة جديدة
                 if (clients.openWindow) {
-                    return clients.openWindow(finalUrl);
+                    return clients.openWindow(urlToOpen);
                 }
             })
     );
 });
 
-// التعامل مع إغلاق الإشعار
-self.addEventListener('notificationclose', function(event) {
-    console.log('🚫 Notification Closed');
-});
-
-// تحديث Service Worker
-self.addEventListener('activate', function(event) {
-    console.log('🔄 Service Worker Activated');
-    event.waitUntil(clients.claim());
-});
-
-// تسجيل Service Worker عند التثبيت
-self.addEventListener('install', function(event) {
-    console.log('📦 Service Worker Installed');
+// تحديث وتفعيل فوري
+self.addEventListener('install', (event) => {
     self.skipWaiting();
+});
+
+self.addEventListener('activate', (event) => {
+    event.waitUntil(clients.claim());
 });
