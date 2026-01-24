@@ -1,0 +1,150 @@
+/* Image Upload Fix CSS */
+.image-preview-container {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 10px;
+    margin-top: 10px;
+}
+
+.image-preview-item {
+    position: relative;
+    width: 100px;
+    height: 100px;
+    border: 1px solid #ddd;
+    border-radius: 8px;
+    overflow: hidden;
+}
+
+.image-preview-item img {
+    width: 100%;
+    height: 100%;
+    object-fit: cover;
+}
+
+.remove-image-btn {
+    position: absolute;
+    top: 5px;
+    right: 5px;
+    background: rgba(255, 0, 0, 0.7);
+    color: white;
+    border: none;
+    border-radius: 50%;
+    width: 20px;
+    height: 20px;
+    cursor: pointer;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    font-size: 12px;
+}
+
+/* Upload Container Styles */
+.image-upload-container {
+    width: 100%;
+    height: 200px;
+    border: 2px dashed #ddd;
+    border-radius: 12px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    cursor: pointer;
+    background: #f9f9f9;
+    transition: all 0.3s ease;
+    position: relative;
+    overflow: hidden;
+}
+
+.image-upload-container:hover {
+    border-color: var(--secondary-color);
+    background: #f0f0f0;
+}
+
+.image-upload-container.has-image {
+    border: 2px solid var(--success-color);
+}
+
+.upload-placeholder {
+    text-align: center;
+    color: #888;
+}
+
+.upload-placeholder i {
+    font-size: 40px;
+    margin-bottom: 10px;
+    display: block;
+}
+
+.upload-placeholder span {
+    display: block;
+    font-size: 16px;
+    font-weight: 600;
+    margin-bottom: 5px;
+}
+
+.upload-placeholder p {
+    font-size: 12px;
+    margin: 0;
+    color: #aaa;
+}
+
+#productImagePreviewContainer {
+    display: none;
+    width: 100%;
+    height: 100%;
+    position: relative;
+}
+
+#productImagePreview {
+    width: 100%;
+    height: 100%;
+    object-fit: contain;
+    background: white;
+}
+
+.remove-image-btn {
+    position: absolute;
+    top: 10px;
+    right: 10px;
+    background: var(--danger-color);
+    color: white;
+    border: none;
+    width: 30px;
+    height: 30px;
+    border-radius: 50%;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    cursor: pointer;
+    font-size: 14px;
+    z-index: 10;
+}
+
+.upload-progress-container {
+    display: none;
+    margin-top: 10px;
+    background: #f5f5f5;
+    border-radius: 8px;
+    padding: 10px;
+}
+
+.progress-info {
+    display: flex;
+    justify-content: space-between;
+    margin-bottom: 5px;
+    font-size: 12px;
+}
+
+.progress-bar-wrapper {
+    width: 100%;
+    height: 6px;
+    background: #e0e0e0;
+    border-radius: 3px;
+    overflow: hidden;
+}
+
+.progress-bar-fill {
+    height: 100%;
+    background: var(--success-color);
+    width: 0%;
+    transition: width 0.3s ease;
+}
