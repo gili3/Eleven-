@@ -1,5 +1,5 @@
-// products-system.js - إدارة المنتجات وعرضها
-// ======================== إدارة المنتجات ========================
+// products-system.js - نظام إدارة المنتجات (نسخة محسنة أمنياً)
+// ======================== إدارة المنتجات ==========================
 
 async function loadProducts() {
     console.log('🛍️ جاري تحميل المنتجات من Firebase...');
@@ -36,15 +36,25 @@ async function loadProducts() {
         
         allProducts = querySnapshot.docs.map(doc => {
             const data = doc.data();
+            
+            // تنظيف البيانات باستخدام SecurityCore
+            const sanitize = (str) => {
+                if (!str) return str;
+                if (window.SecurityCore && window.SecurityCore.sanitizeHTML) {
+                    return window.SecurityCore.sanitizeHTML(str);
+                }
+                return str;
+            };
+            
             return {
                 id: doc.id,
-                name: data.name || 'بدون اسم',
+                name: sanitize(data.name) || 'بدون اسم',
                 price: data.price || 0,
                 originalPrice: data.originalPrice || null,
-                image: data.image || 'https://via.placeholder.com/300x200?text=صورة',
-                category: data.category || 'غير مصنف',
+                image: sanitize(data.image) || 'https://via.placeholder.com/300x200?text=صورة',
+                category: sanitize(data.category) || 'غير مصنف',
                 stock: data.stock || 0,
-                description: data.description || '',
+                description: sanitize(data.description) || '',
                 isNew: data.isNew || false,
                 isSale: data.isSale || false,
                 isBest: data.isBest || false,
@@ -205,17 +215,21 @@ function displayProducts(products = allProducts) {
         const isBest = product.isBest === true || product.isBest === 'true';
         const isInFavorites = favorites.some(f => f.id === product.id);
         
+        const safeName = typeof window.sanitizeHTML === 'function' ? window.sanitizeHTML(product.name) : product.name;
+        const safeDescription = typeof window.sanitizeHTML === 'function' ? window.sanitizeHTML(product.description) : product.description;
+        const safeImage = typeof window.sanitizeHTML === 'function' ? window.sanitizeHTML(product.image) : product.image;
+        
         return `
             <div class="product-card" data-id="${product.id}">
                 <div class="product-image" onclick="openProductDetails('${product.id}')">
-                    <img src="${product.image}" alt="${product.name}" onerror="this.src='https://via.placeholder.com/300x200?text=صورة'">
+                    <img src="${safeImage}" alt="${safeName}" onerror="this.src='https://via.placeholder.com/300x200?text=صورة'">
                     ${isNew ? '<div class="badge new">جديد</div>' : ''}
                     ${isSale ? '<div class="badge sale">عرض</div>' : ''}
                     ${isBest ? '<div class="badge best">الأفضل</div>' : ''}
                 </div>
                 <div class="product-info">
-                    <h3 onclick="openProductDetails('${product.id}')">${product.name}</h3>
-                    <p class="product-description">${product.description || ''}</p>
+                    <h3 onclick="openProductDetails('${product.id}')">${safeName}</h3>
+                    <p class="product-description">${safeDescription || ''}</p>
                     <div class="product-price">
                         <span class="current-price">${formatNumber(product.price)} ${siteCurrency}</span>
                         ${product.originalPrice ? `<span class="original-price">${formatNumber(product.originalPrice)} ${siteCurrency}</span>` : ''}

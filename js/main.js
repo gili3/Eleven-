@@ -1,5 +1,5 @@
-// main.js - ملف التحميل الرئيسي (المحسن)
-// ======================== تهيئة التطبيق ========================
+// main.js - نظام التطبيق الرئيسي (نسخة محسنة أمنياً)
+// ======================== تهيئة التطبيق ================================
 
 async function initializeAppSafely() {
     if (appInitialized) {
@@ -9,6 +9,21 @@ async function initializeAppSafely() {
     
     console.log('🚀 بدء تهيئة التطبيق (الإصدار المحسن)...');
     appInitialized = true;
+
+    // تهيئة نظام الأمان الشامل
+    if (window.SecurityCore && typeof window.SecurityCore.init === 'function') {
+        try {
+            window.SecurityCore.init();
+            console.log('✅ تم تفعيل نظام الأمان الشامل');
+        } catch (e) {
+            console.error('❌ خطأ في تفعيل SecurityCore:', e);
+        }
+    }
+    
+    // تفعيل حماية الإطارات (Clickjacking)
+    if (typeof SecurityManager !== 'undefined') {
+        SecurityManager.preventFraming();
+    }
     
     if (!checkFirebaseSDK()) {
         return;

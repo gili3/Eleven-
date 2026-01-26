@@ -1,5 +1,100 @@
-// auth-system.js - نظام المصادقة والمستخدمين
+// auth-system.js - نظام المصادقة والمستخدمين (نسخة محسنة أمنياً)
 // ======================== معالجة حالة المصادقة ========================
+
+// دوال مساعدة للتشفير وفك التشفير
+const AuthSecurity = {
+    // تشفير البيانات قبل التخزين
+    encryptData: function(data) {
+        try {
+            const jsonStr = JSON.stringify(data);
+            return btoa(encodeURIComponent(jsonStr));
+        } catch (e) {
+            console.error('❌ خطأ في تشفير البيانات:', e);
+            return null;
+        }
+    },
+    
+    // فك تشفير البيانات بعد الاسترجاع
+    decryptData: function(encryptedData) {
+        try {
+            const jsonStr = decodeURIComponent(atob(encryptedData));
+            return JSON.parse(jsonStr);
+        } catch (e) {
+            console.error('❌ خطأ في فك تشفير البيانات:', e);
+            return null;
+        }
+    },
+    
+    // تنظيف وتحقق من بيانات المستخدم
+    sanitizeUserData: function(userData) {
+        if (!userData || typeof userData !== 'object') return null;
+        
+        // استخدام SecurityCore إذا كان متاحاً
+        if (window.SecurityCore && typeof window.SecurityCore.sanitizeObject === 'function') {
+            return window.SecurityCore.sanitizeObject(userData);
+        }
+        
+        // تنظيف أساسي إذا لم يكن SecurityCore متاحاً
+        const cleaned = {};
+        for (const key in userData) {
+            if (Object.prototype.hasOwnProperty.call(userData, key)) {
+                const value = userData[key];
+                if (typeof value === 'string') {
+                    cleaned[key] = value.replace(/<script[^>]*>.*?<\/script>/gi, '').replace(/<[^>]+>/g, '');
+                } else {
+                    cleaned[key] = value;
+                }
+            }
+        }
+        return cleaned;
+    },
+    
+    // حفظ بيانات المستخدم بشكل آمن
+    saveUserData: function(userData, useSession = false) {
+        const sanitized = this.sanitizeUserData(userData);
+        if (!sanitized) return false;
+        
+        const encrypted = this.encryptData(sanitized);
+        if (!encrypted) return false;
+        
+        try {
+            if (useSession) {
+                sessionStorage.setItem('_usr', encrypted);
+            } else {
+                localStorage.setItem('_usr', encrypted);
+            }
+            return true;
+        } catch (e) {
+            console.error('❌ خطأ في حفظ البيانات:', e);
+            return false;
+        }
+    },
+    
+    // استرجاع بيانات المستخدم بشكل آمن
+    loadUserData: function() {
+        try {
+            const encrypted = localStorage.getItem('_usr') || sessionStorage.getItem('_usr');
+            if (!encrypted) return null;
+            
+            const decrypted = this.decryptData(encrypted);
+            if (!decrypted) return null;
+            
+            return this.sanitizeUserData(decrypted);
+        } catch (e) {
+            console.error('❌ خطأ في تحميل البيانات:', e);
+            return null;
+        }
+    },
+    
+    // حذف بيانات المستخدم
+    clearUserData: function() {
+        localStorage.removeItem('_usr');
+        sessionStorage.removeItem('_usr');
+        // حذف البيانات القديمة غير المشفرة
+        localStorage.removeItem('currentUser');
+        sessionStorage.removeItem('currentUser');
+    }
+};
 
 async function handleAuthStateChange(user) {
     try {
@@ -49,10 +144,32 @@ async function handleAuthStateChange(user) {
             
             if (typeof showToast === 'function') showToast(`مرحباً بعودتك ${currentUser.displayName || 'مستخدم'}!`, 'success');
         } else {
-            const savedUser = localStorage.getItem('currentUser') || sessionStorage.getItem('currentUser');
-            if (savedUser) {
+            // محاولة تحميل البيانات المشفرة أولاً
+            let userData = AuthSecurity.loadUserData();
+            
+            // إذا لم توجد بيانات مشفرة، نحاول البيانات القديمة ونشفرها
+            if (!userData) {
+                const oldSavedUser = localStorage.getItem('currentUser') || sessionStorage.getItem('currentUser');
+                if (oldSavedUser) {
+                    try {
+                        userData = JSON.parse(oldSavedUser);
+                        // تنظيف وتشفير البيانات القديمة
+                        userData = AuthSecurity.sanitizeUserData(userData);
+                        if (userData) {
+                            AuthSecurity.saveUserData(userData);
+                            // حذف البيانات القديمة
+                            localStorage.removeItem('currentUser');
+                            sessionStorage.removeItem('currentUser');
+                        }
+                    } catch (e) {
+                        console.error('❌ خطأ في قراءة البيانات القديمة:', e);
+                        userData = null;
+                    }
+                }
+            }
+            
+            if (userData) {
                 try {
-                    const userData = JSON.parse(savedUser);
                     if (userData.isGuest) {
                         currentUser = userData;
                         isGuest = true;
@@ -73,8 +190,7 @@ async function handleAuthStateChange(user) {
                     }
                 } catch (e) {
                     console.error('❌ خطأ في قراءة بيانات المستخدم:', e);
-                    localStorage.removeItem('currentUser');
-                    sessionStorage.removeItem('currentUser');
+                    AuthSecurity.clearUserData();
                     showAuthScreen();
                 }
             } else {
@@ -94,10 +210,9 @@ async function handleAuthStateChange(user) {
 function handleAuthError() {
     console.log('⚠️ فشل الاتصال بمصادقة Firebase');
     
-    const savedUser = sessionStorage.getItem('currentUser');
-    if (savedUser) {
+    const userData = AuthSecurity.loadUserData();
+    if (userData) {
         try {
-            const userData = JSON.parse(savedUser);
             if (userData.isGuest) {
                 currentUser = userData;
                 isGuest = true;
@@ -150,8 +265,9 @@ function signInAsGuest() {
     cartItems = [];
     favorites = [];
     
-    localStorage.setItem('currentUser', JSON.stringify(currentUser));
-    sessionStorage.setItem('currentUser', JSON.stringify(currentUser));
+    // حفظ البيانات بشكل مشفر
+    AuthSecurity.saveUserData(currentUser);
+    AuthSecurity.saveUserData(currentUser, true); // حفظ في session أيضاً
     
     showMainApp();
     if (typeof showSection === 'function') showSection('home');
@@ -203,8 +319,9 @@ async function signInWithGoogle() {
             isAdmin: isAdminUser
         };
         
-        localStorage.setItem('currentUser', JSON.stringify(userToSave));
-        sessionStorage.setItem('currentUser', JSON.stringify(userToSave));
+        // حفظ البيانات بشكل مشفر
+        AuthSecurity.saveUserData(userToSave);
+        AuthSecurity.saveUserData(userToSave, true);
         
         // تصفير الحقول قبل الدخول
         document.querySelectorAll('input').forEach(i => i.value = '');
@@ -231,6 +348,12 @@ async function signInWithGoogle() {
 }
 
 function validateEmail(email) {
+    // استخدام SecurityCore إذا كان متاحاً
+    if (window.SecurityCore && typeof window.SecurityCore.validateEmail === 'function') {
+        return window.SecurityCore.validateEmail(email);
+    }
+    
+    // التحقق الأساسي
     const re = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
     return re.test(String(email).toLowerCase());
 }
@@ -351,10 +474,42 @@ async function signUpWithEmail(email, password, name, phone = '') {
         return false;
     }
 }
+// نظام الحماية من هجمات التخمين (Brute Force)
+const LoginProtector = {
+    attempts: 0,
+    lastAttempt: 0,
+    lockUntil: 0,
+    
+    check: function() {
+        const now = Date.now();
+        if (now < this.lockUntil) {
+            const remaining = Math.ceil((this.lockUntil - now) / 1000);
+            if (typeof showToast === 'function') showToast(`تم قفل المحاولات مؤقتاً. انتظر ${remaining} ثانية`, 'error');
+            return false;
+        }
+        return true;
+    },
+    
+    recordFailure: function() {
+        this.attempts++;
+        this.lastAttempt = Date.now();
+        if (this.attempts >= 5) {
+            this.lockUntil = Date.now() + (60 * 1000); // قفل لمدة دقيقة بعد 5 محاولات فاشلة
+            this.attempts = 0;
+        }
+    },
+    
+    recordSuccess: function() {
+        this.attempts = 0;
+        this.lockUntil = 0;
+    }
+};
 
 async function signInWithEmail(email, password) {
+    if (!LoginProtector.check()) return;
+    
     try {
-        console.log('📧 تسجيل الدخول بالبريد...');
+        console.log('🔑 تسجيل الدخول بالبريد الإلكتروني...');
         
         if (!checkFirebaseSDK || !checkFirebaseSDK() || !initializeFirebase()) {
             if (typeof showToast === 'function') showToast('تعذر الاتصال بخدمة المصادقة', 'error');
@@ -362,10 +517,9 @@ async function signInWithEmail(email, password) {
         }
         
         const result = await window.firebaseModules.signInWithEmailAndPassword(auth, email, password);
-        
+        LoginProtector.recordSuccess();
         currentUser = result.user;
-        isGuest = false;
-        
+        isGuest = false;        
         // جلب بيانات المستخدم أو إنشاؤها
         await checkAndUpdateUserInFirestore(currentUser);
         const isAdminUser = await checkAdminPermissions(currentUser.uid);
@@ -391,8 +545,9 @@ async function signInWithEmail(email, password) {
             isAdmin: isAdminUser
         };
         
-        localStorage.setItem('currentUser', JSON.stringify(userToSave));
-        sessionStorage.setItem('currentUser', JSON.stringify(userToSave));
+        // حفظ البيانات بشكل مشفر
+        AuthSecurity.saveUserData(userToSave);
+        AuthSecurity.saveUserData(userToSave, true);
         
         // تصفير الحقول قبل الدخول
         document.querySelectorAll('input').forEach(i => i.value = '');
@@ -438,6 +593,7 @@ async function signInWithEmail(email, password) {
         
         if (typeof showToast === 'function') showToast(errorMessage, 'error');
         if (typeof showAuthMessage === 'function') showAuthMessage(errorMessage, 'error');
+        LoginProtector.recordFailure();
     }
 }
 

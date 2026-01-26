@@ -1,5 +1,55 @@
-// checkout-system.js - نظام الدفع والإيصالات
+// checkout-system.js - نظام الدفع والإيصالات (نسخة محسنة أمنياً)
 // ======================== نظام الدفع والإيصال ========================
+
+// دوال مساعدة للتحقق من الملفات
+const FileValidator = {
+    // الأنواع المسموحة للصور
+    allowedImageTypes: ['image/jpeg', 'image/jpg', 'image/png', 'image/gif', 'image/webp'],
+    
+    // الحد الأقصى لحجم الملف (5MB)
+    maxFileSize: 5 * 1024 * 1024,
+    
+    // التحقق من نوع الملف
+    isValidImageType: function(file) {
+        if (!file || !file.type) return false;
+        return this.allowedImageTypes.includes(file.type.toLowerCase());
+    },
+    
+    // التحقق من حجم الملف
+    isValidFileSize: function(file) {
+        if (!file || !file.size) return false;
+        return file.size <= this.maxFileSize;
+    },
+    
+    // التحقق من امتداد الملف
+    isValidImageExtension: function(filename) {
+        if (!filename) return false;
+        const validExtensions = ['.jpg', '.jpeg', '.png', '.gif', '.webp'];
+        const ext = filename.toLowerCase().substring(filename.lastIndexOf('.'));
+        return validExtensions.includes(ext);
+    },
+    
+    // التحقق الشامل من الملف
+    validateImageFile: function(file) {
+        if (!file) {
+            return { valid: false, error: 'لم يتم اختيار ملف' };
+        }
+        
+        if (!this.isValidImageType(file)) {
+            return { valid: false, error: 'نوع الملف غير مدعوم (فقط JPG, PNG, GIF, WEBP)' };
+        }
+        
+        if (!this.isValidImageExtension(file.name)) {
+            return { valid: false, error: 'امتداد الملف غير صحيح' };
+        }
+        
+        if (!this.isValidFileSize(file)) {
+            return { valid: false, error: 'حجم الملف كبير جداً (الحد الأقصى 5MB)' };
+        }
+        
+        return { valid: true };
+    }
+};
 
 let checkoutReceiptFile = null;
 
@@ -7,14 +57,11 @@ function previewCheckoutReceipt(input) {
     if (!input || !input.files || !input.files[0]) return;
     
     const file = input.files[0];
-    if (!file.type.startsWith('image/')) {
-        if (typeof showToast === 'function') showToast('يرجى اختيار صورة صالحة', 'error');
-        input.value = '';
-        return;
-    }
     
-    if (file.size > 5 * 1024 * 1024) {
-        if (typeof showToast === 'function') showToast('حجم الصورة كبير جداً (الحد الأقصى 5MB)', 'error');
+    // التحقق الشامل من الملف
+    const validation = FileValidator.validateImageFile(file);
+    if (!validation.valid) {
+        if (typeof showToast === 'function') showToast(validation.error, 'error');
         input.value = '';
         return;
     }
@@ -63,20 +110,30 @@ function updateCheckoutSummary() {
     const shippingCost = subtotal < (siteSettings.freeShippingLimit || 200) ? (siteSettings.shippingCost || 15) : 0;
     const total = subtotal + shippingCost;
     
-    checkoutItems.innerHTML = itemsToDisplay.map(item => `
-        <div class="checkout-item">
-            <img src="${item.image}" class="checkout-item-img" alt="${item.name}">
-            <div class="checkout-item-info">
-                <span class="checkout-item-name">${item.name}</span>
-                <span class="checkout-item-price">${formatNumber(item.price)} SDG</span>
+    checkoutItems.innerHTML = itemsToDisplay.map(item => {
+        // استخدام SecurityCore للتنظيف
+        const safeName = (window.SecurityCore && window.SecurityCore.sanitizeHTML) 
+            ? window.SecurityCore.sanitizeHTML(item.name) 
+            : (typeof window.sanitizeHTML === 'function' ? window.sanitizeHTML(item.name) : item.name);
+        const safeImage = (window.SecurityCore && window.SecurityCore.sanitizeHTML) 
+            ? window.SecurityCore.sanitizeHTML(item.image) 
+            : (typeof window.sanitizeHTML === 'function' ? window.sanitizeHTML(item.image) : item.image);
+        
+        return `
+            <div class="checkout-item">
+                <img src="${safeImage}" class="checkout-item-img" alt="${safeName}">
+                <div class="checkout-item-info">
+                    <span class="checkout-item-name">${safeName}</span>
+                    <span class="checkout-item-price">${formatNumber(item.price)} SDG</span>
+                </div>
+                <div class="checkout-item-qty-controls">
+                    <button class="checkout-item-qty-btn" onclick="updateCheckoutItemQty('${item.id}', -1)">-</button>
+                    <span class="checkout-item-qty-val">${item.quantity}</span>
+                    <button class="checkout-item-qty-btn" onclick="updateCheckoutItemQty('${item.id}', 1)">+</button>
+                </div>
             </div>
-            <div class="checkout-item-qty-controls">
-                <button class="checkout-item-qty-btn" onclick="updateCheckoutItemQty('${item.id}', -1)">-</button>
-                <span class="checkout-item-qty-val">${item.quantity}</span>
-                <button class="checkout-item-qty-btn" onclick="updateCheckoutItemQty('${item.id}', 1)">+</button>
-            </div>
-        </div>
-    `).join("");
+        `;
+    }).join("");
     
     if (typeof safeElementUpdate === 'function') {
         safeElementUpdate('checkoutSubtotal', formatNumber(subtotal) + ' SDG');
@@ -153,9 +210,16 @@ async function submitCheckoutOrder() {
     const addressInput = document.getElementById('checkoutAddress');
     const notesInput = document.getElementById('checkoutNotes');
 
+    // تنظيف المدخلات من الأكواد الخطيرة
     let phone = phoneInput ? phoneInput.value.trim() : '';
-    const address = addressInput ? addressInput.value.trim() : '';
-    const notes = notesInput ? notesInput.value.trim() : '';
+    let address = addressInput ? addressInput.value.trim() : '';
+    let notes = notesInput ? notesInput.value.trim() : '';
+    
+    // تنظيف البيانات باستخدام SecurityCore
+    if (window.SecurityCore && window.SecurityCore.sanitizeHTML) {
+        address = window.SecurityCore.sanitizeHTML(address);
+        notes = window.SecurityCore.sanitizeHTML(notes);
+    }
     
     if (!phone) {
         if (typeof showToast === 'function') showToast('يرجى إدخال رقم الهاتف', 'warning');
@@ -169,9 +233,16 @@ async function submitCheckoutOrder() {
         return;
     }
 
-    // حفظ البيانات محلياً للتسهيل في المرات القادمة
-    localStorage.setItem('userPhone', phone);
-    localStorage.setItem('userAddress', address);
+    // حفظ البيانات محلياً بشكل مشفر (إذا كان AuthSecurity متاحاً)
+    if (window.AuthSecurity && window.AuthSecurity.encryptData) {
+        const encryptedPhone = window.AuthSecurity.encryptData(phone);
+        const encryptedAddress = window.AuthSecurity.encryptData(address);
+        if (encryptedPhone) localStorage.setItem('_ph', encryptedPhone);
+        if (encryptedAddress) localStorage.setItem('_ad', encryptedAddress);
+    } else {
+        localStorage.setItem('userPhone', phone);
+        localStorage.setItem('userAddress', address);
+    }
 
     // تنسيق الرقم تلقائياً لمفتاح السودان
     phone = formatSudanPhone(phone);
@@ -240,7 +311,7 @@ async function submitCheckoutOrder() {
             orderNumber: nextOrderNumber,
             userId: currentUser.uid,
             userName: currentUser.displayName || 'مستخدم',
-            userEmail: currentUser.email || '',
+            userEmail: currentUser.email,
             phone: phone,
             address: address,
             notes: notes,
@@ -261,11 +332,8 @@ async function submitCheckoutOrder() {
             updatedAt: window.firebaseModules.serverTimestamp()
         };
         
-        // 📌 التصحيح هنا: استخدم await واحصل على المرجع
         const ordersRef = window.firebaseModules.collection(db, 'orders');
-        const docRef = await window.firebaseModules.addDoc(ordersRef, orderData);
-        
-        console.log('✅ تم إنشاء الطلب بنجاح:', docRef.id, orderId);
+        await window.firebaseModules.addDoc(ordersRef, orderData);
         
         // الخصم من المخزون وتحديث الحالة تلقائياً
         for (const item of itemsToOrder) {
@@ -326,20 +394,8 @@ async function submitCheckoutOrder() {
         }, 1500);
         
     } catch (error) {
-        console.error('❌ خطأ في إرسال الطلب:', error);
-        
-        let errorMessage = 'خطأ في إرسال الطلب، يرجى المحاولة مجدداً';
-        
-        // رسائل أخطاء مفصلة
-        if (error.code === 'permission-denied') {
-            errorMessage = 'صلاحيات غير كافية. قد تحتاج لتسجيل الدخول أو تحديث القواعد الأمنية';
-        } else if (error.code === 'unavailable') {
-            errorMessage = 'الاتصال بالخادم فشل. تحقق من اتصال الإنترنت';
-        } else if (error.message.includes('userId')) {
-            errorMessage = 'مشكلة في بيانات المستخدم. حاول تسجيل الخروج والدخول مرة أخرى';
-        }
-        
-        if (typeof showToast === 'function') showToast(errorMessage, 'error');
+        console.error('خطأ في إرسال الطلب:', error);
+        if (typeof showToast === 'function') showToast('خطأ في إرسال الطلب، يرجى المحاولة مجدداً', 'error');
     } finally {
         const submitBtn = document.getElementById('submitOrderBtn');
         if (submitBtn) {
@@ -347,7 +403,7 @@ async function submitCheckoutOrder() {
             submitBtn.innerHTML = '<i class="fas fa-check"></i> تأكيد الطلب';
         }
     }
-                }
+}
 
 // دالة رفع الإيصال المصححة
 async function uploadCheckoutReceipt(file) {

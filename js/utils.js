@@ -158,6 +158,17 @@ window.generateUniqueId = generateUniqueId;
 window.loadImageWithFallback = loadImageWithFallback;
 window.checkInternetConnection = checkInternetConnection;
 window.retryWithBackoff = retryWithBackoff;
+/**
+ * تنظيف النصوص من وسوم HTML لمنع هجمات XSS
+ */
+function sanitizeHTML(str) {
+    if (!str) return '';
+    const temp = document.createElement('div');
+    temp.textContent = str;
+    return temp.innerHTML;
+}
+
+window.sanitizeHTML = sanitizeHTML;
 window.initPerformanceOptimizations = initPerformanceOptimizations;
 
 console.log('✅ utils.js loaded');

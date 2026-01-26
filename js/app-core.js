@@ -79,10 +79,14 @@ function generateGuestUID() {
     return 'guest_' + Date.now() + '_' + Math.random().toString(36).substr(2, 9);
 }
 
-function safeElementUpdate(id, value) {
+function safeElementUpdate(id, value, isHTML = false) {
     const element = document.getElementById(id);
     if (element) {
-        element.textContent = value;
+        if (isHTML) {
+            element.innerHTML = window.SecurityCore?.sanitizeHTML(value) || value;
+        } else {
+            element.textContent = value;
+        }
         return true;
     } else {
         console.warn(`⚠️ لم يتم العثور على العنصر: ${id}`);
@@ -90,8 +94,44 @@ function safeElementUpdate(id, value) {
     }
 }
 
+/**
+ * نظام حماية الجلسات والتحقق من سلامة البيانات
+ */
+const SecurityManager = {
+    // منع التلاعب بالبيانات في localStorage
+    validateSession: function() {
+        const session = localStorage.getItem('currentUser');
+        if (!session) return true;
+        try {
+            const data = JSON.parse(session);
+            // إذا كان هناك تلاعب في الحقول الأساسية، قم بتسجيل الخروج
+            if (data.isAdmin && !auth.currentUser) {
+                console.warn('⚠️ محاولة تلاعب بالصلاحيات تم اكتشافها');
+                this.forceLogout();
+                return false;
+            }
+            return true;
+        } catch (e) {
+            this.forceLogout();
+            return false;
+        }
+    },
+    forceLogout: function() {
+        localStorage.removeItem('currentUser');
+        sessionStorage.removeItem('currentUser');
+        if (auth) window.firebaseModules.signOut(auth);
+        window.location.reload();
+    },
+    // حماية ضد هجمات Clickjacking
+    preventFraming: function() {
+        if (window.self !== window.top) {
+            window.top.location = window.self.location;
+        }
+    }
+};
+
 function getFirebaseConfig() {
-    return window.firebaseConfig || {
+    const config = window.firebaseConfig || {
         apiKey: "AIzaSyB1vNmCapPK0MI4H_Q0ilO7OnOgZa02jx0",
         authDomain: "queen-beauty-b811b.firebaseapp.com",
         projectId: "queen-beauty-b811b",
@@ -99,6 +139,7 @@ function getFirebaseConfig() {
         messagingSenderId: "418964206430",
         appId: "1:418964206430:web:8c9451fc56ca7f956bd5cf"
     };
+    return Object.freeze(config);
 }
 
 let firebaseApp = null, firebaseAuth = null, firebaseDb = null, firebaseStorage = null;
@@ -270,6 +311,28 @@ function clearCache(key = null) {
         });
         console.log('🧹 [Cache] تم مسح كل الذاكرة المؤقتة');
     }
+}
+
+// ======================== تطبيق حماية XSS على البيانات ========================
+
+function sanitizeProducts(products) {
+    if (!products || !Array.isArray(products)) return [];
+    
+    return products.map(product => {
+        if (window.SecurityCore?.sanitizeObject) {
+            return window.SecurityCore.sanitizeObject(product);
+        }
+        return product;
+    });
+}
+
+function sanitizeUserInput(input) {
+    if (!input || typeof input !== 'string') return input;
+    
+    if (window.SecurityCore?.sanitizeHTML) {
+        return window.SecurityCore.sanitizeHTML(input);
+    }
+    return input.replace(/[<>]/g, '');
 }
 
 // ======================== المتغيرات العامة ========================
@@ -493,7 +556,7 @@ function updateUIWithSettings() {
     
     const aboutEl = document.getElementById('storeDescription');
     if (aboutEl && siteSettings.aboutUs) {
-        aboutEl.textContent = siteSettings.aboutUs;
+        aboutEl.textContent = sanitizeUserInput(siteSettings.aboutUs);
     }
     
     const socialLinks = {
@@ -701,7 +764,7 @@ function performSearch() {
     const searchInput = document.getElementById('searchInput');
     if (!searchInput) return;
     
-    const searchTerm = searchInput.value.trim().toLowerCase();
+    const searchTerm = sanitizeUserInput(searchInput.value.trim().toLowerCase());
     if (!searchTerm) {
         if (typeof displayProducts === 'function') displayProducts();
         return;
@@ -873,6 +936,8 @@ window.optimizeImageUrl = optimizeImageUrl;
 window.loadWithCache = loadWithCache;
 window.getLocalCache = getLocalCache;
 window.clearCache = clearCache;
+window.sanitizeUserInput = sanitizeUserInput;
+window.sanitizeProducts = sanitizeProducts;
 
 // تهيئة التطبيق
 document.addEventListener('DOMContentLoaded', function() {
