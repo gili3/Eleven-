@@ -1,0 +1,367 @@
+<!DOCTYPE html>
+<html lang="ar" dir="rtl">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, viewport-fit=cover">
+    <title>لوحة التحكم الشاملة - Eleven Store</title>
+    
+    <!-- Firebase Modular SDK -->
+    <script type="module">
+        import { initializeApp } from "https://www.gstatic.com/firebasejs/10.7.1/firebase-app.js";
+        import { getAuth, onAuthStateChanged, signOut } from "https://www.gstatic.com/firebasejs/10.7.1/firebase-auth.js";
+        import { getFirestore, doc, collection, getDoc, getDocs, setDoc, updateDoc, deleteDoc, query, where, orderBy, onSnapshot, serverTimestamp, addDoc, increment } from "https://www.gstatic.com/firebasejs/10.7.1/firebase-firestore.js";
+        import { getStorage, ref, uploadBytes, getDownloadURL, uploadBytesResumable } from "https://www.gstatic.com/firebasejs/10.7.1/firebase-storage.js";
+
+        window.firebaseModules = {
+            initializeApp, getAuth, onAuthStateChanged, signOut,
+            getFirestore, doc, collection, getDoc, getDocs, setDoc, updateDoc, deleteDoc, addDoc, query, where, orderBy, onSnapshot, serverTimestamp, increment,
+            getStorage, ref, uploadBytes, getDownloadURL, uploadBytesResumable
+        };
+        window.dispatchEvent(new CustomEvent('firebase-ready'));
+    </script>
+    
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
+    <link href="https://fonts.googleapis.com/css2?family=Cairo:wght@300;400;500;600;700;800&display=swap" rel="stylesheet">
+    <link rel="stylesheet" href="style.css">
+    <link rel="stylesheet" href="admin/admin-styles.css">
+    <link rel="stylesheet" href="admin/image-upload-fix.css">
+
+    <style>
+        :root { --admin-bg: #f4f7f6; }
+        body { background-color: var(--admin-bg); font-family: 'Cairo', sans-serif; }
+        .admin-header { background: #1a1a1a; color: white; padding: 1rem 2rem; display: flex; justify-content: space-between; align-items: center; position: sticky; top: 0; z-index: 1000; box-shadow: 0 2px 10px rgba(0,0,0,0.2); }
+        .admin-container { padding: 20px; max-width: 1400px; margin: 0 auto; }
+        .admin-tabs { display: flex; gap: 10px; overflow-x: auto; padding: 10px 0; margin-bottom: 25px; scrollbar-width: none; }
+        .admin-tab { padding: 12px 24px; border: none; background: white; border-radius: 10px; cursor: pointer; white-space: nowrap; font-weight: 700; transition: all 0.3s; box-shadow: 0 2px 5px rgba(0,0,0,0.05); display: flex; align-items: center; gap: 8px; }
+        .admin-tab.active { background: var(--secondary-color, #c9a24d); color: white; transform: translateY(-2px); }
+        .admin-section { display: none; animation: fadeIn 0.4s ease; }
+        .admin-section.active { display: block; }
+        @keyframes fadeIn { from { opacity: 0; transform: translateY(10px); } to { opacity: 1; transform: translateY(0); } }
+        
+        /* بطاقات الإحصائيات */
+        .stat-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(240px, 1fr)); gap: 20px; margin-bottom: 30px; }
+        .stat-card { background: white; padding: 25px; border-radius: 15px; box-shadow: 0 4px 15px rgba(0,0,0,0.05); display: flex; align-items: center; gap: 20px; border-right: 5px solid var(--secondary-color); }
+        .stat-icon { width: 60px; height: 60px; border-radius: 12px; display: flex; align-items: center; justify-content: center; font-size: 24px; background: #f8f9fa; color: var(--secondary-color); }
+        .stat-info h3 { font-size: 24px; margin: 0; font-weight: 800; }
+        .stat-info p { margin: 0; color: #777; font-size: 14px; }
+
+        /* الجداول والقوائم */
+        .admin-card { background: white; border-radius: 15px; padding: 20px; box-shadow: 0 4px 15px rgba(0,0,0,0.05); margin-bottom: 20px; }
+        .data-table { width: 100%; border-collapse: collapse; margin-top: 15px; }
+        .data-table th { text-align: right; padding: 15px; background: #f8f9fa; color: #555; font-weight: 700; border-bottom: 2px solid #eee; }
+        .data-table td { padding: 15px; border-bottom: 1px solid #eee; vertical-align: middle; }
+        
+        /* أزرار الإجراءات */
+        .action-btn { width: 35px; height: 35px; border-radius: 8px; border: none; cursor: pointer; transition: 0.2s; display: inline-flex; align-items: center; justify-content: center; margin: 0 2px; }
+        .btn-edit { background: #e3f2fd; color: #1976d2; }
+        .btn-delete { background: #ffebee; color: #d32f2f; }
+        .btn-view { background: #f1f8e9; color: #388e3c; }
+        
+        /* المودال المحسن */
+        .admin-modal { position: fixed; top: 0; left: 0; width: 100%; height: 100%; background: rgba(0,0,0,0.6); display: none; align-items: center; justify-content: center; z-index: 2000; padding: 20px; backdrop-filter: blur(5px); }
+        .admin-modal.active { display: flex; }
+        .modal-content { background: white; width: 100%; max-width: 700px; border-radius: 20px; overflow: hidden; animation: modalSlide 0.3s ease; max-height: 90vh; display: flex; flex-direction: column; }
+        @keyframes modalSlide { from { transform: scale(0.9); opacity: 0; } to { transform: scale(1); opacity: 1; } }
+        .modal-header { padding: 20px; background: #f8f9fa; border-bottom: 1px solid #eee; display: flex; justify-content: space-between; align-items: center; }
+        .modal-body { padding: 25px; overflow-y: auto; }
+        .modal-footer { padding: 20px; border-top: 1px solid #eee; display: flex; justify-content: flex-end; gap: 10px; }
+        
+        /* النماذج */
+        .form-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 15px; }
+        .form-group { margin-bottom: 15px; }
+        .form-group label { display: block; margin-bottom: 8px; font-weight: 700; color: #444; }
+        .form-control { width: 100%; padding: 12px; border: 1.5px solid #ddd; border-radius: 10px; font-family: 'Cairo'; transition: 0.3s; }
+        .form-control:focus { border-color: var(--secondary-color); outline: none; box-shadow: 0 0 0 3px rgba(201, 162, 77, 0.1); }
+    </style>
+</head>
+<body>
+    <!-- شاشات التحقق -->
+    <div id="adminAuthLoader" style="position: fixed; top:0; left:0; width:100%; height:100%; background:white; display:flex; flex-direction:column; justify-content:center; align-items:center; z-index:9999;">
+        <div class="loader-spinner"></div>
+        <p style="margin-top:15px; font-weight:700;">جاري التحقق من صلاحيات الإدارة...</p>
+    </div>
+
+    <div id="adminAccessDenied" style="display:none; flex-direction:column; align-items:center; justify-content:center; height:100vh; text-align:center; background:white;">
+        <i class="fas fa-lock fa-5x" style="color:#d32f2f; margin-bottom:20px;"></i>
+        <h1 style="font-weight:800;">وصول غير مصرح به</h1>
+        <p>عذراً، هذه المنطقة مخصصة لمديري النظام فقط.</p>
+        <button class="btn-primary" onclick="window.location.href='index.html'" style="margin-top:20px;">العودة للمتجر</button>
+    </div>
+
+    <!-- المحتوى الرئيسي -->
+    <div id="adminMainContent" style="display: none;">
+        <header class="admin-header">
+            <div style="display:flex; align-items:center; gap:15px;">
+                <img src="https://i.ibb.co/fVn1SghC/file-00000000cf8071f498fc71b66e09f615.png" alt="Logo" style="height: 45px; filter: brightness(0) invert(1);">
+                <h2 style="margin:0; font-weight:800; letter-spacing:1px;">لوحة التحكم</h2>
+            </div>
+            <div style="display:flex; gap:10px;">
+                <button class="btn-receipt" onclick="window.location.href='index.html'"><i class="fas fa-external-link-alt"></i> عرض المتجر</button>
+                <button class="btn-receipt" onclick="signOutAdmin()" style="background:#d32f2f; color:white; border:none;"><i class="fas fa-power-off"></i> خروج</button>
+            </div>
+        </header>
+
+        <div class="admin-container">
+            <div class="admin-tabs">
+                <button class="admin-tab active" data-tab="dashboard"><i class="fas fa-tachometer-alt"></i> الرئيسة</button>
+                <button class="admin-tab" data-tab="products"><i class="fas fa-box-open"></i> المنتجات</button>
+                <button class="admin-tab" data-tab="orders"><i class="fas fa-shopping-bag"></i> الطلبات</button>
+                <button class="admin-tab" data-tab="users"><i class="fas fa-user-friends"></i> المستخدمين</button>
+                <button class="admin-tab" data-tab="settings"><i class="fas fa-sliders-h"></i> الإعدادات</button>
+            </div>
+
+            <!-- قسم الإحصائيات -->
+            <div id="dashboard" class="admin-section active">
+                <div class="stat-grid">
+                    <div class="stat-card">
+                        <div class="stat-icon"><i class="fas fa-users"></i></div>
+                        <div class="stat-info"><h3 id="statUsers">0</h3><p>إجمالي المستخدمين</p></div>
+                    </div>
+                    <div class="stat-card">
+                        <div class="stat-icon"><i class="fas fa-boxes"></i></div>
+                        <div class="stat-info"><h3 id="statProducts">0</h3><p>المنتجات النشطة</p></div>
+                    </div>
+                    <div class="stat-card">
+                        <div class="stat-icon"><i class="fas fa-check-double"></i></div>
+                        <div class="stat-info"><h3 id="statOrders">0</h3><p>طلبات مكتملة</p></div>
+                    </div>
+                    <div class="stat-card">
+                        <div class="stat-icon"><i class="fas fa-money-bill-wave"></i></div>
+                        <div class="stat-info"><h3 id="statSales">0 SDG</h3><p>إجمالي المبيعات</p></div>
+                    </div>
+                </div>
+                
+                <div class="admin-card">
+                    <h3><i class="fas fa-history"></i> آخر الطلبات</h3>
+                    <div id="recentOrdersList"></div>
+                </div>
+            </div>
+
+            <!-- قسم المنتجات -->
+            <div id="products" class="admin-section">
+                <div class="admin-card">
+                    <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:20px;">
+                        <h3>قائمة المنتجات</h3>
+                        <button class="btn-primary" onclick="openProductModal()"><i class="fas fa-plus-circle"></i> إضافة منتج جديد</button>
+                    </div>
+                    <div style="overflow-x:auto;">
+                        <table class="data-table">
+                            <thead>
+                                <tr>
+                                    <th>الصورة</th>
+                                    <th>الاسم</th>
+                                    <th>الفئة</th>
+                                    <th>السعر</th>
+                                    <th>المخزون</th>
+                                    <th>الحالة</th>
+                                    <th>الإجراءات</th>
+                                </tr>
+                            </thead>
+                            <tbody id="adminProductsTableBody"></tbody>
+                        </table>
+                    </div>
+                </div>
+            </div>
+
+            <!-- قسم الطلبات -->
+            <div id="orders" class="admin-section">
+                <div class="admin-card">
+                    <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:20px;">
+                        <h3>إدارة الطلبات</h3>
+                        <select id="orderFilter" class="form-control" style="width:200px;" onchange="loadAdminOrders(this.value)">
+                            <option value="all">كل الطلبات</option>
+                            <option value="pending">قيد الانتظار</option>
+                            <option value="processing">جاري التجهيز</option>
+                            <option value="shipped">تم الشحن</option>
+                            <option value="delivered">تم التوصيل</option>
+                            <option value="cancelled">ملغي</option>
+                        </select>
+                    </div>
+                    <div id="adminOrdersContainer"></div>
+                </div>
+            </div>
+
+            <!-- قسم المستخدمين -->
+            <div id="users" class="admin-section">
+                <div class="admin-card">
+                    <h3>إدارة المستخدمين</h3>
+                    <div style="overflow-x:auto;">
+                        <table class="data-table">
+                            <thead>
+                                <tr>
+                                    <th>المستخدم</th>
+                                    <th>البريد الإلكتروني</th>
+                                    <th>الهاتف</th>
+                                    <th>الصلاحية</th>
+                                    <th>تاريخ التسجيل</th>
+                                    <th>الإجراءات</th>
+                                </tr>
+                            </thead>
+                            <tbody id="adminUsersTableBody"></tbody>
+                        </table>
+                    </div>
+                </div>
+            </div>
+
+            <!-- قسم الإعدادات -->
+            <div id="settings" class="admin-section">
+                <div class="admin-card">
+                    <h3>إعدادات المتجر العامة</h3>
+                    <form id="adminSettingsForm">
+                        <div class="form-grid">
+                            <div class="form-group">
+                                <label>اسم المتجر</label>
+                                <input type="text" id="setStoreName" class="form-control">
+                            </div>
+                            <div class="form-group">
+                                <label>رقم التواصل (WhatsApp)</label>
+                                <input type="text" id="setStorePhone" class="form-control">
+                            </div>
+                            <div class="form-group">
+                                <label>تكلفة الشحن (SDG)</label>
+                                <input type="number" id="setShippingCost" class="form-control">
+                            </div>
+                            <div class="form-group">
+                                <label>حد الشحن المجاني (SDG)</label>
+                                <input type="number" id="setFreeShippingLimit" class="form-control">
+                            </div>
+                        </div>
+                        <div class="form-group">
+                            <label>عن المتجر</label>
+                            <textarea id="setAboutUs" class="form-control" rows="4"></textarea>
+                        </div>
+                        <button type="button" class="btn-primary" onclick="saveAdminSettings()" style="width:100%; padding:15px;">حفظ التغييرات</button>
+                    </form>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- مودال المنتج (إضافة/تعديل) -->
+    <div id="productModal" class="admin-modal">
+        <div class="modal-content">
+            <div class="modal-header">
+                <h3 id="productModalTitle">إضافة منتج جديد</h3>
+                <button class="close-modal" onclick="closeAdminModal('productModal')">&times;</button>
+            </div>
+            <div class="modal-body">
+                <form id="productForm">
+                    <input type="hidden" id="editProductId">
+                    <div class="form-group">
+                        <label>اسم المنتج</label>
+                        <input type="text" id="prodName" class="form-control" required>
+                    </div>
+                    <div class="form-grid">
+                        <div class="form-group">
+                            <label>السعر (SDG)</label>
+                            <input type="number" id="prodPrice" class="form-control" required>
+                        </div>
+                        <div class="form-group">
+                            <label>الفئة</label>
+                            <select id="prodCategory" class="form-control">
+                                <option value="perfume">عطور</option>
+                                <option value="makeup">مكياج</option>
+                                <option value="skincare">عناية بالبشرة</option>
+                                <option value="haircare">عناية بالشعر</option>
+                            </select>
+                        </div>
+                    </div>
+                    <div class="form-grid">
+                        <div class="form-group">
+                            <label>الكمية المتوفرة</label>
+                            <input type="number" id="prodStock" class="form-control" value="10">
+                        </div>
+                        <div class="form-group">
+                            <label>الحالة</label>
+                            <select id="prodStatus" class="form-control">
+                                <option value="true">نشط</option>
+                                <option value="false">غير نشط</option>
+                            </select>
+                        </div>
+                    </div>
+                    <div class="form-group">
+                        <label>صورة المنتج</label>
+                        <div class="image-upload-container" onclick="document.getElementById('prodImageFile').click()">
+                            <div id="prodImagePreview" class="upload-placeholder">
+                                <i class="fas fa-cloud-upload-alt fa-2x"></i>
+                                <p>اضغط لرفع صورة</p>
+                            </div>
+                            <input type="file" id="prodImageFile" hidden accept="image/*" onchange="handleAdminImageUpload(this)">
+                        </div>
+                        <input type="hidden" id="prodImageUrl">
+                    </div>
+                    <div class="form-group">
+                        <label>وصف المنتج</label>
+                        <textarea id="prodDesc" class="form-control" rows="3"></textarea>
+                    </div>
+                </form>
+            </div>
+            <div class="modal-footer">
+                <button class="btn-secondary" onclick="closeAdminModal('productModal')">إلغاء</button>
+                <button class="btn-primary" id="saveProductBtn" onclick="saveProductData()">حفظ المنتج</button>
+            </div>
+        </div>
+    </div>
+
+    <!-- مودال تفاصيل الطلب -->
+    <div id="orderDetailModal" class="admin-modal">
+        <div class="modal-content">
+            <div class="modal-header">
+                <h3>تفاصيل الطلب</h3>
+                <button class="close-modal" onclick="closeAdminModal('orderDetailModal')">&times;</button>
+            </div>
+            <div id="orderDetailBody" class="modal-body"></div>
+            <div class="modal-footer">
+                <button class="btn-secondary" onclick="closeAdminModal('orderDetailModal')">إغلاق</button>
+            </div>
+        </div>
+    </div>
+
+    <!-- السكربتات -->
+    <script src="js/security-core.js"></script>
+    <script src="js/firebase-config.js"></script>
+    <script src="js/app-core.js"></script>
+    <script src="js/auth-system.js"></script>
+    <script src="js/admin-core.js"></script>
+
+    <script>
+        async function signOutAdmin() {
+            if (window.firebaseModules && auth) {
+                await window.firebaseModules.signOut(auth);
+                window.location.href = 'index.html';
+            }
+        }
+
+        function closeAdminModal(id) {
+            document.getElementById(id).classList.remove('active');
+        }
+
+        document.addEventListener('DOMContentLoaded', () => {
+            if (window.SecurityCore) window.SecurityCore.init();
+            
+            const checkAuth = setInterval(() => {
+                if (typeof auth !== 'undefined') {
+                    clearInterval(checkAuth);
+                    window.firebaseModules.onAuthStateChanged(auth, async (user) => {
+                        if (!user) { window.location.href = 'index.html'; return; }
+                        
+                        try {
+                            const userDoc = await window.firebaseModules.getDoc(window.firebaseModules.doc(db, "users", user.uid));
+                            const userData = userDoc.exists() ? userDoc.data() : null;
+                            
+                            if ((userData && userData.isAdmin === true) || user.email === "yxr.249@gmail.com") {
+                                document.getElementById('adminAuthLoader').style.display = 'none';
+                                document.getElementById('adminMainContent').style.display = 'block';
+                                if (typeof initAdminPanel === 'function') initAdminPanel();
+                            } else {
+                                document.getElementById('adminAuthLoader').style.display = 'none';
+                                document.getElementById('adminAccessDenied').style.display = 'flex';
+                            }
+                        } catch (e) { window.location.href = 'index.html'; }
+                    });
+                }
+            }, 100);
+        });
+    </script>
+</body>
+</html>
