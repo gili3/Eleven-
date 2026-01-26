@@ -1,479 +1,0 @@
-<!DOCTYPE html>
-<html lang="ar" dir="rtl">
-<head>
-    <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
-    <title>لوحة تحكم - Queen Beauty</title>
-    
-    <!-- Firebase Modular SDK -->
-    <script type="module" id="firebase-sdk-module">
-        import { initializeApp } from "https://www.gstatic.com/firebasejs/10.7.1/firebase-app.js";
-        import { getAuth, onAuthStateChanged, signOut, setPersistence, browserSessionPersistence } from "https://www.gstatic.com/firebasejs/10.7.1/firebase-auth.js";
-        import { getFirestore, doc, collection, getDoc, getDocs, setDoc, updateDoc, deleteDoc, query, where, orderBy, onSnapshot, serverTimestamp, addDoc, increment } from "https://www.gstatic.com/firebasejs/10.7.1/firebase-firestore.js";
-        import { getStorage, ref, uploadBytes, getDownloadURL, uploadBytesResumable } from "https://www.gstatic.com/firebasejs/10.7.1/firebase-storage.js";
-
-        window.firebaseModules = {
-            initializeApp,
-            getAuth,
-            onAuthStateChanged,
-            signOut,
-            setPersistence,
-            browserSessionPersistence,
-            getFirestore,
-            doc,
-            collection,
-            getDoc,
-            getDocs,
-            setDoc,
-            updateDoc,
-            deleteDoc,
-            addDoc,
-            query,
-            where,
-            orderBy,
-            onSnapshot,
-            serverTimestamp,
-            increment,
-            getStorage,
-            ref,
-            uploadBytes,
-            getDownloadURL,
-            uploadBytesResumable
-        };
-        console.log("✅ Firebase Modules Loaded in Admin");
-    </script>
-    
-    <!-- Font Awesome -->
-    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
-    
-    <!-- Google Fonts -->
-    <link href="https://fonts.googleapis.com/css2?family=Cairo:wght@300;400;500;600;700;800&display=swap" rel="stylesheet">
-    
-    <!-- CSS Files -->
-    <link rel="stylesheet" href="admin-styles.css">
-    <link rel="stylesheet" href="image-upload-fix.css">
-</head>
-<body>
-    <!-- Header -->
-    <header class="admin-header">
-        <div class="header-logo">
-            <img src="https://i.ibb.co/fVn1SghC/file-00000000cf8071f498fc71b66e09f615.png" alt="Logo">
-            <span>لوحة التحكم</span>
-        </div>
-        <div class="header-actions" style="display: flex; gap: 10px; align-items: center;">
-            <button class="admin-tab" onclick="window.location.href='../index.html'" style="border: 1px solid var(--border-color); background: white; padding: 8px 15px;">
-                <i class="fas fa-external-link-alt"></i> عرض المتجر
-            </button>
-            <button onclick="logoutAdmin()" class="logout-admin-btn">
-                <i class="fas fa-sign-out-alt"></i> خروج
-            </button>
-        </div>
-    </header>
-
-    <div class="admin-container">
-        <!-- التبويبات المبسطة تحت الهيدر -->
-        <div class="admin-tabs">
-            <button class="admin-tab active" data-tab="dashboard">
-                <i class="fas fa-chart-line"></i> الإحصائيات
-            </button>
-            <button class="admin-tab" data-tab="productsManagement">
-                <i class="fas fa-boxes"></i> المنتجات
-            </button>
-            <button class="admin-tab" data-tab="ordersManagement">
-                <i class="fas fa-shopping-cart"></i> الطلبات
-            </button>
-            <button class="admin-tab" data-tab="usersManagement">
-                <i class="fas fa-users"></i> المستخدمين
-            </button>
-            <button class="admin-tab" data-tab="settingsManagement">
-                <i class="fas fa-cog"></i> الإعدادات
-            </button>
-            <button class="admin-tab" data-tab="themeManagement">
-                <i class="fas fa-palette"></i> المظهر
-            </button>
-        </div>
-
-        <!-- محتوى الإحصائيات (الرئيسية) -->
-        <div id="dashboard" class="admin-tab-content active">
-            <div class="admin-stats">
-                <div class="admin-stat-card">
-                    <div class="stat-icon users"><i class="fas fa-users"></i></div>
-                    <div class="stat-details">
-                        <h3 id="adminUsersCount">0</h3>
-                        <p>المستخدمين</p>
-                    </div>
-                </div>
-                <div class="admin-stat-card">
-                    <div class="stat-icon products"><i class="fas fa-box"></i></div>
-                    <div class="stat-details">
-                        <h3 id="adminProductsCount">0</h3>
-                        <p>المنتجات النشطة</p>
-                    </div>
-                </div>
-                <div class="admin-stat-card">
-                    <div class="stat-icon orders"><i class="fas fa-shopping-cart"></i></div>
-                    <div class="stat-details">
-                        <h3 id="adminCompletedOrdersCount">0</h3>
-                        <p>الطلبات المكتملة</p>
-                    </div>
-                </div>
-                <div class="admin-stat-card">
-                    <div class="stat-icon sales"><i class="fas fa-dollar-sign"></i></div>
-                    <div class="stat-details">
-                        <h3 id="adminTotalSales">0 SDG</h3>
-                        <p>إجمالي المبيعات</p>
-                    </div>
-                </div>
-            </div>
-
-            <!-- المنتجات الأكثر مبيعاً -->
-            <div class="top-products-card">
-                <div class="top-products-header">
-                    <i class="fas fa-fire" style="color: #e67e22;"></i>
-                    <h3>المنتجات الأكثر مبيعاً</h3>
-                </div>
-                <div id="topProductsList" class="top-products-container">
-                    <div class="spinner"></div>
-                </div>
-            </div>
-        </div>
-
-        <!-- إدارة المنتجات -->
-        <div class="admin-tab-content" id="productsManagement">
-            <div class="tab-header">
-                <h3>إدارة المنتجات</h3>
-                <button class="add-product-btn" id="addProductBtn">
-                    <i class="fas fa-plus"></i> إضافة منتج جديد
-                </button>
-            </div>
-            
-            <div class="products-list" id="adminProductsList">
-                <!-- سيتم تعبئتها بواسطة JavaScript -->
-            </div>
-        </div>
-
-        <!-- إدارة الطلبات -->
-        <div class="admin-tab-content" id="ordersManagement">
-            <div class="tab-header">
-                <h3>إدارة الطلبات</h3>
-                <div class="filter-group" style="display: flex; gap: 10px;">
-                    <select id="orderStatusFilter" style="padding: 10px; border-radius: 8px; border: 1px solid var(--border-color); font-family: 'Cairo'; min-width: 150px;">
-                        <option value="all">جميع الحالات</option>
-                        <option value="pending">قيد الانتظار</option>
-                        <option value="processing">قيد التنفيذ</option>
-                        <option value="shipped">تم الشحن</option>
-                        <option value="delivered">تم التوصيل</option>
-                        <option value="cancelled">ملغي</option>
-                    </select>
-                </div>
-            </div>
-            
-            <div class="orders-list" id="adminOrdersList">
-                <!-- سيتم تعبئتها بواسطة JavaScript -->
-            </div>
-        </div>
-        
-        <!-- إدارة المستخدمين -->
-        <div class="admin-tab-content" id="usersManagement">
-            <h3>إدارة المستخدمين</h3>
-            <div class="users-list" id="adminUsersList">
-                <!-- سيتم تعبئتها بواسطة JavaScript -->
-            </div>
-        </div>
-        
-        <!-- إعدادات الموقع -->
-        <div class="admin-tab-content" id="settingsManagement">
-            <h3>إعدادات الموقع</h3>
-            <div class="settings-form">
-                <div id="settingsForm">
-                    <!-- سيتم تعبئتها بواسطة JavaScript -->
-                </div>
-                <button class="btn-primary" id="saveSettingsBtn" style="width: 100%; margin-top: 20px;">
-                    <i class="fas fa-save"></i> حفظ الإعدادات
-                </button>
-            </div>
-        </div>
-        
-        <!-- إدارة المظهر -->
-        <div class="admin-tab-content" id="themeManagement">
-            <h3>إدارة الألوان والتصميم</h3>
-            <div class="settings-form">
-                <h4><i class="fas fa-palette"></i> ألوان المتجر</h4>
-                
-                <div class="color-input-group">
-                    <div class="color-preview" style="background: var(--primary-color);"></div>
-                    <div class="color-inputs">
-                        <label>اللون الأساسي</label>
-                        <input type="color" id="primaryColor" value="#1C1C1C">
-                        <input type="text" id="primaryColorHex" value="#1C1C1C" placeholder="#1C1C1C" style="margin-top: 5px;">
-                    </div>
-                    <div class="color-info">
-                        <h5>اللون الأساسي</h5>
-                        <p>يستخدم في النصوص والعناوين الرئيسية</p>
-                    </div>
-                </div>
-                
-                <div class="color-input-group">
-                    <div class="color-preview" style="background: var(--secondary-color);"></div>
-                    <div class="color-inputs">
-                        <label>اللون الثانوي</label>
-                        <input type="color" id="secondaryColor" value="#555555">
-                        <input type="text" id="secondaryColorHex" value="#555555" placeholder="#555555" style="margin-top: 5px;">
-                    </div>
-                    <div class="color-info">
-                        <h5>اللون الثانوي</h5>
-                        <p>يستخدم في الأزرار والعناصر التفاعلية</p>
-                    </div>
-                </div>
-                
-                <div class="color-input-group">
-                    <div class="color-preview" style="background: var(--success-color);"></div>
-                    <div class="color-inputs">
-                        <label>لون النجاح</label>
-                        <input type="color" id="successColor" value="#27ae60">
-                        <input type="text" id="successColorHex" value="#27ae60" placeholder="#27ae60" style="margin-top: 5px;">
-                    </div>
-                    <div class="color-info">
-                        <h5>لون النجاح</h5>
-                        <p>يستخدم للإشعارات الناجحة والعناصر الإيجابية</p>
-                    </div>
-                </div>
-
-                <div class="color-input-group">
-                    <div class="color-preview" style="background: var(--button-press-color);"></div>
-                    <div class="color-inputs">
-                        <input type="color" id="buttonPressColor" value="#555555">
-                        <input type="text" id="buttonPressColorHex" value="#555555" placeholder="#555555" style="margin-top: 5px;">
-                    </div>
-                    <div class="color-info">
-                        <h5>لون الضغط</h5>
-                        <p>يستخدم عند النقر على الأزرار والعناصر التفاعلية</p>
-                    </div>
-                </div>
-                
-                <div class="color-input-group">
-                    <div class="color-preview" style="background: var(--danger-color);"></div>
-                    <div class="color-inputs">
-                        <label>لون الخطأ</label>
-                        <input type="color" id="dangerColor" value="#e74c3c">
-                        <input type="text" id="dangerColorHex" value="#e74c3c" placeholder="#e74c3c" style="margin-top: 5px;">
-                    </div>
-                    <div class="color-info">
-                        <h5>لون الخطأ</h5>
-                        <p>يستخدم للإشعارات الخطأ والأزرار الحمراء</p>
-                    </div>
-                </div>
-                
-                <div class="color-input-group">
-                    <div class="color-preview" style="background: var(--warning-color);"></div>
-                    <div class="color-inputs">
-                        <label>لون التحذير</label>
-                        <input type="color" id="warningColor" value="#f39c12">
-                        <input type="text" id="warningColorHex" value="#f39c12" placeholder="#f39c12" style="margin-top: 5px;">
-                    </div>
-                    <div class="color-info">
-                        <h5>لون التحذير</h5>
-                        <p>يستخدم للتحذيرات والعناصر التحذيرية</p>
-                    </div>
-                </div>
-                
-                <div class="color-input-group">
-                    <div class="color-preview" style="background: var(--light-color); border: 2px solid var(--border-color);"></div>
-                    <div class="color-inputs">
-                        <label>لون الخلفية</label>
-                        <input type="color" id="lightColor" value="#F7F5F2">
-                        <input type="text" id="lightColorHex" value="#F7F5F2" placeholder="#F7F5F2" style="margin-top: 5px;">
-                    </div>
-                    <div class="color-info">
-                        <h5>لون الخلفية</h5>
-                        <p>يستخدم في خلفيات العناصر والأقسام</p>
-                    </div>
-                </div>
-                
-                <button class="btn-primary" id="saveColorsBtn" style="width: 100%; margin-top: 20px;">
-                    <i class="fas fa-save"></i> حفظ الألوان
-                </button>
-                
-                <button class="btn-secondary" id="resetColorsBtn" style="width: 100%; margin-top: 10px;">
-                    <i class="fas fa-undo"></i> استعادة الألوان الافتراضية
-                </button>
-                
-                <div style="background: var(--light-color); padding: 15px; border-radius: 10px; margin-top: 20px; border: 1px solid var(--border-color);">
-                    <h5 style="margin-bottom: 10px;"><i class="fas fa-info-circle"></i> ملاحظة مهمة</h5>
-                    <p style="font-size: 14px; color: var(--gray-color); line-height: 1.6;">
-                        لون الأزرار عند الضغط يتم تطبيقه تلقائياً على جميع الأزرار في الموقع والمتجر. 
-                        تأكد من اختيار لون يتناسب مع اللون الثانوي ويوفر تباينًا جيدًا للمستخدمين.
-                    </p>
-                </div>
-                
-                <div class="preview-section">
-                    <h4>معاينة الألوان</h4>
-                    <div class="preview-elements">
-                        <div class="preview-element preview-primary">أساسي</div>
-                        <div class="preview-element preview-secondary">ثانوي</div>
-                        <div class="preview-element preview-success">نجاح</div>
-                        <div class="preview-element preview-danger">خطأ</div>
-                        <div class="preview-element preview-warning">تحذير</div>
-                        <div class="preview-element preview-light">خلفية</div>
-                        <button class="preview-element preview-button-press" id="previewButtonPress" style="cursor: pointer; font-weight: 600;">اضغط هنا</button>
-                    </div>
-                </div>
-            </div>
-        </div>
-    </div>
-
-    <!-- نافذة إضافة/تعديل منتج -->
-    <div id="productModal" class="modal">
-        <div class="modal-content">
-            <div class="modal-header">
-                <h3 id="productModalTitle">إضافة منتج جديد</h3>
-                <button class="close-modal" onclick="closeModal()">&times;</button>
-            </div>
-            <div class="modal-body">
-                <div class="form-row">
-                    <div class="form-group">
-                        <label for="productName">اسم المنتج *</label>
-                        <input type="text" id="productName" required placeholder="أدخل اسم المنتج">
-                    </div>
-                    <div class="form-group">
-                        <label for="productPrice">السعر (SDG) *</label>
-                        <input type="number" id="productPrice" min="0" step="0.01" required placeholder="0.00">
-                    </div>
-                </div>
-                
-                <div class="form-row">
-                    <div class="form-group">
-                        <label for="productCategory">الفئة *</label>
-                        <select id="productCategory" required>
-                            <option value="">اختر الفئة</option>
-                            <option value="perfume">عطور</option>
-                            <option value="makeup">مكياج</option>
-                            <option value="skincare">عناية بالبشرة</option>
-                            <option value="haircare">عناية بالشعر</option>
-                        </select>
-                    </div>
-                    <div class="form-group">
-                        <label for="productStock">الكمية في المخزن *</label>
-                        <input type="number" id="productStock" min="0" required placeholder="0">
-                    </div>
-                </div>
-                
-                <div class="form-group">
-                    <label for="productDescription">وصف المنتج</label>
-                    <textarea id="productDescription" rows="3" placeholder="أدخل وصف المنتج..."></textarea>
-                </div>
-                
-                <div class="form-group">
-                    <label for="productImage">صورة المنتج *</label>
-                    <div class="image-upload-container" id="productImageUploadContainer" onclick="document.getElementById('productImageFile').click()">
-                        <div class="upload-placeholder" id="productImagePlaceholder">
-                            <i class="fas fa-image"></i>
-                            <span>ارفع صورة المنتج</span>
-                            <p>اضغط هنا لاختيار الصورة</p>
-                        </div>
-                        <div class="image-preview-container" id="productImagePreviewContainer">
-                            <img id="productImagePreview" src="" alt="معاينة">
-                            <button type="button" class="remove-image-btn" onclick="event.stopPropagation(); removeProductImagePreview()">
-                                <i class="fas fa-times"></i>
-                            </button>
-                        </div>
-                        <input type="file" id="productImageFile" accept="image/*" style="display: none;" onchange="handleProductImageUpload(this)">
-                    </div>
-                    
-                    <div class="upload-progress-container" id="productUploadProgressContainer">
-                        <div class="progress-info">
-                            <span id="productUploadStatus">جاري الرفع...</span>
-                            <span id="productProgressText">0%</span>
-                        </div>
-                        <div class="progress-bar-wrapper">
-                            <div class="progress-bar-fill" id="productProgressFill"></div>
-                        </div>
-                    </div>
-                    <input type="hidden" id="productImage" required>
-                </div>
-                
-                <div class="form-checkboxes">
-                    <label class="checkbox-label">
-                        <input type="checkbox" id="productIsNew">
-                        <span>منتج جديد</span>
-                    </label>
-                    <label class="checkbox-label">
-                        <input type="checkbox" id="productIsSale">
-                        <span>في عرض خاص</span>
-                    </label>
-                    <label class="checkbox-label">
-                        <input type="checkbox" id="productIsBest">
-                        <span>الأفضل مبيعاً</span>
-                    </label>
-                    <label class="checkbox-label">
-                        <input type="checkbox" id="productIsActive" checked>
-                        <span>منتج نشط</span>
-                    </label>
-                </div>
-            </div>
-            <div class="modal-footer">
-                <button class="btn-secondary" onclick="closeModal()">إلغاء</button>
-                <button class="btn-primary" id="saveProductBtn">حفظ المنتج</button>
-            </div>
-        </div>
-    </div>
-
-    <!-- نافذة التأكيد -->
-    <div id="confirmModal" class="modal">
-        <div class="modal-content" style="max-width: 400px;">
-            <div class="modal-header">
-                <h3>تأكيد العملية</h3>
-                <button class="close-modal" onclick="closeModal()">&times;</button>
-            </div>
-            <div class="modal-body">
-                <div style="text-align: center; padding: 20px;">
-                    <i class="fas fa-exclamation-triangle fa-3x" style="color: var(--warning-color); margin-bottom: 20px;"></i>
-                    <h3 style="margin-bottom: 10px;" id="confirmTitle">هل أنت متأكد؟</h3>
-                    <p style="color: var(--gray-color);" id="confirmMessage">سيتم تعطيل المنتج وعدم عرضه في المتجر</p>
-                </div>
-            </div>
-            <div class="modal-footer">
-                <button class="btn-secondary" onclick="closeModal()">إلغاء</button>
-                <button class="btn-danger" onclick="deleteProductConfirmed()" style="background: var(--danger-color); color: white; padding: 12px 25px; border: none; border-radius: 8px; cursor: pointer; font-family: 'Cairo';">
-                    نعم، تعطيل
-                </button>
-            </div>
-        </div>
-    </div>
-
-    <script>
-        // تهيئة المتغيرات العالمية قبل تحميل السكربتات
-        window.isAdmin = false;
-
-        // دالة الانتظار لتحميل Firebase Modules
-        async function waitForFirebase() {
-            return new Promise(resolve => {
-                const check = () => {
-                    if (window.firebaseModules && window.firebaseModules.initializeApp) {
-                        resolve();
-                    } else {
-                        setTimeout(check, 100);
-                    }
-                };
-                check();
-            });
-        }
-
-        // تشغيل التطبيق بعد تحميل DOM و Firebase
-        document.addEventListener('DOMContentLoaded', async () => {
-            console.log('⏳ بانتظار تحميل Firebase...');
-            await waitForFirebase();
-            console.log('🚀 تم تحميل Firebase، بدء تشغيل لوحة التحكم...');
-            if (typeof initAdminApp === 'function') {
-                initAdminApp();
-            } else {
-                console.error('❌ دالة initAdminApp غير معرفة!');
-            }
-        });
-    </script>
-    
-    <!-- JavaScript Files -->
-    <script src="firebase-config.js"></script>
-    <script src="admin.js"></script>
-</body>
-</html>
