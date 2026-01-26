@@ -60,10 +60,11 @@ self.addEventListener('activate', (event) => {
 self.addEventListener('fetch', (event) => {
     const url = new URL(event.request.url);
     
-    // استثناء Firebase وطلبات الصوت/الفيديو
+    // استثناء Firebase وطلبات الصوت/الفيديو وطلبات POST
     if (url.pathname.includes('firebase') || 
         event.request.destination === 'video' || 
-        event.request.destination === 'audio') {
+        event.request.destination === 'audio' ||
+        event.request.method !== 'GET') {
         return;
     }
     
