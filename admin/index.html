@@ -242,7 +242,6 @@
                 <div class="color-input-group">
                     <div class="color-preview" style="background: var(--button-press-color);"></div>
                     <div class="color-inputs">
-                        <label>لون الضغط على الأزرار</label>
                         <input type="color" id="buttonPressColor" value="#555555">
                         <input type="text" id="buttonPressColorHex" value="#555555" placeholder="#555555" style="margin-top: 5px;">
                     </div>
@@ -445,6 +444,32 @@
     <script>
         // تهيئة المتغيرات العالمية قبل تحميل السكربتات
         window.isAdmin = false;
+
+        // دالة الانتظار لتحميل Firebase Modules
+        async function waitForFirebase() {
+            return new Promise(resolve => {
+                const check = () => {
+                    if (window.firebaseModules && window.firebaseModules.initializeApp) {
+                        resolve();
+                    } else {
+                        setTimeout(check, 100);
+                    }
+                };
+                check();
+            });
+        }
+
+        // تشغيل التطبيق بعد تحميل DOM و Firebase
+        document.addEventListener('DOMContentLoaded', async () => {
+            console.log('⏳ بانتظار تحميل Firebase...');
+            await waitForFirebase();
+            console.log('🚀 تم تحميل Firebase، بدء تشغيل لوحة التحكم...');
+            if (typeof initAdminApp === 'function') {
+                initAdminApp();
+            } else {
+                console.error('❌ دالة initAdminApp غير معرفة!');
+            }
+        });
     </script>
     
     <!-- JavaScript Files -->
