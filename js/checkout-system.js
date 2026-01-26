@@ -240,7 +240,7 @@ async function submitCheckoutOrder() {
             orderNumber: nextOrderNumber,
             userId: currentUser.uid,
             userName: currentUser.displayName || 'مستخدم',
-            userEmail: currentUser.email,
+            userEmail: currentUser.email || '',
             phone: phone,
             address: address,
             notes: notes,
@@ -261,8 +261,11 @@ async function submitCheckoutOrder() {
             updatedAt: window.firebaseModules.serverTimestamp()
         };
         
+        // 📌 التصحيح هنا: استخدم await واحصل على المرجع
         const ordersRef = window.firebaseModules.collection(db, 'orders');
-        await window.firebaseModules.addDoc(ordersRef, orderData);
+        const docRef = await window.firebaseModules.addDoc(ordersRef, orderData);
+        
+        console.log('✅ تم إنشاء الطلب بنجاح:', docRef.id, orderId);
         
         // الخصم من المخزون وتحديث الحالة تلقائياً
         for (const item of itemsToOrder) {
@@ -323,8 +326,20 @@ async function submitCheckoutOrder() {
         }, 1500);
         
     } catch (error) {
-        console.error('خطأ في إرسال الطلب:', error);
-        if (typeof showToast === 'function') showToast('خطأ في إرسال الطلب، يرجى المحاولة مجدداً', 'error');
+        console.error('❌ خطأ في إرسال الطلب:', error);
+        
+        let errorMessage = 'خطأ في إرسال الطلب، يرجى المحاولة مجدداً';
+        
+        // رسائل أخطاء مفصلة
+        if (error.code === 'permission-denied') {
+            errorMessage = 'صلاحيات غير كافية. قد تحتاج لتسجيل الدخول أو تحديث القواعد الأمنية';
+        } else if (error.code === 'unavailable') {
+            errorMessage = 'الاتصال بالخادم فشل. تحقق من اتصال الإنترنت';
+        } else if (error.message.includes('userId')) {
+            errorMessage = 'مشكلة في بيانات المستخدم. حاول تسجيل الخروج والدخول مرة أخرى';
+        }
+        
+        if (typeof showToast === 'function') showToast(errorMessage, 'error');
     } finally {
         const submitBtn = document.getElementById('submitOrderBtn');
         if (submitBtn) {
@@ -332,7 +347,7 @@ async function submitCheckoutOrder() {
             submitBtn.innerHTML = '<i class="fas fa-check"></i> تأكيد الطلب';
         }
     }
-}
+                }
 
 // دالة رفع الإيصال المصححة
 async function uploadCheckoutReceipt(file) {
