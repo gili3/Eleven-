@@ -1,6 +1,14 @@
 // admin-core.js - المحرك البرمجي للوحة التحكم الشاملة
 // ========================================================================
 
+// دالة تنسيق الأرقام إذا لم تكن موجودة في app-core
+if (typeof formatNumber !== 'function') {
+    window.formatNumber = function(num) {
+        if (num === null || num === undefined) return "0";
+        return num.toString().replace(/\B(?=(\d{3})+(?!\d))/g, ",");
+    };
+}
+
 /**
  * تهيئة لوحة التحكم
  */
@@ -30,10 +38,10 @@ function setupAdminTabs() {
 async function handleTabChange(tabId) {
     switch(tabId) {
         case 'dashboard': await loadAdminStats(); break;
-        case 'products': await loadAdminProducts(); break;
-        case 'orders': await loadAdminOrders(); break;
-        case 'users': await loadAdminUsers(); break;
-        case 'settings': await loadAdminSettings(); break;
+        case 'productsManagement': await loadAdminProducts(); break;
+        case 'ordersManagement': await loadAdminOrders(); break;
+        case 'usersManagement': await loadAdminUsers(); break;
+        case 'settingsManagement': await loadAdminSettings(); break;
     }
 }
 
@@ -61,9 +69,9 @@ async function loadAdminStats() {
         let totalSales = 0;
         ordersSnap.forEach(doc => totalSales += (doc.data().total || 0));
         
-        safeElementUpdate('statUsers', usersSnap.size);
-        safeElementUpdate('statProducts', productsSnap.size);
-        safeElementUpdate('statOrders', ordersSnap.size);
+        safeElementUpdate('statUsers', usersSnap.size.toString());
+        safeElementUpdate('statProducts', productsSnap.size.toString());
+        safeElementUpdate('statOrders', ordersSnap.size.toString());
         safeElementUpdate('statSales', formatNumber(totalSales) + ' SDG');
         
         await loadRecentOrders();
@@ -172,7 +180,7 @@ async function saveProductData() {
             await window.firebaseModules.addDoc(window.firebaseModules.collection(db, "products"), data);
         }
         showToast("تم حفظ المنتج بنجاح", "success");
-        closeAdminModal('productModal');
+        document.getElementById('productModal').classList.remove('active');
         loadAdminProducts();
     } catch (e) { showToast("خطأ في الحفظ", "error"); }
     finally { hideLoadingSpinner(); }
@@ -260,29 +268,34 @@ async function updateOrderStatus(orderId, newStatus) {
 }
 
 async function viewOrderDetails(id) {
-    const modal = document.getElementById('orderDetailModal');
-    const body = document.getElementById('orderDetailBody');
-    body.innerHTML = '<div class="spinner"></div>';
-    modal.classList.add('active');
-    
+    const body = document.getElementById('orderDetailsBody');
+    if (!body) return;
     try {
         const docSnap = await window.firebaseModules.getDoc(window.firebaseModules.doc(db, "orders", id));
+        if (!docSnap.exists()) return;
         const o = docSnap.data();
-        let itemsHtml = o.items.map(item => `<li>${item.name} (x${item.quantity}) - ${formatNumber(item.price * item.quantity)} SDG</li>`).join('');
+        document.getElementById('orderDetailsModal').classList.add('active');
+        
+        let itemsHtml = (o.items || []).map(item => `<li>${item.name} (x${item.quantity}) - ${formatNumber(item.price * item.quantity)} SDG</li>`).join('');
         
         body.innerHTML = `
-            <h4>معلومات العميل</h4>
-            <p>الاسم: ${o.userName}</p>
-            <p>الهاتف: ${o.phone}</p>
-            <p>العنوان: ${o.address}</p>
-            <hr>
-            <h4>المنتجات</h4>
-            <ul>${itemsHtml}</ul>
-            <hr>
-            <p><strong>طريقة الدفع:</strong> ${o.paymentMethod === 'bank' ? 'تحويل بنكي' : 'عند الاستلام'}</p>
-            ${o.receiptImage ? `<p><strong>إيصال الدفع:</strong><br><img src="${o.receiptImage}" style="max-width:100%; border-radius:10px; margin-top:10px;"></p>` : ''}
+            <div style="text-align: right;">
+                <h4>معلومات العميل</h4>
+                <p><strong>الاسم:</strong> ${o.userName || 'غير معروف'}</p>
+                <p><strong>الهاتف:</strong> ${o.phone || 'غير معروف'}</p>
+                <p><strong>العنوان:</strong> ${o.address || 'غير معروف'}</p>
+                <hr>
+                <h4>المنتجات</h4>
+                <ul>${itemsHtml || 'لا توجد منتجات'}</ul>
+                <hr>
+                <p><strong>طريقة الدفع:</strong> ${o.paymentMethod === 'bank' ? 'تحويل بنكي' : 'عند الاستلام'}</p>
+                ${o.receiptImage ? `<p><strong>إيصال الدفع:</strong><br><img src="${o.receiptImage}" style="max-width:100%; border-radius:10px; margin-top:10px;"></p>` : ''}
+            </div>
         `;
-    } catch (e) { body.innerHTML = 'خطأ في تحميل البيانات'; }
+    } catch (e) { 
+        console.error(e);
+        body.innerHTML = 'خطأ في تحميل البيانات'; 
+    }
 }
 
 // ======================== 4. إدارة المستخدمين ========================
