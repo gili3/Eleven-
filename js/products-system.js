@@ -65,6 +65,8 @@ async function loadProducts() {
         
         console.log(`✅ تم تحميل ${allProducts.length} منتج من Firebase`);
         
+        // إعادة تعيين عدد المنتجات المعروضة عند التحميل الجديد
+        displayedProductsCount = 8;
         if (typeof displayProducts === 'function') displayProducts();
         if (typeof displayFeaturedProducts === 'function') displayFeaturedProducts();
         
@@ -209,7 +211,9 @@ function displayProducts(products = allProducts) {
         return;
     }
     
-    productsGrid.innerHTML = products.map(product => {
+    const productsToDisplay = products.slice(0, displayedProductsCount);
+    
+    productsGrid.innerHTML = productsToDisplay.map(product => {
         const isNew = product.isNew === true || product.isNew === 'true';
         const isSale = product.isSale === true || product.isSale === 'true';
         const isBest = product.isBest === true || product.isBest === 'true';
@@ -249,6 +253,23 @@ function displayProducts(products = allProducts) {
             </div>
         `;
     }).join('');
+    
+    setupInfiniteScroll();
+}
+
+function setupInfiniteScroll() {
+    if (window.infiniteScrollSet) return;
+    
+    window.addEventListener('scroll', () => {
+        if ((window.innerHeight + window.scrollY) >= document.body.offsetHeight - 800) {
+            if (displayedProductsCount < allProducts.length) {
+                displayedProductsCount += productsPerPage;
+                displayProducts(allProducts);
+            }
+        }
+    });
+    
+    window.infiniteScrollSet = true;
 }
 
 function displayFeaturedProducts(filteredProducts = null) {

@@ -297,6 +297,25 @@ function showSection(sectionId) {
         window.scrollTo(0, 0);
         document.documentElement.scrollTop = 0;
         document.body.scrollTop = 0;
+
+        // تحميل البيانات فقط عند فتح القسم (Lazy Loading)
+        switch(sectionId) {
+            case 'cart':
+                if (typeof updateCartDisplay === 'function') updateCartDisplay();
+                break;
+            case 'favorites':
+                if (typeof updateFavoritesDisplay === 'function') updateFavoritesDisplay();
+                break;
+            case 'profile':
+                if (typeof updateProfileStats === 'function') updateProfileStats();
+                break;
+            case 'my-orders':
+                if (typeof loadMyOrders === 'function') loadMyOrders();
+                break;
+            case 'products':
+                if (typeof loadProducts === 'function') loadProducts();
+                break;
+        }
         
         if (sectionId === 'checkout') {
             const savedPhone = localStorage.getItem('userPhone');
@@ -316,28 +335,9 @@ function showSection(sectionId) {
             }
         }
 
-        switch(sectionId) {
-            case 'cart':
-                if (typeof updateCartDisplay === 'function') updateCartDisplay();
-                break;
-            case 'checkout':
-                if (typeof updateCheckoutSummary === 'function') updateCheckoutSummary();
-                break;
-            case 'favorites':
-                if (typeof updateFavoritesDisplay === 'function') updateFavoritesDisplay();
-                break;
-            case 'profile':
-                if (typeof updateProfileStats === 'function') updateProfileStats();
-                break;
-            case 'my-orders':
-                if (typeof loadMyOrders === 'function') loadMyOrders();
-                break;
-            case 'home':
-                if (typeof displayFeaturedProducts === 'function') displayFeaturedProducts();
-                break;
-            case 'products':
-                if (typeof loadProducts === 'function') loadProducts(true);
-                break;
+        // تم نقل المنطق إلى بداية الدالة لضمان التحميل عند الطلب فقط
+        if (sectionId === 'home') {
+            if (typeof displayFeaturedProducts === 'function') displayFeaturedProducts();
         }
     }
 }
