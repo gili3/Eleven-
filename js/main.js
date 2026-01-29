@@ -197,6 +197,8 @@ function setupAppEventListeners() {
     
     if (searchBtn && searchInput) {
         searchBtn.addEventListener('click', performSearch);
+        // دعم البحث المباشر أثناء الكتابة (Live Search)
+        searchInput.addEventListener('input', performSearch);
         searchInput.addEventListener('keypress', (e) => {
             if (e.key === 'Enter') performSearch();
         });
@@ -298,24 +300,36 @@ function showSection(sectionId) {
         document.documentElement.scrollTop = 0;
         document.body.scrollTop = 0;
 
-        // تحميل البيانات فقط عند فتح القسم (Lazy Loading)
-        switch(sectionId) {
-            case 'cart':
-                if (typeof updateCartDisplay === 'function') updateCartDisplay();
-                break;
-            case 'favorites':
-                if (typeof updateFavoritesDisplay === 'function') updateFavoritesDisplay();
-                break;
-            case 'profile':
-                if (typeof updateProfileStats === 'function') updateProfileStats();
-                break;
-            case 'my-orders':
-                if (typeof loadMyOrders === 'function') loadMyOrders();
-                break;
-            case 'products':
-                if (typeof loadProducts === 'function') loadProducts();
-                break;
-        }
+        // نظام التحميل الذكي (Lazy Loading) - تحميل البيانات فقط عند الحاجة
+        const lazyLoadData = async () => {
+            switch(sectionId) {
+                case 'cart':
+                    if (typeof updateCartDisplay === 'function') updateCartDisplay();
+                    break;
+                case 'favorites':
+                    if (typeof updateFavoritesDisplay === 'function') updateFavoritesDisplay();
+                    break;
+                case 'profile':
+                    if (typeof updateProfileStats === 'function') updateProfileStats();
+                    break;
+                case 'my-orders':
+                    if (typeof loadMyOrders === 'function') loadMyOrders();
+                    break;
+                case 'products':
+                    // تحميل المنتجات من Firebase فقط إذا لم تكن محملة أو عند الحاجة لتحديثها
+                    if (typeof allProducts === 'undefined' || allProducts.length === 0) {
+                        if (typeof loadProducts === 'function') await loadProducts();
+                    } else {
+                        if (typeof displayProducts === 'function') displayProducts();
+                    }
+                    break;
+                case 'home':
+                    // تحميل المنتجات المميزة فقط عند فتح الصفحة الرئيسية
+                    if (typeof displayFeaturedProducts === 'function') displayFeaturedProducts();
+                    break;
+            }
+        };
+        lazyLoadData();
         
         if (sectionId === 'checkout') {
             const savedPhone = localStorage.getItem('userPhone');

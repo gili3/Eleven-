@@ -762,27 +762,100 @@ function updateHeaderLayout() {
 
 // ======================== دوال إضافية ========================
 
+// نظام البحث الذكي والاحترافي (Smart Search System)
+let searchDebounceTimer;
 function performSearch() {
     const searchInput = document.getElementById('searchInput');
     if (!searchInput) return;
     
-    const searchTerm = sanitizeUserInput(searchInput.value.trim().toLowerCase());
+    const searchTerm = searchInput.value.trim().toLowerCase();
+    
+    // استخدام Debouncing لتحسين الأداء ومنع العمليات المتكررة
+    clearTimeout(searchDebounceTimer);
+    searchDebounceTimer = setTimeout(() => {
+        executeSmartSearch(searchTerm);
+    }, 300);
+}
+
+function executeSmartSearch(searchTerm) {
     if (!searchTerm) {
-        if (typeof displayProducts === 'function') displayProducts();
+        // إظهار الفلاتر عند مسح البحث
+        const filtersContainer = document.querySelector('.filters-container');
+        if (filtersContainer) {
+            filtersContainer.style.display = 'flex';
+        }
+        if (typeof displayProducts === 'function') displayProducts(allProducts);
         return;
     }
+
+    console.log(`🔍 [Smart Search] البحث عن: ${searchTerm}`);
     
-    const filteredProducts = allProducts.filter(product =>
-        product.name.toLowerCase().includes(searchTerm) ||
-        (product.description && product.description.toLowerCase().includes(searchTerm)) ||
-        (product.category && product.category.toLowerCase().includes(searchTerm))
-    );
+    // خوارزمية مطابقة متقدمة (ترتيب حسب الأهمية)
+    const filteredProducts = allProducts.map(product => {
+        let score = 0;
+        const name = (product.name || '').toLowerCase();
+        const desc = (product.description || '').toLowerCase();
+        const cat = (product.category || '').toLowerCase();
+
+        // 1. مطابقة تامة في الاسم (أعلى أولوية)
+        if (name === searchTerm) score += 100;
+        // 2. الاسم يبدأ بكلمة البحث
+        else if (name.startsWith(searchTerm)) score += 50;
+        // 3. الاسم يحتوي على كلمة البحث
+        else if (name.includes(searchTerm)) score += 30;
+        
+        // 4. مطابقة في الفئة
+        if (cat.includes(searchTerm)) score += 20;
+        
+        // 5. مطابقة في الوصف
+        if (desc.includes(searchTerm)) score += 10;
+
+        return { ...product, searchScore: score };
+    })
+    .filter(p => p.searchScore > 0)
+    .sort((a, b) => b.searchScore - a.searchScore); // الترتيب حسب الأكثر صلة
     
-    if (typeof displayProducts === 'function') displayProducts(filteredProducts);
+    // إخفاء الفلاتر عند البحث
+    const filtersContainer = document.querySelector('.filters-container');
+    if (filtersContainer) {
+        filtersContainer.style.display = 'none';
+    }
+    
+    if (typeof displayProducts === 'function') {
+        displayProducts(filteredProducts);
+        
+        // إذا لم تكن هناك نتائج، عرض رسالة مناسبة
+        if (filteredProducts.length === 0) {
+            const productsGrid = document.getElementById('productsGrid');
+            if (productsGrid) {
+                productsGrid.innerHTML = `
+                    <div style="text-align: center; padding: 40px 20px; width: 100%; grid-column: 1/-1;">
+                        <i class="fas fa-search fa-3x" style="color: var(--gray-color); margin-bottom: 20px;"></i>
+                        <h3 style="color: var(--primary-color);">لا توجد نتائج للبحث عن "${searchTerm}"</h3>
+                        <p style="color: var(--gray-color);">جرب كلمات بحث أخرى أو تصفح الأقسام</p>
+                    </div>
+                `;
+            }
+        }
+    }
+    
+    // الانتقال لقسم المنتجات لرؤية النتائج
     if (typeof showSection === 'function') showSection('products');
 }
 
 function filterProducts() {
+    // إظهار الفلاتر عند استخدامها
+    const filtersContainer = document.querySelector('.filters-container');
+    if (filtersContainer) {
+        filtersContainer.style.display = 'flex';
+    }
+    
+    // مسح حقل البحث عند استخدام الفلاتر
+    const searchInput = document.getElementById('searchInput');
+    if (searchInput) {
+        searchInput.value = '';
+    }
+    
     let filteredProducts = [...allProducts];
     
     const category = document.getElementById('categoryFilter')?.value;
@@ -876,10 +949,30 @@ async function saveUserDataToFirestore() {
 // ======================== أدوات تحسين الصور ========================
 
 function optimizeImageUrl(url, width = 300) {
-    if (!url || !url.includes('firebasestorage')) return url;
+    if (!url) return 'https://via.placeholder.com/300x200?text=Eleven+Store';
+    if (!url.includes('firebasestorage')) return url;
     
-    return `${url}?width=${width}&quality=80`;
+    // تحسين روابط Firebase Storage للتحميل الأسرع
+    const separator = url.includes('?') ? '&' : '?';
+    return `${url}${separator}alt=media&width=${width}&quality=75`;
 }
+
+// نظام مراقبة الأداء (Performance Monitoring) لضمان السرعة
+function initPerformanceMonitoring() {
+    window.addEventListener('load', () => {
+        setTimeout(() => {
+            const timing = window.performance.timing;
+            const loadTime = (timing.loadEventEnd - timing.navigationStart) / 1000;
+            console.log(`⚡ [Performance] وقت تحميل الموقع الإجمالي: ${loadTime.toFixed(2)} ثانية`);
+            
+            if (loadTime > 3) {
+                console.warn('⚠️ الموقع يستغرق وقتاً طويلاً للتحميل، جاري تحسين الذاكرة المؤقتة...');
+                clearCache('products'); // مسح الكاش القديم لتحديثه ببيانات أسرع
+            }
+        }, 0);
+    });
+}
+initPerformanceMonitoring();
 
 // ======================== إدارة الذاكرة ========================
 

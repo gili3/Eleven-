@@ -226,7 +226,7 @@ function displayProducts(products = allProducts) {
         return `
             <div class="product-card" data-id="${product.id}">
                 <div class="product-image" onclick="openProductDetails('${product.id}')">
-                    <img src="${safeImage}" alt="${safeName}" onerror="this.src='https://via.placeholder.com/300x200?text=صورة'">
+                    <img src="${safeImage}" alt="${safeName}" loading="lazy" onerror="this.src='https://via.placeholder.com/300x200?text=صورة'">
                     ${isNew ? '<div class="badge new">جديد</div>' : ''}
                     ${isSale ? '<div class="badge sale">عرض</div>' : ''}
                     ${isBest ? '<div class="badge best">الأفضل</div>' : ''}
@@ -424,7 +424,65 @@ window.toggleReviewForm = function() {
     }
     
     form.style.display = form.style.display === 'none' ? 'block' : 'none';
+    
+    // تهيئة نظام النجوم عند فتح النموذج
+    if (form.style.display !== 'none') {
+        initializeRatingStars();
+    }
 };
+
+/**
+ * تهيئة نظام النجوم للتقييم
+ */
+let selectedRating = 5; // القيمة الافتراضية
+function initializeRatingStars() {
+    const stars = document.querySelectorAll('.rating-input i');
+    if (!stars || stars.length === 0) return;
+    
+    // تعيين التقييم الافتراضي (5 نجوم)
+    selectedRating = 5;
+    updateStarsDisplay(selectedRating);
+    
+    stars.forEach(star => {
+        // عند التمرير فوق النجمة
+        star.addEventListener('mouseenter', function() {
+            const value = parseInt(this.getAttribute('data-value'));
+            updateStarsDisplay(value);
+        });
+        
+        // عند النقر على النجمة
+        star.addEventListener('click', function() {
+            selectedRating = parseInt(this.getAttribute('data-value'));
+            updateStarsDisplay(selectedRating);
+        });
+    });
+    
+    // عند مغادرة منطقة النجوم، إرجاع التقييم المحدد
+    const ratingContainer = document.querySelector('.rating-input');
+    if (ratingContainer) {
+        ratingContainer.addEventListener('mouseleave', function() {
+            updateStarsDisplay(selectedRating);
+        });
+    }
+}
+
+/**
+ * تحديث عرض النجوم
+ */
+function updateStarsDisplay(rating) {
+    const stars = document.querySelectorAll('.rating-input i');
+    stars.forEach((star, index) => {
+        if (index < rating) {
+            star.classList.remove('far');
+            star.classList.add('fas');
+            star.style.color = '#f1c40f';
+        } else {
+            star.classList.remove('fas');
+            star.classList.add('far');
+            star.style.color = '#ddd';
+        }
+    });
+}
 
 /**
  * معاينة صورة التقييم
@@ -467,7 +525,7 @@ window.submitReview = async function() {
     }
 
     const comment = document.getElementById('reviewComment').value.trim();
-    const rating = parseInt(document.querySelector('input[name="rating"]:checked')?.value) || 5;
+    const rating = selectedRating || 5; // استخدام التقييم المحدد من النجوم
     const productId = currentModalProductId;
 
     if (!comment) {
@@ -509,6 +567,8 @@ window.submitReview = async function() {
         // إعادة تعيين النموذج
         document.getElementById('reviewComment').value = '';
         removeReviewImage();
+        selectedRating = 5; // إعادة تعيين التقييم
+        updateStarsDisplay(5);
         toggleReviewForm();
         
         // تحديث قائمة التقييمات
