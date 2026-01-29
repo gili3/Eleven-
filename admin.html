@@ -51,6 +51,7 @@
     
     <!-- CSS Files -->
     <link rel="stylesheet" href="admin-styles.css">
+    <link rel="stylesheet" href="css-security.css">
     <script>
         // حماية صفحة الأدمن من الفحص والنسخ
         (function() {
@@ -170,12 +171,13 @@
             <div class="tab-header">
                 <h3>إدارة الطلبات</h3>
                 <div class="filter-group" style="display: flex; gap: 10px;">
-                    <select id="orderStatusFilter" style="padding: 10px; border-radius: 8px; border: 1px solid var(--border-color); font-family: 'Cairo'; min-width: 150px;">
+                    <select id="orderStatusFilter" onchange="handleAdminOrderFilterChange(this.value)" style="padding: 10px; border-radius: 8px; border: 1px solid var(--border-color); font-family: 'Cairo'; min-width: 150px;">
                         <option value="all">جميع الحالات</option>
                         <option value="pending">قيد الانتظار</option>
-                        <option value="processing">قيد التنفيذ</option>
-                        <option value="shipped">تم الشحن</option>
-                        <option value="delivered">تم التوصيل</option>
+                        <option value="paid">تم الدفع</option>
+                        <option value="processing">جاري التجهيز</option>
+                        <option value="shipped">خرج للتوصيل</option>
+                        <option value="delivered">تم التسليم</option>
                         <option value="cancelled">ملغي</option>
                     </select>
                 </div>
@@ -461,38 +463,57 @@
     </script>
     
     <!-- JavaScript Files -->
+    <script src="js/security-core.js"></script>
     <script src="js/firebase-config.js"></script>
     <script src="js/admin.js"></script>
+    <script src="js/admin-orders-system.js"></script>
+    <script src="js/admin-pagination-system.js"></script>
     <script>
-        // منطق التحميل عند الطلب للوحة التحكم
+        // نظام التحميل الذكي (Lazy Loading) للوحة التحكم - الإصدار الاحترافي
         document.addEventListener('DOMContentLoaded', () => {
             const tabs = document.querySelectorAll('.admin-tab');
+            const loadedSections = new Set(['dashboard']); // الإحصائيات تحمل افتراضياً
+
             tabs.forEach(tab => {
-                tab.addEventListener('click', function() {
+                tab.addEventListener('click', async function() {
                     const tabId = this.getAttribute('data-tab');
                     if (!tabId) return;
 
-                    // تحميل البيانات بناءً على القسم المختار
-                    switch(tabId) {
-                        case 'productsManagement':
-                            if (typeof loadAdminProducts === 'function') loadAdminProducts();
-                            break;
-                        case 'ordersManagement':
-                            if (typeof loadAdminOrders === 'function') loadAdminOrders();
-                            break;
-                        case 'usersManagement':
-                            if (typeof loadAdminUsers === 'function') loadAdminUsers();
-                            break;
-                        case 'settingsManagement':
-                            if (typeof loadAdminSettings === 'function') loadAdminSettings();
-                            break;
-                        case 'dashboard':
-                            if (typeof loadAdminStats === 'function') loadAdminStats();
-                            break;
+                    // إدارة حالة التبويبات (UI)
+                    tabs.forEach(t => t.classList.remove('active'));
+                    this.classList.add('active');
+                    
+                    document.querySelectorAll('.admin-tab-content').forEach(content => {
+                        content.classList.remove('active');
+                    });
+                    const targetContent = document.getElementById(tabId);
+                    if (targetContent) targetContent.classList.add('active');
+
+                    // التحميل الذكي للبيانات (Data) - التحميل لمرة واحدة فقط أو عند الحاجة
+                    if (!loadedSections.has(tabId) || tabId === 'ordersManagement') {
+                        console.log(`🚀 [Admin LazyLoad] جاري تحميل بيانات القسم: ${tabId}`);
+                        
+                        switch(tabId) {
+                            case 'productsManagement':
+                                if (typeof loadAdminProducts === 'function') await loadAdminProducts(1);
+                                break;
+                            case 'ordersManagement':
+                                // الطلبات تحمل دائماً لضمان رؤية أحدث الطلبات فوراً
+                                if (typeof loadAdminOrders === 'function') await loadAdminOrders(1, 'all');
+                                break;
+                            case 'usersManagement':
+                                if (typeof loadAdminUsers === 'function') await loadAdminUsers(1);
+                                break;
+                            case 'settingsManagement':
+                                if (typeof loadAdminSettings === 'function') await loadAdminSettings();
+                                break;
+                            case 'dashboard':
+                                if (typeof loadAdminStats === 'function') await loadAdminStats();
+                                break;
+                        }
+                        loadedSections.add(tabId);
                     }
                 });
             });
         });
     </script>
-</body>
-</html>
