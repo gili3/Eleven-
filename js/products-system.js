@@ -1,15 +1,32 @@
 // products-system.js - نظام إدارة المنتجات (نسخة محسنة أمنياً)
 // ======================== إدارة المنتجات ==========================
 
-async function loadProducts() {
-    console.log('🛍️ جاري تحميل المنتجات من Firebase...');
+// متغيرات للتحميل التدريجي الحقيقي
+let lastProductDoc = null;
+let hasMoreProducts = true;
+let isLoadingMoreProducts = false;
+
+async function loadProducts(loadMore = false) {
+    console.log(`🛍️ ${loadMore ? 'جاري تحميل المزيد' : 'جاري تحميل المنتجات'} من Firebase...');
     
-    if (isLoading) {
+    if (isLoading || isLoadingMoreProducts) {
         console.log('⚠️ المنتجات قيد التحميل بالفعل، تخطي...');
         return;
     }
     
-    isLoading = true;
+    if (loadMore && !hasMoreProducts) {
+        console.log('✅ تم تحميل جميع المنتجات');
+        return;
+    }
+    
+    if (loadMore) {
+        isLoadingMoreProducts = true;
+    } else {
+        isLoading = true;
+        allProducts = [];
+        lastProductDoc = null;
+        hasMoreProducts = true;
+    }
     
     try {
         if (!db) {
@@ -19,12 +36,23 @@ async function loadProducts() {
         }
         
         const productsRef = window.firebaseModules.collection(db, "products");
-        // تحسين: جلب المنتجات النشطة فقط وترتيبها حسب الأحدث
-        // جلب جميع المنتجات وترتيبها حسب الأحدث
-        const q = window.firebaseModules.query(
-            productsRef, 
-            window.firebaseModules.orderBy("createdAt", "desc")
-        );
+        
+        // 💡 Lazy Loading الحقيقي: تحميل 12 منتج فقط في كل مرة
+        let q;
+        if (loadMore && lastProductDoc) {
+            q = window.firebaseModules.query(
+                productsRef,
+                window.firebaseModules.orderBy("createdAt", "desc"),
+                window.firebaseModules.startAfter(lastProductDoc),
+                window.firebaseModules.limit(12)
+            );
+        } else {
+            q = window.firebaseModules.query(
+                productsRef,
+                window.firebaseModules.orderBy("createdAt", "desc"),
+                window.firebaseModules.limit(12)
+            );
+        }
         
         const querySnapshot = await window.firebaseModules.getDocs(q);
         
@@ -34,7 +62,24 @@ async function loadProducts() {
             return;
         }
         
-        allProducts = querySnapshot.docs.map(doc => {
+        if (querySnapshot.empty) {
+            hasMoreProducts = false;
+            if (!loadMore) {
+                console.log('⚠️ لا توجد منتجات في قاعدة البيانات');
+                if (typeof displayNoProductsMessage === 'function') displayNoProductsMessage();
+            }
+            return;
+        }
+        
+        // حفظ آخر مستند للتحميل التالي
+        lastProductDoc = querySnapshot.docs[querySnapshot.docs.length - 1];
+        
+        // إذا كان عدد المنتجات أقل من 12، فلا يوجد مزيد
+        if (querySnapshot.docs.length < 12) {
+            hasMoreProducts = false;
+        }
+        
+        const newProducts = querySnapshot.docs.map(doc => {
             const data = doc.data();
             
             // تنظيف البيانات باستخدام SecurityCore
@@ -63,12 +108,17 @@ async function loadProducts() {
             };
         }).filter(product => product.isActive && product.stock > 0);
         
-        console.log(`✅ تم تحميل ${allProducts.length} منتج من Firebase`);
+        // إضافة المنتجات الجديدة للقائمة
+        if (loadMore) {
+            allProducts = [...allProducts, ...newProducts];
+            console.log(`✅ تم تحميل ${newProducts.length} منتج إضافي (الإجمالي: ${allProducts.length})`);
+        } else {
+            allProducts = newProducts;
+            console.log(`✅ تم تحميل ${allProducts.length} منتج من Firebase`);
+        }
         
-        // إعادة تعيين عدد المنتجات المعروضة عند التحميل الجديد
-        displayedProductsCount = 8;
         if (typeof displayProducts === 'function') displayProducts();
-        if (typeof displayFeaturedProducts === 'function') displayFeaturedProducts();
+        if (!loadMore && typeof displayFeaturedProducts === 'function') displayFeaturedProducts();
         
     } catch (error) {
         console.error('❌ خطأ في تحميل المنتجات من Firebase:', error);
@@ -262,9 +312,9 @@ function setupInfiniteScroll() {
     
     window.addEventListener('scroll', () => {
         if ((window.innerHeight + window.scrollY) >= document.body.offsetHeight - 800) {
-            if (displayedProductsCount < allProducts.length) {
-                displayedProductsCount += productsPerPage;
-                displayProducts(allProducts);
+            // 💡 تحميل المزيد من Firebase عند الوصول للنهاية
+            if (hasMoreProducts && !isLoadingMoreProducts) {
+                if (typeof loadProducts === 'function') loadProducts(true);
             }
         }
     });

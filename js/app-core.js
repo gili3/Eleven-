@@ -796,6 +796,7 @@ function executeSmartSearch(searchTerm) {
         const name = (product.name || '').toLowerCase();
         const desc = (product.description || '').toLowerCase();
         const cat = (product.category || '').toLowerCase();
+        const keywords = (product.keywords || '').toLowerCase(); // دعم الكلمات المفتاحية
 
         // 1. مطابقة تامة في الاسم (أعلى أولوية)
         if (name === searchTerm) score += 100;
@@ -804,10 +805,13 @@ function executeSmartSearch(searchTerm) {
         // 3. الاسم يحتوي على كلمة البحث
         else if (name.includes(searchTerm)) score += 30;
         
-        // 4. مطابقة في الفئة
+        // 4. مطابقة في الكلمات المفتاحية (أولوية عالية)
+        if (keywords && keywords.includes(searchTerm)) score += 25;
+        
+        // 5. مطابقة في الفئة
         if (cat.includes(searchTerm)) score += 20;
         
-        // 5. مطابقة في الوصف
+        // 6. مطابقة في الوصف
         if (desc.includes(searchTerm)) score += 10;
 
         return { ...product, searchScore: score };
@@ -831,8 +835,12 @@ function executeSmartSearch(searchTerm) {
                 productsGrid.innerHTML = `
                     <div style="text-align: center; padding: 40px 20px; width: 100%; grid-column: 1/-1;">
                         <i class="fas fa-search fa-3x" style="color: var(--gray-color); margin-bottom: 20px;"></i>
-                        <h3 style="color: var(--primary-color);">لا توجد نتائج للبحث عن "${searchTerm}"</h3>
-                        <p style="color: var(--gray-color);">جرب كلمات بحث أخرى أو تصفح الأقسام</p>
+                        <h3 style="color: var(--primary-color); margin-bottom: 10px;">لا توجد منتجات مطابقة لبحثك</h3>
+                        <p style="color: var(--gray-color); margin-bottom: 5px;">لم نجد أي منتجات تطابق "<strong>${searchTerm}</strong>"</p>
+                        <p style="color: var(--gray-color); font-size: 14px;">💡 جرب كلمات بحث أخرى أو تصفح جميع المنتجات</p>
+                        <button onclick="document.getElementById('searchInput').value=''; performSearch();" style="margin-top: 20px; padding: 10px 20px; background: var(--secondary-color); color: white; border: none; border-radius: 8px; cursor: pointer; font-size: 14px;">
+                            <i class="fas fa-times"></i> مسح البحث وعرض جميع المنتجات
+                        </button>
                     </div>
                 `;
             }
