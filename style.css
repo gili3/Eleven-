@@ -319,17 +319,24 @@ body {
     min-height: 100vh;
 }
 
-/* ============== الهيدر المعدل ============== */
+/* ============== الهيدر المعدل (Smart Header) ============== */
 .header {
     background: rgba(255, 255, 255, 0.95);
     backdrop-filter: blur(10px);
     box-shadow: 0 2px 20px rgba(0, 0, 0, 0.05);
-    position: sticky;
+    position: fixed;
     top: 0;
+    left: 0;
+    right: 0;
     z-index: 1000;
     padding: 0;
     border-bottom: 1px solid rgba(0,0,0,0.05);
-    transition: all 0.3s ease;
+    transition: transform 0.3s ease-in-out, all 0.3s ease;
+    transform: translateY(0);
+}
+
+.header.hidden {
+    transform: translateY(-100%);
 }
 
 .header-content {

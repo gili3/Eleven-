@@ -1174,31 +1174,18 @@
                 <!-- قسم التقييمات -->
                 <div class="product-reviews-section" style="margin-top: 30px; border-top: 1px solid #eee; padding-top: 20px;">
                     <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 20px;">
-                        <h3>التقييمات والآراء</h3>
-                        <button class="add-review-btn" onclick="toggleReviewForm()" style="padding: 8px 15px; border-radius: 20px; border: 1px solid var(--secondary-color); background: white; color: var(--secondary-color); font-weight: 600; cursor: pointer;">أضف تقييمك</button>
+                        <h3 style="color: var(--primary-color);">
+                            <i class="fas fa-star" style="color: #ffc107;"></i> التقييمات والآراء
+                            <span style="font-size: 14px; color: var(--gray-color); margin-right: 10px;">(<span id="reviewsCount">0</span> تقييم)</span>
+                        </h3>
+                        <div style="display: flex; align-items: center; gap: 10px;">
+                            <div style="font-size: 18px; font-weight: bold; color: var(--primary-color);">
+                                <i class="fas fa-star" style="color: #ffc107;"></i> <span id="averageRating">0.0</span>
+                            </div>
+                        </div>
                     </div>
 
-                    <div id="reviewForm" class="review-form" style="display: none; background: #f9f9f9; padding: 20px; border-radius: 12px; margin-bottom: 20px;">
-                        <h4>أضف تقييمك للمنتج</h4>
-                        <div class="rating-input" style="margin: 15px 0; font-size: 24px; color: #ddd; cursor: pointer;">
-                            <i class="far fa-star" data-value="1"></i>
-                            <i class="far fa-star" data-value="2"></i>
-                            <i class="far fa-star" data-value="3"></i>
-                            <i class="far fa-star" data-value="4"></i>
-                            <i class="far fa-star" data-value="5"></i>
-                        </div>
-                        <textarea id="reviewComment" style="width: 100%; padding: 12px; border-radius: 8px; border: 1px solid #ddd; font-family: 'Cairo'; margin-bottom: 15px;" rows="3" placeholder="اكتب رأيك هنا..."></textarea>
-                        <div class="review-image-upload" style="margin-bottom: 15px;">
-                            <label for="reviewImageInput" style="cursor: pointer; color: var(--secondary-color); font-weight: 600;">
-                                <i class="fas fa-camera"></i> أضف صورة (اختياري)
-                            </label>
-                            <input type="file" id="reviewImageInput" accept="image/*" style="display: none;" onchange="previewReviewImage(this)">
-                            <div id="reviewImagePreview" style="margin-top: 10px;"></div>
-                        </div>
-                        <button class="submit-review-btn" onclick="submitReview()" style="width: 100%; padding: 12px; border-radius: 8px; border: none; background: var(--primary-color); color: white; font-weight: 700; cursor: pointer;">إرسال التقييم</button>
-                    </div>
-
-                    <div id="productReviewsList" class="reviews-list">
+                    <div id="productReviews" class="reviews-list">
                         <!-- سيتم تعبئتها برمجياً -->
                         <p style="text-align: center; color: #888; padding: 20px;">لا توجد تقييمات لهذا المنتج بعد.</p>
                     </div>
@@ -1232,6 +1219,7 @@
     <script src="js/app-core.js?v=20"></script>
     <script src="js/auth-system.js?v=20"></script>
     <script src="js/products-system.js?v=20"></script>
+    <script src="js/reviews-system.js?v=20"></script>
     <script src="js/cart-system.js?v=20"></script>
     <script src="js/orders-system.js?v=20"></script>
     <script src="js/checkout-system.js?v=20"></script>
