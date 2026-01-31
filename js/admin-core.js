@@ -58,60 +58,24 @@ async function refreshAdminData() {
 
 // ======================== 1. الإحصائيات ========================
 
-// 💡 تحسين الإحصائيات: استخدام عدادات محفوظة في Firebase بدلاً من جلب جميع البيانات
 async function loadAdminStats() {
     try {
-        // جلب العدادات من مستند counters بدلاً من جلب جميع البيانات
-        const countersRef = window.firebaseModules.doc(db, "counters", "stats");
-        const countersSnap = await window.firebaseModules.getDoc(countersRef);
+        const usersSnap = await window.firebaseModules.getDocs(window.firebaseModules.collection(db, "users"));
+        const productsSnap = await window.firebaseModules.getDocs(window.firebaseModules.collection(db, "products"));
+        const ordersSnap = await window.firebaseModules.getDocs(
+            window.firebaseModules.query(window.firebaseModules.collection(db, "orders"), window.firebaseModules.where("status", "==", "delivered"))
+        );
         
-        if (countersSnap.exists()) {
-            const data = countersSnap.data();
-            safeElementUpdate('statUsers', (data.users || 0).toString());
-            safeElementUpdate('statProducts', (data.products || 0).toString());
-            safeElementUpdate('statOrders', (data.orders || 0).toString());
-            safeElementUpdate('statSales', formatNumber(data.totalSales || 0) + ' SDG');
-        } else {
-            // إذا لم يكن موجوداً، احسب العدادات مرة واحدة (فقط للإحصائيات، ليس للعرض)
-            const usersCount = await window.firebaseModules.getCountFromServer(window.firebaseModules.collection(db, "users"));
-            const productsCount = await window.firebaseModules.getCountFromServer(window.firebaseModules.collection(db, "products"));
-            const ordersCount = await window.firebaseModules.getCountFromServer(
-                window.firebaseModules.query(window.firebaseModules.collection(db, "orders"), window.firebaseModules.where("status", "==", "delivered"))
-            );
-            
-            // حساب إجمالي المبيعات (فقط للطلبات المسلمة)
-            const ordersQuery = window.firebaseModules.query(
-                window.firebaseModules.collection(db, "orders"),
-                window.firebaseModules.where("status", "==", "delivered")
-            );
-            const ordersSnap = await window.firebaseModules.getDocs(ordersQuery);
-            let totalSales = 0;
-            ordersSnap.forEach(doc => totalSales += (doc.data().total || 0));
-            
-            safeElementUpdate('statUsers', usersCount.data().count.toString());
-            safeElementUpdate('statProducts', productsCount.data().count.toString());
-            safeElementUpdate('statOrders', ordersCount.data().count.toString());
-            safeElementUpdate('statSales', formatNumber(totalSales) + ' SDG');
-            
-            // حفض العدادات للمرة القادمة
-            await window.firebaseModules.setDoc(countersRef, {
-                users: usersCount.data().count,
-                products: productsCount.data().count,
-                orders: ordersCount.data().count,
-                totalSales: totalSales,
-                lastUpdated: window.firebaseModules.serverTimestamp()
-            });
-        }
+        let totalSales = 0;
+        ordersSnap.forEach(doc => totalSales += (doc.data().total || 0));
+        
+        safeElementUpdate('statUsers', usersSnap.size.toString());
+        safeElementUpdate('statProducts', productsSnap.size.toString());
+        safeElementUpdate('statOrders', ordersSnap.size.toString());
+        safeElementUpdate('statSales', formatNumber(totalSales) + ' SDG');
         
         await loadRecentOrders();
-    } catch (e) { 
-        console.error("Stats Error:", e);
-        // في حالة فشل getCountFromServer (ليس مدعوماً في جميع الإصدارات)، عرض قيم افتراضية
-        safeElementUpdate('statUsers', '0');
-        safeElementUpdate('statProducts', '0');
-        safeElementUpdate('statOrders', '0');
-        safeElementUpdate('statSales', '0 SDG');
-    }
+    } catch (e) { console.error("Stats Error:", e); }
 }
 
 async function loadRecentOrders() {
@@ -134,58 +98,15 @@ async function loadRecentOrders() {
 
 // ======================== 2. إدارة المنتجات ========================
 
-// متغيرات Lazy Loading للمنتجات في لوحة التحكم
-let adminProductsCache = [];
-let adminProductsPage = 1;
-let adminProductsPerPage = 20;
-let adminProductsLastDoc = null;
-let adminProductsHasMore = true;
-
-async function loadAdminProducts(loadMore = false) {
+async function loadAdminProducts() {
     const tbody = document.getElementById('adminProductsTableBody');
     if (!tbody) return;
-    
     try {
-        if (!loadMore) {
-            tbody.innerHTML = '<tr><td colspan="7" style="text-align:center;"><div class="spinner"></div></td></tr>';
-            adminProductsCache = [];
-            adminProductsLastDoc = null;
-            adminProductsHasMore = true;
-        }
-        
-        // 💡 Lazy Loading: تحميل 20 منتج فقط في كل مرة
-        let q;
-        if (loadMore && adminProductsLastDoc) {
-            q = window.firebaseModules.query(
-                window.firebaseModules.collection(db, "products"),
-                window.firebaseModules.orderBy("createdAt", "desc"),
-                window.firebaseModules.startAfter(adminProductsLastDoc),
-                window.firebaseModules.limit(adminProductsPerPage)
-            );
-        } else {
-            q = window.firebaseModules.query(
-                window.firebaseModules.collection(db, "products"),
-                window.firebaseModules.orderBy("createdAt", "desc"),
-                window.firebaseModules.limit(adminProductsPerPage)
-            );
-        }
-        
+        const q = window.firebaseModules.query(window.firebaseModules.collection(db, "products"), window.firebaseModules.orderBy("serverTimestamp", "desc"));
         const snap = await window.firebaseModules.getDocs(q);
-        
-        if (snap.empty) {
-            if (!loadMore) tbody.innerHTML = '<tr><td colspan="7" style="text-align:center;">لا توجد منتجات</td></tr>';
-            adminProductsHasMore = false;
-            return;
-        }
-        
-        adminProductsLastDoc = snap.docs[snap.docs.length - 1];
-        if (snap.docs.length < adminProductsPerPage) adminProductsHasMore = false;
-        
-        if (!loadMore) tbody.innerHTML = '';
-        
+        tbody.innerHTML = '';
         snap.forEach(doc => {
             const p = { id: doc.id, ...doc.data() };
-            adminProductsCache.push(p);
             const tr = document.createElement('tr');
             tr.innerHTML = `
                 <td><img src="${p.image}" style="width:50px; height:50px; object-fit:cover; border-radius:5px;"></td>
@@ -201,25 +122,7 @@ async function loadAdminProducts(loadMore = false) {
             `;
             tbody.appendChild(tr);
         });
-        
-        // إضافة زر "تحميل المزيد" إذا كان هناك مزيد
-        if (adminProductsHasMore) {
-            const loadMoreRow = document.createElement('tr');
-            loadMoreRow.innerHTML = `
-                <td colspan="7" style="text-align:center; padding:20px;">
-                    <button onclick="loadAdminProducts(true)" class="btn-primary" style="padding:10px 20px;">
-                        <i class="fas fa-arrow-down"></i> تحميل المزيد (${adminProductsCache.length} من إجمالي المنتجات)
-                    </button>
-                </td>
-            `;
-            tbody.appendChild(loadMoreRow);
-        }
-        
-        console.log(`✅ تم تحميل ${snap.docs.length} منتج (الإجمالي: ${adminProductsCache.length})`);
-    } catch (e) { 
-        console.error(e);
-        tbody.innerHTML = '<tr><td colspan="7" style="text-align:center; color:red;">حدث خطأ في تحميل المنتجات</td></tr>';
-    }
+    } catch (e) { console.error(e); }
 }
 
 function openProductModal(productId = null) {

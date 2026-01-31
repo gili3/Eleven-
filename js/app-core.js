@@ -790,13 +790,12 @@ function executeSmartSearch(searchTerm) {
 
     console.log(`🔍 [Smart Search] البحث عن: ${searchTerm}`);
     
-    // خوارزمية مطابقة متقدمة (ترتيب حسب الأهمية)
+    // خوارزمية البحث المحسّنة - البحث في الاسم والوصف والكلمات المفتاحية فقط
     const filteredProducts = allProducts.map(product => {
         let score = 0;
         const name = (product.name || '').toLowerCase();
         const desc = (product.description || '').toLowerCase();
-        const cat = (product.category || '').toLowerCase();
-        const keywords = (product.keywords || '').toLowerCase(); // دعم الكلمات المفتاحية
+        const keywords = (product.keywords || '').toLowerCase(); // الكلمات المفتاحية
 
         // 1. مطابقة تامة في الاسم (أعلى أولوية)
         if (name === searchTerm) score += 100;
@@ -805,14 +804,11 @@ function executeSmartSearch(searchTerm) {
         // 3. الاسم يحتوي على كلمة البحث
         else if (name.includes(searchTerm)) score += 30;
         
-        // 4. مطابقة في الكلمات المفتاحية (أولوية عالية)
-        if (keywords && keywords.includes(searchTerm)) score += 25;
+        // 4. مطابقة في الوصف
+        if (desc.includes(searchTerm)) score += 20;
         
-        // 5. مطابقة في الفئة
-        if (cat.includes(searchTerm)) score += 20;
-        
-        // 6. مطابقة في الوصف
-        if (desc.includes(searchTerm)) score += 10;
+        // 5. مطابقة في الكلمات المفتاحية
+        if (keywords.includes(searchTerm)) score += 15;
 
         return { ...product, searchScore: score };
     })
@@ -828,19 +824,16 @@ function executeSmartSearch(searchTerm) {
     if (typeof displayProducts === 'function') {
         displayProducts(filteredProducts);
         
-        // إذا لم تكن هناك نتائج، عرض رسالة مناسبة
+        // إذا لم تكن هناك نتائج، عرض رسالة واضحة
         if (filteredProducts.length === 0) {
             const productsGrid = document.getElementById('productsGrid');
             if (productsGrid) {
                 productsGrid.innerHTML = `
-                    <div style="text-align: center; padding: 40px 20px; width: 100%; grid-column: 1/-1;">
-                        <i class="fas fa-search fa-3x" style="color: var(--gray-color); margin-bottom: 20px;"></i>
-                        <h3 style="color: var(--primary-color); margin-bottom: 10px;">لا توجد منتجات مطابقة لبحثك</h3>
-                        <p style="color: var(--gray-color); margin-bottom: 5px;">لم نجد أي منتجات تطابق "<strong>${searchTerm}</strong>"</p>
-                        <p style="color: var(--gray-color); font-size: 14px;">💡 جرب كلمات بحث أخرى أو تصفح جميع المنتجات</p>
-                        <button onclick="document.getElementById('searchInput').value=''; performSearch();" style="margin-top: 20px; padding: 10px 20px; background: var(--secondary-color); color: white; border: none; border-radius: 8px; cursor: pointer; font-size: 14px;">
-                            <i class="fas fa-times"></i> مسح البحث وعرض جميع المنتجات
-                        </button>
+                    <div style="text-align: center; padding: 60px 20px; width: 100%; grid-column: 1/-1;">
+                        <i class="fas fa-search fa-4x" style="color: #ddd; margin-bottom: 25px;"></i>
+                        <h2 style="color: var(--primary-color); margin-bottom: 15px; font-size: 24px;">لا توجد منتجات مطابقة لبحثك</h2>
+                        <p style="color: var(--gray-color); font-size: 16px; margin-bottom: 10px;">لم نتمكن من العثور على منتجات تطابق "${searchTerm}"</p>
+                        <p style="color: var(--gray-color); font-size: 14px;">جرب استخدام كلمات بحث مختلفة أو تصفح الأقسام</p>
                     </div>
                 `;
             }

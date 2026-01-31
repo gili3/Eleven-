@@ -290,44 +290,25 @@ async function submitCheckoutOrder() {
             }
         }
         
-        // 💡 نظام ترقيم موحد واحترافي: ORD-000001, ORD-000002, ...
-        const counterRef = window.firebaseModules.doc(db, 'counters', 'orders');
+        // الحصول على آخر رقم طلب من الإعدادات ليكون تصاعدياً
+        const settingsRef = window.firebaseModules.doc(db, 'settings', 'site_config');
+        const settingsDoc = await window.firebaseModules.getDoc(settingsRef);
+        let nextOrderNumber = 11001000;
         
-        // استخدام Transaction لضمان عدم تكرار الأرقام
-        let orderNumber;
-        try {
-            orderNumber = await window.firebaseModules.runTransaction(db, async (transaction) => {
-                const counterDoc = await transaction.get(counterRef);
-                let newCount = 1;
-                
-                if (counterDoc.exists()) {
-                    newCount = (counterDoc.data().count || 0) + 1;
-                    transaction.update(counterRef, { 
-                        count: newCount,
-                        lastUpdated: window.firebaseModules.serverTimestamp()
-                    });
-                } else {
-                    transaction.set(counterRef, { 
-                        count: newCount,
-                        createdAt: window.firebaseModules.serverTimestamp(),
-                        lastUpdated: window.firebaseModules.serverTimestamp()
-                    });
-                }
-                
-                return newCount;
-            });
-        } catch (error) {
-            console.error('خطأ في الحصول على رقم الطلب:', error);
-            // في حالة الفشل، استخدام Timestamp كبديل
-            orderNumber = Date.now();
+        if (settingsDoc.exists() && settingsDoc.data().lastOrderNumber) {
+            nextOrderNumber = settingsDoc.data().lastOrderNumber + 1;
         }
         
-        // تنسيق رقم الطلب: ORD-000001
-        const orderId = `ORD-${String(orderNumber).padStart(6, '0')}`;
+        // تحديث آخر رقم طلب في الإعدادات
+        await window.firebaseModules.updateDoc(settingsRef, {
+            lastOrderNumber: nextOrderNumber
+        });
+
+        const orderId = 'NO:' + nextOrderNumber;
         
         const orderData = {
             orderId: orderId,
-            orderNumber: orderNumber,
+            orderNumber: nextOrderNumber,
             userId: currentUser.uid,
             userName: currentUser.displayName || 'مستخدم',
             userEmail: currentUser.email,

@@ -2,6 +2,44 @@
 // ======================== متغيرات الحالة ========================
 
 let adminOrdersCache = [];
+let orderNumberCounter = {}; // لتخزين الأرقام التسلسلية
+
+/**
+ * توليد رقم طلب بصيغة ORD-000001
+ * @param {string} orderId - معرف الطلب
+ * @param {any} createdAt - تاريخ الإنشاء
+ * @returns {string} رقم الطلب
+ */
+function generateOrderNumber(orderId, createdAt) {
+    // إذا كان الرقم محفوظ مسبقاً
+    if (orderNumberCounter[orderId]) {
+        return `ORD-${String(orderNumberCounter[orderId]).padStart(6, '0')}`;
+    }
+    
+    // توليد رقم تسلسلي بناءً على التاريخ
+    let timestamp = Date.now();
+    
+    try {
+        if (createdAt) {
+            if (createdAt.toDate) {
+                timestamp = createdAt.toDate().getTime();
+            } else if (createdAt instanceof Date) {
+                timestamp = createdAt.getTime();
+            } else if (typeof createdAt === 'string') {
+                timestamp = new Date(createdAt).getTime();
+            }
+        }
+    } catch (e) {
+        console.error('خطأ في معالجة التاريخ:', e);
+    }
+    
+    // استخدام آخر 6 أرقام من timestamp
+    const orderNumber = parseInt(String(timestamp).slice(-6));
+    orderNumberCounter[orderId] = orderNumber;
+    
+    return `ORD-${String(orderNumber).padStart(6, '0')}`;
+}
+
 let adminOrdersCurrentPage = 1;
 let adminOrdersItemsPerPage = 8; // عدد الطلبات في كل صفحة
 let adminOrdersTotalPages = 0;
@@ -29,51 +67,44 @@ async function loadAdminOrders(page = 1, filter = 'all') {
         // عرض مؤشر التحميل
         ordersList.innerHTML = '<div class="spinner"></div>';
 
-        // 💡 Lazy Loading الحقيقي: تحميل فقط الصفحة المطلوبة من Firebase
-        console.log(`🔄 جاري جلب الصفحة ${page} من الطلبات...`);
-        
-        const ordersRef = window.firebaseModules.collection(adminDb, "orders");
-        let q;
+        // إذا لم نقم بتحميل البيانات من قبل أو تغير الفلتر، جلب من Firebase
+        if (adminOrdersCache.length === 0 || adminOrdersCurrentFilter !== filter) {
+            console.log('🔄 جاري جلب الطلبات من Firebase...');
+            
+            const ordersRef = window.firebaseModules.collection(adminDb, "orders");
+            let q;
 
-        if (filter === 'all') {
-            q = window.firebaseModules.query(
-                ordersRef,
-                window.firebaseModules.orderBy("createdAt", "desc"),
-                window.firebaseModules.limit(adminOrdersItemsPerPage)
-            );
-        } else {
-            q = window.firebaseModules.query(
-                ordersRef,
-                window.firebaseModules.where("status", "==", filter),
-                window.firebaseModules.orderBy("createdAt", "desc"),
-                window.firebaseModules.limit(adminOrdersItemsPerPage)
-            );
+            if (filter === 'all') {
+                q = window.firebaseModules.query(
+                    ordersRef,
+                    window.firebaseModules.orderBy("createdAt", "desc")
+                );
+            } else {
+                q = window.firebaseModules.query(
+                    ordersRef,
+                    window.firebaseModules.where("status", "==", filter),
+                    window.firebaseModules.orderBy("createdAt", "desc")
+                );
+            }
+
+            const querySnapshot = await window.firebaseModules.getDocs(q);
+            
+            adminOrdersCache = [];
+            querySnapshot.forEach(doc => {
+                const order = doc.data();
+                order.id = doc.id;
+                adminOrdersCache.push(order);
+            });
+
+            adminOrdersCurrentFilter = filter;
+            adminOrdersCurrentPage = 1;
+            page = 1;
+
+            console.log(`✅ تم تحميل ${adminOrdersCache.length} طلب من Firebase`);
         }
 
-        const querySnapshot = await window.firebaseModules.getDocs(q);
-        
-        adminOrdersCache = [];
-        querySnapshot.forEach(doc => {
-            const order = doc.data();
-            order.id = doc.id;
-            adminOrdersCache.push(order);
-        });
-
-        adminOrdersCurrentFilter = filter;
-        adminOrdersCurrentPage = 1;
-        page = 1;
-        
-        // حساب عدد الصفحات بناءً على العداد الكلي (إن أمكن)
-        adminOrdersTotalPages = Math.ceil(querySnapshot.size / adminOrdersItemsPerPage) || 1;
-
-        console.log(`✅ تم تحميل ${adminOrdersCache.length} طلب من Firebase`);
-
-        // حساب عدد الصفحات (بناءً على البيانات المحملة)
-        if (adminOrdersCache.length < adminOrdersItemsPerPage) {
-            adminOrdersTotalPages = 1;
-        } else {
-            adminOrdersTotalPages = Math.ceil(adminOrdersCache.length / adminOrdersItemsPerPage);
-        }
+        // حساب عدد الصفحات
+        adminOrdersTotalPages = Math.ceil(adminOrdersCache.length / adminOrdersItemsPerPage);
 
         // التحقق من رقم الصفحة
         if (page < 1) page = 1;
@@ -129,7 +160,7 @@ async function loadAdminOrders(page = 1, filter = 'all') {
     }
 }
 
-// ======================== عرض بطاقة الطلب المختصرة (محسّن) ========================
+// ======================== عرض بطاقة الطلب مع التفاصيل الكاملة ========================
 
 function renderAdminOrderCard(order) {
     // تحديد نص وألوان الحالة
@@ -219,56 +250,106 @@ function renderAdminOrderCard(order) {
         </div>
     ` : '';
 
-    // 💡 عرض مختصر واحترافي: فقط المعلومات الأساسية
     return `
-        <div class="order-card-compact" style="background: white; border-radius: 10px; border: 1px solid var(--border-color); padding: 16px; margin-bottom: 12px; box-shadow: 0 2px 4px rgba(0,0,0,0.05); transition: all 0.2s ease; cursor: pointer;" onclick="viewAdminOrderDetails('${order.id}')">
-            <div style="display: flex; justify-content: space-between; align-items: center; gap: 15px; flex-wrap: wrap;">
-                
-                <!-- رقم الطلب والتاريخ -->
-                <div style="flex: 1; min-width: 150px;">
-                    <div style="font-weight: 700; color: var(--primary-color); font-size: 15px; margin-bottom: 4px;">
-                        <i class="fas fa-hashtag"></i> #${order.orderId || order.id.substring(0, 8)}
+        <div class="order-card" style="background: white; border-radius: 12px; border: 1px solid var(--border-color); padding: 18px; margin-bottom: 15px; box-shadow: 0 2px 4px rgba(0,0,0,0.05); transition: all 0.3s ease;">
+            
+            <!-- رأس الطلب -->
+            <div class="order-header" style="display: flex; justify-content: space-between; align-items: flex-start; margin-bottom: 15px; padding-bottom: 12px; border-bottom: 2px solid var(--border-color); flex-wrap: wrap; gap: 10px;">
+                <div>
+                    <div class="order-id" style="font-weight: 700; color: var(--primary-color); font-size: 16px;">
+                        <i class="fas fa-hashtag"></i> ${generateOrderNumber(order.id, order.createdAt)}
                     </div>
-                    <div style="font-size: 12px; color: var(--gray-color);">
+                    <div class="order-date" style="font-size: 13px; color: var(--gray-color); margin-top: 5px;">
                         <i class="fas fa-calendar-alt"></i> ${orderDate}
                     </div>
                 </div>
-                
-                <!-- اسم العميل -->
-                <div style="flex: 1; min-width: 120px;">
-                    <div style="font-size: 12px; color: var(--gray-color); margin-bottom: 2px;">العميل</div>
-                    <div style="font-weight: 600; color: var(--dark-color); font-size: 14px;">
-                        <i class="fas fa-user"></i> ${customerName}
-                    </div>
-                </div>
-                
-                <!-- عدد المنتجات -->
-                <div style="text-align: center; min-width: 80px;">
-                    <div style="font-size: 12px; color: var(--gray-color); margin-bottom: 2px;">المنتجات</div>
-                    <div style="font-weight: 600; color: var(--primary-color); font-size: 14px;">
-                        <i class="fas fa-box"></i> ${itemsCount}
-                    </div>
-                </div>
-                
-                <!-- الإجمالي -->
-                <div style="text-align: center; min-width: 100px;">
-                    <div style="font-size: 12px; color: var(--gray-color); margin-bottom: 2px;">الإجمالي</div>
-                    <div style="font-weight: 700; color: var(--secondary-color); font-size: 16px;">
-                        ${formatNumber(order.total || 0)} SDG
-                    </div>
-                </div>
-                
-                <!-- الحالة -->
-                <div style="min-width: 100px; text-align: center;">
-                    <span class="order-status-badge ${statusClass}" style="padding: 6px 12px; border-radius: 20px; font-size: 11px; font-weight: 600; display: inline-block; white-space: nowrap;">
+                <div style="display: flex; gap: 10px; align-items: center; flex-wrap: wrap;">
+                    <span class="order-status-badge ${statusClass}" style="padding: 8px 14px; border-radius: 20px; font-size: 12px; font-weight: 600; display: inline-block; line-height: 1;">
                         ${statusText}
                     </span>
+                    <button onclick="viewAdminOrderDetails('${order.id}')" class="btn-primary" style="padding: 8px 15px; font-size: 13px; background: var(--secondary-color); color: white; border: none; border-radius: 8px; cursor: pointer; display: flex; align-items: center; gap: 6px; transition: all 0.2s ease;">
+                        <i class="fas fa-eye"></i> عرض التفاصيل
+                    </button>
                 </div>
+            </div>
+
+            <!-- بيانات العميل -->
+            <div class="customer-info" style="background: #f8f9fa; padding: 12px; border-radius: 8px; margin-bottom: 15px;">
+                <h5 style="margin: 0 0 8px 0; font-size: 14px; color: var(--primary-color); font-weight: 600;">
+                    <i class="fas fa-user-circle"></i> بيانات العميل
+                </h5>
+                <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 10px; font-size: 13px;">
+                    <div>
+                        <strong style="color: var(--primary-color);">الاسم:</strong>
+                        <div style="color: var(--dark-color); margin-top: 2px;">${customerName}</div>
+                    </div>
+                    <div>
+                        <strong style="color: var(--primary-color);">البريد:</strong>
+                        <div style="color: var(--dark-color); margin-top: 2px; word-break: break-all;">${customerEmail}</div>
+                    </div>
+                    <div>
+                        <strong style="color: var(--primary-color);">الهاتف:</strong>
+                        <div style="color: var(--dark-color); margin-top: 2px;">${customerPhone}</div>
+                    </div>
+                    <div>
+                        <strong style="color: var(--primary-color);">العنوان:</strong>
+                        <div style="color: var(--dark-color); margin-top: 2px;">${customerAddress}</div>
+                    </div>
+                </div>
+            </div>
+
+            <!-- تفاصيل الطلب -->
+            <div class="order-body" style="display: grid; grid-template-columns: 1fr 1fr; gap: 15px; margin-bottom: 15px;">
                 
-                <!-- زر عرض التفاصيل -->
-                <div>
-                    <button onclick="event.stopPropagation(); viewAdminOrderDetails('${order.id}');" style="padding: 8px 16px; background: var(--secondary-color); color: white; border: none; border-radius: 8px; font-size: 13px; cursor: pointer; display: flex; align-items: center; gap: 6px; transition: all 0.2s ease; white-space: nowrap;">
-                        <i class="fas fa-eye"></i> عرض
+                <!-- المنتجات -->
+                <div class="order-items" style="background: #f8f9fa; padding: 12px; border-radius: 8px;">
+                    <h5 style="margin: 0 0 8px 0; font-size: 14px; color: var(--primary-color); font-weight: 600;">
+                        <i class="fas fa-box"></i> المنتجات (${itemsCount})
+                    </h5>
+                    ${itemsHTML}
+                    ${moreItemsHTML}
+                </div>
+
+                <!-- معلومات الإيصال والملاحظات -->
+                <div style="background: #f8f9fa; padding: 12px; border-radius: 8px;">
+                    <h5 style="margin: 0 0 8px 0; font-size: 14px; color: var(--primary-color); font-weight: 600;">
+                        <i class="fas fa-receipt"></i> الإيصال والملاحظات
+                    </h5>
+                    <div style="font-size: 13px; margin-bottom: 8px;">
+                        <strong>حالة الإيصال:</strong>
+                        <div style="margin-top: 2px;">${receiptStatus}</div>
+                    </div>
+                    ${order.notes ? `
+                        <div style="font-size: 13px;">
+                            <strong>ملاحظات:</strong>
+                            <div style="margin-top: 2px; color: var(--dark-color);">${order.notes}</div>
+                        </div>
+                    ` : ''}
+                </div>
+            </div>
+
+            <!-- الإجمالي والإجراءات -->
+            <div class="order-footer" style="display: flex; justify-content: space-between; align-items: center; padding-top: 12px; border-top: 2px solid var(--border-color); flex-wrap: wrap; gap: 12px;">
+                <div class="order-total" style="font-weight: 700; font-size: 16px; color: var(--secondary-color);">
+                    الإجمالي: ${formatNumber(order.total || 0)} SDG
+                </div>
+                <div class="order-actions" style="display: flex; gap: 8px; flex-wrap: wrap;">
+                    <select class="status-select" onchange="updateAdminOrderStatus('${order.id}', this.value)" style="padding: 8px 12px; border-radius: 8px; border: 1px solid var(--border-color); font-family: 'Cairo'; font-size: 13px; background: white; cursor: pointer;">
+                        <option value="">تغيير الحالة...</option>
+                        <option value="pending" ${order.status === 'pending' ? 'selected' : ''}>قيد الانتظار</option>
+                        <option value="paid" ${order.status === 'paid' ? 'selected' : ''}>تم الدفع</option>
+                        <option value="processing" ${order.status === 'processing' ? 'selected' : ''}>جاري التجهيز</option>
+                        <option value="shipped" ${order.status === 'shipped' ? 'selected' : ''}>خرج للتوصيل</option>
+                        <option value="delivered" ${order.status === 'delivered' ? 'selected' : ''}>تم التسليم</option>
+                        <option value="cancelled" ${order.status === 'cancelled' ? 'selected' : ''}>ملغي</option>
+                    </select>
+                    ${hasReceipt ? `
+                        <button onclick="viewAdminReceipt('${hasReceipt}')" class="btn-secondary" style="padding: 8px 12px; font-size: 13px; background: white; color: var(--primary-color); border: 1px solid var(--border-color); border-radius: 8px; cursor: pointer; display: flex; align-items: center; gap: 6px; transition: all 0.2s ease;">
+                            <i class="fas fa-image"></i> الإيصال
+                        </button>
+                    ` : ''}
+                    <button onclick="deleteAdminOrder('${order.id}')" class="delete-btn" style="padding: 8px 12px; font-size: 13px; background: var(--danger-color); color: white; border: none; border-radius: 8px; cursor: pointer; display: flex; align-items: center; gap: 6px; transition: all 0.2s ease;">
+                        <i class="fas fa-trash"></i> حذف
                     </button>
                 </div>
             </div>
