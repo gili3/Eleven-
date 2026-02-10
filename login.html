@@ -1,0 +1,272 @@
+<!DOCTYPE html>
+<html lang="ar" dir="rtl">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, viewport-fit=cover">
+    <title>تسجيل الدخول | Eleven Store</title>
+    <link rel="manifest" href="manifest.json">
+    <meta name="theme-color" content="#c9a24d">
+    <meta name="apple-mobile-web-app-capable" content="yes">
+    <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+    <meta name="apple-mobile-web-app-title" content="Eleven Store">
+    <link rel="apple-touch-icon" href="https://i.ibb.co/fVn1SghC/file-00000000cf8071f498fc71b66e09f615.png">
+    
+    <!-- Firebase Modular SDK -->
+    <script type="module">
+        import { initializeApp } from "https://www.gstatic.com/firebasejs/10.7.1/firebase-app.js";
+        import { getAuth, onAuthStateChanged, GoogleAuthProvider, signInWithPopup, signInWithEmailAndPassword, createUserWithEmailAndPassword, signOut, updateProfile } from "https://www.gstatic.com/firebasejs/10.7.1/firebase-auth.js";
+        import { getFirestore, doc, collection, getDoc, getDocs, setDoc, updateDoc, query, where, orderBy, serverTimestamp, deleteDoc, addDoc, increment } from "https://www.gstatic.com/firebasejs/10.7.1/firebase-firestore.js";
+        import { getStorage, ref, uploadBytes, getDownloadURL, uploadBytesResumable } from "https://www.gstatic.com/firebasejs/10.7.1/firebase-storage.js";
+
+        window.firebaseModules = { 
+            initializeApp, 
+            getAuth, 
+            onAuthStateChanged, 
+            GoogleAuthProvider, 
+            signInWithPopup, 
+            signInWithEmailAndPassword, 
+            createUserWithEmailAndPassword, 
+            signOut,
+            updateProfile,
+            getFirestore,
+            doc,
+            collection,
+            getDoc,
+            getDocs,
+            setDoc,
+            updateDoc,
+            deleteDoc,
+            addDoc,
+            query,
+            where,
+            orderBy,
+            serverTimestamp,
+            increment,
+            getStorage,
+            ref,
+            uploadBytes,
+            getDownloadURL,
+            uploadBytesResumable
+        };
+        console.log("✅ Firebase Modules Loaded");
+        window.dispatchEvent(new CustomEvent('firebase-ready'));
+    </script>
+    
+    <!-- Font Awesome -->
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
+    
+    <!-- Google Fonts -->
+    <link href="https://fonts.googleapis.com/css2?family=Cairo:wght@300;400;500;600;700;800&display=swap" rel="stylesheet">
+    
+    <!-- CSS -->
+    <link rel="stylesheet" href="public/css/style.css?v=20">
+    <link rel="stylesheet" href="shared/css/css-security.css">
+    
+    <style>
+        body {
+            background: linear-gradient(135deg, #f7f5f2 0%, #ffffff 100%);
+            min-height: 100vh;
+            display: flex;
+            justify-content: center;
+            align-items: center;
+        }
+        .auth-screen {
+            position: relative;
+            z-index: 1;
+            width: 100%;
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            padding: 20px;
+        }
+        .auth-container {
+            max-height: none;
+            overflow-y: visible;
+        }
+        #initialLoader {
+            position: fixed;
+            top: 0;
+            left: 0;
+            width: 100vw;
+            height: 100vh;
+            background-color: #fff;
+            display: flex;
+            flex-direction: column;
+            justify-content: center;
+            align-items: center;
+            z-index: 9999;
+            transition: opacity 0.5s ease;
+        }
+        .loader-spinner {
+            width: 50px;
+            height: 50px;
+            border: 5px solid #f3f3f3;
+            border-top: 5px solid var(--primary-color, #555555);
+            border-radius: 50%;
+            animation: spin 1s linear infinite;
+            margin-bottom: 15px;
+        }
+        @keyframes spin {
+            0% { transform: rotate(0deg); }
+            100% { transform: rotate(360deg); }
+        }
+    </style>
+    <link rel="icon" type="image/x-icon" href="https://i.ibb.co/fVn1SghC/file-00000000cf8071f498fc71b66e09f615.png">
+</head>
+<body>
+    <!-- شاشة التحميل -->
+    <div id="initialLoader">
+        <div class="loader-spinner"></div>
+        <p>جاري التحميل...</p>
+    </div>
+
+    <!-- شاشة المصادقة -->
+    <div id="authScreen" class="auth-screen">
+        <div class="auth-container">
+            <div class="auth-header">
+                <img id="authLogo" src="https://i.ibb.co/fVn1SghC/file-00000000cf8071f498fc71b66e09f615.png" alt="Eleven Logo" class="auth-logo" loading="lazy">
+                <h1>Eleven</h1>
+                <p>حيث تجد عطرك المفضل واكثر</p>
+            </div>
+            
+            <div id="authOptions" class="auth-options">
+                <button id="googleSignInBtn" class="auth-btn google-btn">
+                    <i class="fab fa-google"></i>
+                    تسجيل الدخول بـ Google
+                </button>
+                
+                <button id="emailSignInBtn" class="auth-btn email-btn">
+                    <i class="fas fa-envelope"></i>
+                    تسجيل الدخول بالبريد الإلكتروني
+                </button>
+                
+                <button id="guestSignInBtn" class="auth-btn guest-btn">
+                    <i class="fas fa-user-clock"></i>
+                    الدخول كضيف
+                </button>
+                
+                <p class="auth-note">
+                    الدخول كضيف يسمح لك بالتسوق فقط، ولن يتم حفظ طلباتك
+                </p>
+            </div>
+            
+            <!-- نموذج المصادقة بالبريد -->
+            <div id="emailAuthForm" class="email-auth-form" style="display: none;">
+                <div class="form-header">
+                    <h2 id="authFormTitle">تسجيل الدخول</h2>
+                    <button id="backToAuthOptions" class="back-btn">
+                        <i class="fas fa-arrow-right"></i> رجوع
+                    </button>
+                </div>
+                
+                <!-- حقول تسجيل الدخول -->
+                <div id="loginFields">
+                    <div class="form-group">
+                        <label for="emailInput">
+                            <i class="fas fa-envelope"></i> البريد الإلكتروني
+                        </label>
+                        <input type="email" id="emailInput" placeholder="example@domain.com">
+                    </div>
+                    
+                    <div class="form-group">
+                        <label for="passwordInput">
+                            <i class="fas fa-lock"></i> كلمة المرور
+                        </label>
+                        <input type="password" id="passwordInput" placeholder="********">
+                    </div>
+                    
+                    <div class="form-actions">
+                        <button id="signInBtn" class="submit-btn">
+                            <i class="fas fa-sign-in-alt"></i> تسجيل الدخول
+                        </button>
+                        <button id="signUpBtn" class="submit-btn secondary">
+                            <i class="fas fa-user-plus"></i> إنشاء حساب جديد
+                        </button>
+                    </div>
+                </div>
+                
+                <!-- حقول إنشاء حساب جديد -->
+                <div id="registerFields" style="display: none;">
+                    <div class="form-group">
+                        <label for="registerName">
+                            <i class="fas fa-user"></i> الاسم الكامل *
+                        </label>
+                        <input type="text" id="registerName" placeholder="أدخل اسمك الكامل">
+                    </div>
+                    
+                    <div class="form-group">
+                        <label for="registerEmail">
+                            <i class="fas fa-envelope"></i> البريد الإلكتروني *
+                        </label>
+                        <input type="email" id="registerEmail" placeholder="example@domain.com">
+                    </div>
+                    
+                    <div class="form-group">
+                        <label for="registerPassword">
+                            <i class="fas fa-lock"></i> كلمة المرور *
+                        </label>
+                        <input type="password" id="registerPassword" placeholder="******** (6 أحرف على الأقل)" minlength="6">
+                    </div>
+                    
+                    <div class="form-group">
+                        <label for="registerPhone">
+                            <i class="fas fa-phone"></i> رقم الهاتف (اختياري)
+                        </label>
+                        <input type="tel" id="registerPhone" placeholder="مثال: 0912345678">
+                    </div>
+                    
+                    <div class="form-actions">
+                        <button id="completeSignUpBtn" class="submit-btn">
+                            <i class="fas fa-user-plus"></i> إنشاء حساب
+                        </button>
+                        <button id="switchToLoginBtn" class="submit-btn secondary">
+                            <i class="fas fa-sign-in-alt"></i> لدي حساب بالفعل
+                        </button>
+                    </div>
+                </div>
+                
+                <div id="emailAuthMessage" class="auth-message"></div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Scripts -->
+    <script src="shared/js/firebase-config.js"></script>
+    <script src="public/js/app-core.js"></script>
+    <script src="shared/js/security-core.js"></script>
+    <script src="public/js/utils.js"></script>
+    <script src="public/js/auth-system.js"></script>
+    <script src="public/js/main.js"></script>
+    
+    <script>
+        // تخصيص لصفحة تسجيل الدخول المستقلة
+        window.addEventListener('firebase-ready', () => {
+            if (typeof initializeAppSafely === 'function') initializeAppSafely();
+            // تعديل دالة showMainApp لتوجه المستخدم للرئيسية بدلاً من إظهار الحاوية
+            window.showMainApp = () => {
+                window.location.href = 'index.html';
+            };
+            
+            // ربط زر تسجيل الدخول
+            const signInBtn = document.getElementById('signInBtn');
+            if (signInBtn) {
+                signInBtn.addEventListener('click', () => {
+                    if (typeof handleLogin === 'function') handleLogin();
+                });
+            }
+
+            // إخفاء اللودر بعد التحميل
+            setTimeout(() => {
+                const loader = document.getElementById('initialLoader');
+                if (loader) loader.style.opacity = '0';
+                setTimeout(() => loader.style.display = 'none', 500);
+            }, 1000);
+        });
+
+        // التأكد من بقاء المستخدم في هذه الصفحة إذا لم يسجل دخول
+        window.showAuthScreen = () => {
+            console.log("User is on login page");
+        };
+    </script>
+</body>
+</html>

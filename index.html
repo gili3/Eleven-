@@ -59,8 +59,8 @@
     <link href="https://fonts.googleapis.com/css2?family=Cairo:wght@300;400;500;600;700;800&display=swap" rel="stylesheet">
     
     <!-- CSS -->
-    <link rel="stylesheet" href="style.css?v=20">
-    <link rel="stylesheet" href="css-security.css">
+    <link rel="stylesheet" href="public/css/style.css?v=20">
+    <link rel="stylesheet" href="shared/css/css-security.css">
     
     <style>
         /* شاشة التحميل الأولية */
@@ -366,8 +366,8 @@
         <p>جاري التحميل...</p>
     </div>
     
-    <!-- شاشة المصادقة -->
-    <div id="authScreen" class="auth-screen" style="display: none;">
+    <!-- تم نقل شاشة المصادقة إلى login.html -->
+    <div id="authScreen" class="auth-screen" style="display: none; visibility: hidden;">
         <div class="auth-container">
             <div class="auth-header">
                 <img id="authLogo" src="https://i.ibb.co/fVn1SghC/file-00000000cf8071f498fc71b66e09f615.png" alt="Eleven Logo" class="auth-logo" loading="lazy">
@@ -492,6 +492,8 @@
         </div>
     </div>
 
+        </div>
+
     <!-- التطبيق الرئيسي -->
     <div id="appContainer" class="app-container" style="display: none;">
         <!-- الهيدر المعدل -->
@@ -558,6 +560,14 @@
                 <li id="adminMobileLink" style="display: none;">
                     <a href="admin.html"><i class="fas fa-cog"></i> لوحة التحكم</a>
                 </li>
+                
+                <li class="nav-divider" style="height: 1px; background: #eee; margin: 10px 20px;"></li>
+                
+                <li class="nav-contact-header" style="padding: 10px 20px; font-size: 14px; color: #888; font-weight: 600;">تواصل معنا</li>
+                <li><a href="mailto:yxr.249@gmail.com"><i class="fas fa-envelope"></i> البريد الإلكتروني</a></li>
+                <li><a href="tel:+249933002015"><i class="fas fa-phone"></i> اتصل بنا</a></li>
+                <li><a href="https://wa.me/249933002015" target="_blank"><i class="fab fa-whatsapp"></i> واتساب</a></li>
+                
                 <li class="logout-item">
                     <a href="#" id="mobileLogoutBtn" class="logout-link">
                         <i class="fas fa-sign-out-alt"></i> تسجيل الخروج
@@ -943,47 +953,14 @@
             </section>
         </main>
 
-        <!-- الفوتر -->
-        <footer class="footer">
-            <div class="footer-content">
-                <div class="footer-section">
-                    <div class="footer-logo">
-                        <img id="footerLogo" src="https://i.ibb.co/fVn1SghC/file-00000000cf8071f498fc71b66e09f615.png" alt="Eleven" loading="lazy">
-                        <h3 id="footerStoreName">Eleven</h3>
-                    </div>
-                    <p id="storeDescription">متجر متخصص في بيع العطور ومستحضرات التجميل الأصلية</p>
-                    <div class="social-icons" id="footerSocialIcons">
-                        <a href="#" target="_blank" class="social-icon" id="footerFacebook" style="display: none;"><i class="fab fa-facebook"></i></a>
-                        <a href="#" target="_blank" class="social-icon" id="footerInstagram" style="display: none;"><i class="fab fa-instagram"></i></a>
-                        <a href="#" target="_blank" class="social-icon" id="footerTwitter" style="display: none;"><i class="fab fa-twitter"></i></a>
-                        <a href="#" target="_blank" class="social-icon" id="footerTiktok" style="display: none;"><i class="fab fa-tiktok"></i></a>
-                        <a href="#" target="_blank" class="social-icon" id="footerWhatsapp"><i class="fab fa-whatsapp"></i></a>
-                    </div>
+        <!-- الفوتر البسيط -->
+        <footer class="footer" style="padding: 20px 0; background: #f9f9f9; border-top: 1px solid #eee;">
+            <div class="footer-bottom" style="text-align: center;">
+                <div class="footer-logo" style="margin-bottom: 10px; display: flex; align-items: center; justify-content: center; gap: 10px;">
+                    <img src="https://i.ibb.co/fVn1SghC/file-00000000cf8071f498fc71b66e09f615.png" alt="Eleven" style="height: 30px;">
+                    <h3 style="font-size: 18px; margin: 0;">Eleven Store</h3>
                 </div>
-                
-                <div class="footer-section">
-                    <h4>روابط سريعة</h4>
-                    <ul>
-                        <li><a href="javascript:void(0)" onclick="showSection('home')">الصفحة الرئيسية</a></li>
-                        <li><a href="javascript:void(0)" onclick="showSection('products')">جميع المنتجات</a></li>
-                        <li><a href="javascript:void(0)" onclick="showSection('favorites')">المفضلة</a></li>
-                        <li><a href="javascript:void(0)" onclick="showSection('my-orders')">طلباتي</a></li>
-                    </ul>
-                </div>
-                
-                <div class="footer-section">
-                    <h4>معلومات الاتصال</h4>
-                    <ul class="contact-info">
-                        <li><i class="fas fa-envelope"></i> <span id="footerEmail">yxr.249@gmail.com</span></li>
-                        <li><i class="fas fa-phone"></i> <span id="footerPhone">+249933002015</span></li>
-                        <li><i class="fas fa-map-marker-alt"></i> <span id="footerAddress">السودان - الخرطوم</span></li>
-                        <li><i class="fas fa-clock"></i> <span id="footerHours">من الأحد إلى الخميس: 9 صباحاً - 10 مساءً</span></li>
-                    </ul>
-                </div>
-            </div>
-            
-            <div class="footer-bottom">
-                <p>&copy; 2024 Eleven Store LLC . جميع الحقوق محفوظة.</p>
+                <p style="font-size: 12px; color: #888;">&copy; 2024 Eleven Store LLC . جميع الحقوق محفوظة.</p>
             </div>
         </footer>
     </div>
@@ -1174,18 +1151,31 @@
                 <!-- قسم التقييمات -->
                 <div class="product-reviews-section" style="margin-top: 30px; border-top: 1px solid #eee; padding-top: 20px;">
                     <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 20px;">
-                        <h3 style="color: var(--primary-color);">
-                            <i class="fas fa-star" style="color: #ffc107;"></i> التقييمات والآراء
-                            <span style="font-size: 14px; color: var(--gray-color); margin-right: 10px;">(<span id="reviewsCount">0</span> تقييم)</span>
-                        </h3>
-                        <div style="display: flex; align-items: center; gap: 10px;">
-                            <div style="font-size: 18px; font-weight: bold; color: var(--primary-color);">
-                                <i class="fas fa-star" style="color: #ffc107;"></i> <span id="averageRating">0.0</span>
-                            </div>
-                        </div>
+                        <h3>التقييمات والآراء</h3>
+                        <button class="add-review-btn" onclick="toggleReviewForm()" style="padding: 8px 15px; border-radius: 20px; border: 1px solid var(--secondary-color); background: white; color: var(--secondary-color); font-weight: 600; cursor: pointer;">أضف تقييمك</button>
                     </div>
 
-                    <div id="productReviews" class="reviews-list">
+                    <div id="reviewForm" class="review-form" style="display: none; background: #f9f9f9; padding: 20px; border-radius: 12px; margin-bottom: 20px;">
+                        <h4>أضف تقييمك للمنتج</h4>
+                        <div class="rating-input" style="margin: 15px 0; font-size: 24px; color: #ddd; cursor: pointer;">
+                            <i class="far fa-star" data-value="1"></i>
+                            <i class="far fa-star" data-value="2"></i>
+                            <i class="far fa-star" data-value="3"></i>
+                            <i class="far fa-star" data-value="4"></i>
+                            <i class="far fa-star" data-value="5"></i>
+                        </div>
+                        <textarea id="reviewComment" style="width: 100%; padding: 12px; border-radius: 8px; border: 1px solid #ddd; font-family: 'Cairo'; margin-bottom: 15px;" rows="3" placeholder="اكتب رأيك هنا..."></textarea>
+                        <div class="review-image-upload" style="margin-bottom: 15px;">
+                            <label for="reviewImageInput" style="cursor: pointer; color: var(--secondary-color); font-weight: 600;">
+                                <i class="fas fa-camera"></i> أضف صورة (اختياري)
+                            </label>
+                            <input type="file" id="reviewImageInput" accept="image/*" style="display: none;" onchange="previewReviewImage(this)">
+                            <div id="reviewImagePreview" style="margin-top: 10px;"></div>
+                        </div>
+                        <button class="submit-review-btn" onclick="submitReview()" style="width: 100%; padding: 12px; border-radius: 8px; border: none; background: var(--primary-color); color: white; font-weight: 700; cursor: pointer;">إرسال التقييم</button>
+                    </div>
+
+                    <div id="productReviewsList" class="reviews-list">
                         <!-- سيتم تعبئتها برمجياً -->
                         <p style="text-align: center; color: #888; padding: 20px;">لا توجد تقييمات لهذا المنتج بعد.</p>
                     </div>
@@ -1212,20 +1202,19 @@
     <div id="toastContainer"></div>
     
     <!-- JavaScript Files -->
-    <script src="js/security-core.js"></script>
-    <script src="js/firebase-config.js?v=20"></script>
-    <script src="js/firebase-messaging.js?v=20"></script>
-    <script src="js/notifications-system.js?v=20"></script>
-    <script src="js/app-core.js?v=20"></script>
-    <script src="js/auth-system.js?v=20"></script>
-    <script src="js/products-system.js?v=20"></script>
-    <script src="js/reviews-system.js?v=20"></script>
-    <script src="js/cart-system.js?v=20"></script>
-    <script src="js/orders-system.js?v=20"></script>
-    <script src="js/checkout-system.js?v=20"></script>
-    <script src="js/profile-system.js?v=20"></script>
-    <script src="js/utils.js?v=20"></script>
-    <script src="js/main.js?v=20"></script>
+    <script src="shared/js/security-core.js"></script>
+    <script src="shared/js/firebase-config.js?v=20"></script>
+    <script src="shared/js/firebase-messaging.js?v=20"></script>
+    <script src="public/js/notifications-system.js?v=20"></script>
+    <script src="public/js/app-core.js?v=20"></script>
+    <script src="public/js/auth-system.js?v=20"></script>
+    <script src="public/js/products-system.js?v=20"></script>
+    <script src="public/js/cart-system.js?v=20"></script>
+    <script src="public/js/orders-system.js?v=20"></script>
+    <script src="public/js/checkout-system.js?v=20"></script>
+    <script src="public/js/profile-system.js?v=20"></script>
+    <script src="public/js/utils.js?v=20"></script>
+    <script src="public/js/main.js?v=20"></script>
     
     <!-- تهيئة تحسينات الأداء بعد تحميل الصفحة -->
     <script>

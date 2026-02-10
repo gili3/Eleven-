@@ -50,8 +50,8 @@
     <link href="https://fonts.googleapis.com/css2?family=Cairo:wght@300;400;500;600;700;800&display=swap" rel="stylesheet">
     
     <!-- CSS Files -->
-    <link rel="stylesheet" href="admin-styles.css">
-    <link rel="stylesheet" href="css-security.css">
+    <link rel="stylesheet" href="admin/css/admin-styles.css">
+    <link rel="stylesheet" href="shared/css/css-security.css">
     <script>
         // حماية صفحة الأدمن من الفحص والنسخ
         (function() {
@@ -460,14 +460,46 @@
     <script>
         // تهيئة المتغيرات العالمية قبل تحميل السكربتات
         window.isAdmin = false;
+
+        // دالة تسجيل الخروج للوحة التحكم
+        async function logoutAdmin() {
+            if (confirm('هل أنت متأكد من تسجيل الخروج من لوحة التحكم؟')) {
+                try {
+                    // حذف بيانات الجلسة والتخزين المحلي
+                    localStorage.removeItem('_usr');
+                    sessionStorage.removeItem('_usr');
+                    localStorage.removeItem('currentUser');
+                    sessionStorage.removeItem('currentUser');
+                    
+                    // تسجيل الخروج من Firebase إذا كان متاحاً
+                    if (window.firebaseModules && window.firebaseModules.signOut && window.adminAuth) {
+                        await window.firebaseModules.signOut(window.adminAuth);
+                    }
+                    
+                    // التوجيه لصفحة تسجيل الدخول أو الرئيسية
+                    window.location.href = 'login.html';
+                } catch (error) {
+                    console.error('Error during admin logout:', error);
+                    window.location.href = 'index.html';
+                }
+            }
+        }
     </script>
     
     <!-- JavaScript Files -->
-    <script src="js/security-core.js"></script>
-    <script src="js/firebase-config.js"></script>
-    <script src="js/admin.js"></script>
-    <script src="js/admin-orders-system.js"></script>
-    <script src="js/admin-pagination-system.js"></script>
+    <script src="shared/js/security-core.js"></script>
+    <script src="shared/js/firebase-config.js"></script>
+    <!-- Admin Modules -->
+    <script src="admin/js/modules/admin-ui-utils.js"></script>
+    <script src="admin/js/modules/admin-auth.js"></script>
+    <script src="admin/js/modules/admin-dashboard.js"></script>
+    <script src="admin/js/modules/admin-products.js"></script>
+    <script src="admin/js/modules/admin-orders.js"></script>
+    <script src="admin/js/modules/admin-users.js"></script>
+    <script src="admin/js/modules/admin-settings.js"></script>
+    <script src="admin/js/admin.js"></script>
+    <script src="admin/js/admin-orders-system.js"></script>
+    <script src="admin/js/admin-pagination-system.js"></script>
     <script>
         // نظام التحميل الذكي (Lazy Loading) للوحة التحكم - الإصدار الاحترافي
         document.addEventListener('DOMContentLoaded', () => {
