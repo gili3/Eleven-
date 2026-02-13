@@ -7,6 +7,13 @@ async function initializeAppSafely() {
         return;
     }
     
+    // الانتظار حتى يتم تحميل وحدات Firebase
+    if (!window.firebaseModules) {
+        console.log('⏳ بانتظار تحميل وحدات Firebase...');
+        window.addEventListener('firebase-ready', () => initializeAppSafely(), { once: true });
+        return;
+    }
+
     console.log('🚀 بدء تهيئة التطبيق (الإصدار المحسن)...');
     appInitialized = true;
 
@@ -152,7 +159,7 @@ function setupNavigationEventListeners() {
         navOverlay.addEventListener('click', closeMenuFunc);
     }
     
-    document.querySelectorAll('a[data-section]').forEach(link => {
+    document.querySelectorAll('[data-section]').forEach(link => {
         link.addEventListener('click', function(e) {
             e.preventDefault();
             const sectionId = this.getAttribute('data-section');
@@ -278,6 +285,29 @@ function setupRegistrationEventListeners() {
 function showSection(sectionId) {
     const currentSection = document.querySelector('.section.active');
     
+    // تحديث الحالة النشطة في شريط التنقل السفلي والقائمة الجانبية
+    document.querySelectorAll('.nav-item, .mobile-nav-links a').forEach(item => {
+        if (item.getAttribute('data-section') === sectionId) {
+            item.classList.add('active');
+        } else {
+            item.classList.remove('active');
+        }
+    });
+    
+    // تحديث العرض عند التبديل للأقسام المعنية
+    if (sectionId === 'cart') {
+        if (typeof updateCartDisplay === 'function') updateCartDisplay();
+    } else if (sectionId === 'favorites') {
+        if (typeof updateFavoritesDisplay === 'function') updateFavoritesDisplay();
+    } else if (sectionId === 'products') {
+        if (typeof loadProducts === 'function') loadProducts(false);
+    }
+    
+    // إعادة تعيين الفلاتر عند الخروج من صفحة المنتجات
+    if (currentSection && currentSection.id === 'products' && sectionId !== 'products') {
+        if (typeof resetAllFilters === 'function') resetAllFilters();
+    }
+
     if (!navigationHistory.includes(sectionId)) {
         navigationHistory.push(sectionId);
     }
@@ -288,15 +318,17 @@ function showSection(sectionId) {
         if (typeof removeReceiptPreview === 'function') removeReceiptPreview();
     }
 
-    document.querySelectorAll('.section').forEach(section => {
-        if (section) section.classList.remove('active');
+    // إخفاء جميع الأقسام أولاً
+    document.querySelectorAll('.section').forEach(sec => {
+        if (sec) sec.classList.remove('active');
     });
-    
+
     const targetSection = document.getElementById(sectionId);
     if (targetSection) {
         targetSection.classList.add('active');
         
-        window.scrollTo(0, 0);
+        // التمرير للأعلى عند فتح أي صفحة أو قسم
+        window.scrollTo({ top: 0, behavior: 'instant' });
         document.documentElement.scrollTop = 0;
         document.body.scrollTop = 0;
 
@@ -314,16 +346,19 @@ function showSection(sectionId) {
                     if (typeof loadMyOrders === 'function') loadMyOrders(false);
                     break;
                 case 'products':
-                    // تحميل المنتجات من Firebase فقط إذا لم تكن محملة أو عند الحاجة لتحديثها
-                    if (typeof allProducts === 'undefined' || allProducts.length === 0) {
-                        if (typeof loadProducts === 'function') await loadProducts(false);
-                    } else {
-                        if (typeof displayProducts === 'function') displayProducts(allProducts, false);
+                    // تحميل المنتجات من Firebase وإعداد التمرير اللانهائي
+                    if (typeof loadProducts === 'function') {
+                        await loadProducts(false);
+                        if (typeof setupInfiniteScroll === 'function') setupInfiniteScroll();
                     }
                     break;
                 case 'home':
-                    // تحميل المنتجات المميزة فقط عند فتح الصفحة الرئيسية
-                    if (typeof displayFeaturedProducts === 'function') displayFeaturedProducts();
+                    // تحميل الصفحة الرئيسية عند العرض
+                    if (typeof initializeHomePage === 'function') {
+                        initializeHomePage();
+                    } else if (typeof loadHomeProducts === 'function') {
+                        loadHomeProducts(false);
+                    }
                     break;
             }
         };
@@ -475,8 +510,27 @@ window.submitCheckoutOrder = submitCheckoutOrder;
 window.updateCheckoutItemQty = updateCheckoutItemQty;
 window.setupLightweightNotifications = setupLightweightNotifications;
 window.initPerformanceMonitoring = initPerformanceMonitoring;
+window.loadHomeProducts = loadHomeProducts;
+window.initializeHomePage = initializeHomePage;
+window.setupHomeInfiniteScroll = setupHomeInfiniteScroll;
 
 window.addEventListener('resize', adjustLayout);
+
+// تهيئة التحميل بالتمرير عند تحميل الصفحة
+document.addEventListener('DOMContentLoaded', () => {
+    if (typeof setupHomeInfiniteScroll === 'function') {
+        setupHomeInfiniteScroll();
+    }
+});
+
+// إذا فتح المستخدم الصفحة الرئيسية مباشرة
+if (window.location.hash === '#home' || !window.location.hash) {
+    setTimeout(() => {
+        if (typeof initializeHomePage === 'function') {
+            initializeHomePage();
+        }
+    }, 500);
+}
 
 // تسجيل Service Worker المتقدم
 if ('serviceWorker' in navigator) {

@@ -89,7 +89,10 @@ function safeElementUpdate(id, value, isHTML = false) {
         }
         return true;
     } else {
-        console.warn(`⚠️ لم يتم العثور على العنصر: ${id}`);
+        // تقليل الضجيج في الكونسول للعناصر الاختيارية مثل الـ footer
+        if (!id.startsWith('footer')) {
+            console.warn(`⚠️ لم يتم العثور على العنصر: ${id}`);
+        }
         return false;
     }
 }
@@ -150,7 +153,10 @@ function initializeFirebaseApp(appName = 'DefaultApp') {
     }
 
     try {
-        if (!window.firebaseModules) throw new Error('Firebase SDK لم يتم تحميله');
+        if (!window.firebaseModules) {
+            console.warn('⚠️ Firebase SDK لم يتم تحميله بعد، سيتم المحاولة مرة أخرى...');
+            return null;
+        }
         const config = getFirebaseConfig();
         const app = window.firebaseModules.initializeApp(config, appName);
         const auth = window.firebaseModules.getAuth(app);
@@ -181,7 +187,12 @@ function initializeFirebaseApp(appName = 'DefaultApp') {
 }
 
 function getFirebaseInstance() {
-    if (!firebaseApp) throw new Error('Firebase لم يتم تهيئته بعد');
+    if (!firebaseApp) {
+        console.warn('⚠️ محاولة الوصول إلى Firebase قبل التهيئة، جاري التهيئة...');
+        const instance = initializeFirebase();
+        if (!instance) throw new Error('Firebase لم يتم تهيئته بعد');
+        return instance;
+    }
     return { app: firebaseApp, auth: firebaseAuth, db: firebaseDb, storage: firebaseStorage };
 }
 
@@ -557,9 +568,41 @@ function updateUIWithSettings() {
         }
     }
     
-    const aboutEl = document.getElementById('storeDescription');
-    if (aboutEl && siteSettings.aboutUs) {
-        aboutEl.textContent = sanitizeUserInput(siteSettings.aboutUs);
+    // تحديث قسم "عن المتجر"
+    const aboutStoreDesc = document.getElementById('aboutStoreDescription');
+    if (aboutStoreDesc && siteSettings.aboutUs) {
+        aboutStoreDesc.innerHTML = siteSettings.aboutUs;
+    }
+    
+    // تحديث قسم "تواصل معنا"
+    const whatsappLink = document.getElementById('contactWhatsapp');
+    if (whatsappLink) {
+        const whatsappPhone = siteSettings.phone ? siteSettings.phone.replace(/\D/g, '') : '249933002015';
+        whatsappLink.href = `https://wa.me/${whatsappPhone}`;
+    }
+
+    const instagramLink = document.getElementById('contactInstagram');
+    if (instagramLink && siteSettings.instagramUrl) {
+        instagramLink.href = siteSettings.instagramUrl;
+    }
+
+    const emailText = document.getElementById('contactEmailText');
+    const emailLink = document.getElementById('contactEmail');
+    if (emailText && siteSettings.email) {
+        emailText.textContent = siteSettings.email;
+        if (emailLink) emailLink.href = `mailto:${siteSettings.email}`;
+    }
+
+    const phoneText = document.getElementById('contactPhoneText');
+    const phoneLink = document.getElementById('contactPhone');
+    if (phoneText && siteSettings.phone) {
+        phoneText.textContent = siteSettings.phone;
+        if (phoneLink) phoneLink.href = `tel:${siteSettings.phone}`;
+    }
+
+    const addressText = document.getElementById('contactAddressText');
+    if (addressText && siteSettings.address) {
+        addressText.textContent = siteSettings.address;
     }
     
     const socialLinks = {
@@ -579,12 +622,6 @@ function updateUIWithSettings() {
                 element.style.display = 'none';
             }
         }
-    }
-
-    const whatsappEl = document.getElementById('footerWhatsapp');
-    if (whatsappEl) {
-        const whatsappPhone = siteSettings.phone ? siteSettings.phone.replace(/\D/g, '') : '';
-        whatsappEl.href = `https://wa.me/${whatsappPhone}`;
     }
 
     if (siteSettings.logoUrl) {
@@ -659,9 +696,19 @@ function showMainApp() {
     
     if (authScreen) {
         authScreen.style.setProperty('display', 'none', 'important');
+        authScreen.style.setProperty('visibility', 'hidden', 'important');
     }
     if (appContainer) {
         appContainer.style.setProperty('display', 'flex', 'important');
+        appContainer.style.setProperty('visibility', 'visible', 'important');
+        appContainer.style.setProperty('opacity', '1', 'important');
+    }
+    
+    // إخفاء شاشة التحميل
+    if (typeof forceHideLoader === 'function') {
+        forceHideLoader();
+    } else if (typeof hideLoader === 'function') {
+        hideLoader();
     }
 }
 
@@ -791,42 +838,7 @@ function performSearch() {
 }
 
 function executeSmartSearch(searchTerm) {
-    if (!searchTerm) {
-        // إظهار الفلاتر عند مسح البحث
-        const filtersContainer = document.querySelector('.filters-container');
-        if (filtersContainer) {
-            filtersContainer.style.display = 'flex';
-        }
-        if (typeof displayProducts === 'function') displayProducts(allProducts);
-        return;
-    }
-
-    console.log(`🔍 [Smart Search] البحث عن: ${searchTerm}`);
-    
-    // خوارزمية مطابقة متقدمة (ترتيب حسب الأهمية)
-    const filteredProducts = allProducts.map(product => {
-        let score = 0;
-        const name = (product.name || '').toLowerCase();
-        const desc = (product.description || '').toLowerCase();
-        const cat = (product.category || '').toLowerCase();
-
-        // 1. مطابقة تامة في الاسم (أعلى أولوية)
-        if (name === searchTerm) score += 100;
-        // 2. الاسم يبدأ بكلمة البحث
-        else if (name.startsWith(searchTerm)) score += 50;
-        // 3. الاسم يحتوي على كلمة البحث
-        else if (name.includes(searchTerm)) score += 30;
-        
-        // 4. مطابقة في الفئة
-        if (cat.includes(searchTerm)) score += 20;
-        
-        // 5. مطابقة في الوصف
-        if (desc.includes(searchTerm)) score += 10;
-
-        return { ...product, searchScore: score };
-    })
-    .filter(p => p.searchScore > 0)
-    .sort((a, b) => b.searchScore - a.searchScore); // الترتيب حسب الأكثر صلة
+    console.log(`🔍 [Database Search] البحث عن: ${searchTerm}`);
     
     // إخفاء الفلاتر عند البحث
     const filtersContainer = document.querySelector('.filters-container');
@@ -834,26 +846,13 @@ function executeSmartSearch(searchTerm) {
         filtersContainer.style.display = 'none';
     }
     
-    if (typeof displayProducts === 'function') {
-        displayProducts(filteredProducts);
-        
-        // إذا لم تكن هناك نتائج، عرض رسالة مناسبة
-        if (filteredProducts.length === 0) {
-            const productsGrid = document.getElementById('productsGrid');
-            if (productsGrid) {
-                productsGrid.innerHTML = `
-                    <div style="text-align: center; padding: 40px 20px; width: 100%; grid-column: 1/-1;">
-                        <i class="fas fa-search fa-3x" style="color: var(--gray-color); margin-bottom: 20px;"></i>
-                        <h3 style="color: var(--primary-color);">لا توجد نتائج للبحث عن "${searchTerm}"</h3>
-                        <p style="color: var(--gray-color);">جرب كلمات بحث أخرى أو تصفح الأقسام</p>
-                    </div>
-                `;
-            }
-        }
-    }
-    
     // الانتقال لقسم المنتجات لرؤية النتائج
     if (typeof showSection === 'function') showSection('products');
+
+    // استدعاء تحميل المنتجات من قاعدة البيانات مباشرة
+    if (typeof loadProducts === 'function') {
+        loadProducts(false);
+    }
 }
 
 function filterProducts() {
@@ -869,37 +868,9 @@ function filterProducts() {
         searchInput.value = '';
     }
     
-    let filteredProducts = [...allProducts];
-    
-    const category = document.getElementById('categoryFilter')?.value;
-    if (category) {
-        filteredProducts = filteredProducts.filter(p => p.category === category);
-    }
-    
-    const sortBy = document.getElementById('sortFilter')?.value;
-    if (sortBy === 'price-low') {
-        filteredProducts.sort((a, b) => a.price - b.price);
-    } else if (sortBy === 'price-high') {
-        filteredProducts.sort((a, b) => b.price - a.price);
-    } else if (sortBy === 'newest') {
-        filteredProducts.sort((a, b) => b.createdAt - a.createdAt);
-    }
-    
-    const activeFilters = Array.from(document.querySelectorAll('.filter-btn.active'));
-    activeFilters.forEach(btn => {
-        const filterType = btn.getAttribute('data-filter');
-        if (filterType === 'isNew') {
-            filteredProducts = filteredProducts.filter(p => p.isNew === true || p.isNew === 'true');
-        } else if (filterType === 'isSale') {
-            filteredProducts = filteredProducts.filter(p => p.isSale === true || p.isSale === 'true');
-        } else if (filterType === 'isBest') {
-            filteredProducts = filteredProducts.filter(p => p.isBest === true || p.isBest === 'true');
-        }
-    });
-    
-    if (typeof displayProducts === 'function') {
-        // عند الفلترة، نقوم بمسح الشبكة وعرض النتائج المفلترة فقط (بدون append)
-        displayProducts(filteredProducts, false);
+    // استدعاء تحميل المنتجات من Firebase مع الفلاتر الجديدة
+    if (typeof loadProducts === 'function') {
+        loadProducts(false); // false تعني إعادة التحميل من البداية بالفلاتر الجديدة
     }
 }
 
@@ -941,11 +912,103 @@ async function syncUserDataFromFirestore() {
             cartItems = data.cart || [];
             favorites = data.favorites || [];
             console.log('✅ تم مزامنة البيانات من السحابة');
+            
+            // تحديث العرض بعد المزامنة
+            if (typeof updateCartCount === 'function') updateCartCount();
+            if (typeof updateFavoritesDisplay === 'function') updateFavoritesDisplay();
         }
     } catch (error) {
         console.error('❌ خطأ في مزامنة البيانات:', error);
     }
 }
+
+async function toggleFavorite(productId) {
+    if (!currentUser || isGuest) {
+        showToast('يرجى تسجيل الدخول لإضافة المنتجات للمفضلة', 'warning');
+        return;
+    }
+
+    const index = favorites.findIndex(f => f.id === productId);
+    if (index === -1) {
+        const product = allProducts.find(p => p.id === productId);
+        if (product) {
+            favorites.push({
+                id: product.id,
+                name: product.name,
+                price: product.price,
+                image: product.image,
+                category: product.category
+            });
+            showToast('تمت الإضافة للمفضلة', 'success');
+        }
+    } else {
+        favorites.splice(index, 1);
+        showToast('تمت الإزالة من المفضلة', 'info');
+    }
+
+    await saveUserDataToFirestore();
+    updateFavoritesDisplay();
+    
+    // تحديث أيقونة القلب في شبكة المنتجات
+    const favBtns = document.querySelectorAll(`.product-card[data-id="${productId}"] .favorite-btn`);
+    favBtns.forEach(btn => {
+        const icon = btn.querySelector('i');
+        if (index === -1) {
+            btn.classList.add('active');
+            if (icon) icon.className = 'fas fa-heart';
+        } else {
+            btn.classList.remove('active');
+            if (icon) icon.className = 'far fa-heart';
+        }
+    });
+}
+
+function updateFavoritesDisplay() {
+    const favoritesList = document.getElementById('favoritesList');
+    const emptyMessage = document.getElementById('emptyFavoritesMessage');
+    
+    if (!favoritesList || !emptyMessage) return;
+
+    if (!favorites || favorites.length === 0) {
+        favoritesList.innerHTML = '';
+        emptyMessage.style.display = 'block';
+        return;
+    }
+
+    emptyMessage.style.display = 'none';
+    favoritesList.innerHTML = favorites.map(product => {
+        let imageUrl = product.image;
+        if (!imageUrl || imageUrl === 'https://via.placeholder.com/300x200?text=صورة') {
+            imageUrl = 'https://i.ibb.co/fVn1SghC/file-00000000cf8071f498fc71b66e09f615.png';
+        }
+
+        return `
+            <div class="product-card" data-id="${product.id}">
+                <div class="product-image" onclick="openProductDetails('${product.id}')">
+                    <img src="${imageUrl}" alt="${product.name}" loading="lazy" onerror="this.src='https://i.ibb.co/fVn1SghC/file-00000000cf8071f498fc71b66e09f615.png'">
+                </div>
+                <div class="product-info">
+                    <div class="product-category-tag">${product.category || 'عطور'}</div>
+                    <h3 onclick="openProductDetails('${product.id}')">${product.name}</h3>
+                    <div class="product-price">
+                        <span class="current-price">${formatNumber(product.price)} ${siteCurrency}</span>
+                    </div>
+                    <div class="product-actions">
+                        <button class="add-to-cart-btn" onclick="openQuantityModal('${product.id}')">
+                            <i class="fas fa-shopping-cart"></i> إضافة
+                        </button>
+                        <button class="favorite-btn active" onclick="toggleFavorite('${product.id}')">
+                            <i class="fas fa-heart"></i>
+                        </button>
+                    </div>
+                </div>
+            </div>
+        `;
+    }).join('');
+}
+
+window.toggleFavorite = toggleFavorite;
+window.updateFavoritesDisplay = updateFavoritesDisplay;
 
 async function saveUserDataToFirestore() {
     if (!currentUser || isGuest) return;

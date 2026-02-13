@@ -105,9 +105,9 @@ function updateCheckoutSummary() {
     const checkoutItems = document.getElementById("checkoutItems");
     if (!checkoutItems) return;
     
-    const itemsToDisplay = directPurchaseItem ? [directPurchaseItem] : cartItems;
+    const itemsToDisplay = window.directPurchaseItem ? [window.directPurchaseItem] : window.cartItems;
     const subtotal = itemsToDisplay.reduce((total, item) => total + (Number(item.price) * Number(item.quantity)), 0);
-    const shippingCost = subtotal < (siteSettings.freeShippingLimit || 200) ? (siteSettings.shippingCost || 15) : 0;
+    const shippingCost = subtotal < (window.siteSettings?.freeShippingLimit || 20000) ? (window.siteSettings?.shippingCost || 2000) : 0;
     const total = subtotal + shippingCost;
     
     checkoutItems.innerHTML = itemsToDisplay.map(item => {
@@ -144,7 +144,7 @@ function updateCheckoutSummary() {
     
     const submitOrderBtn = document.getElementById('submitOrderBtn');
     if (submitOrderBtn) {
-        submitOrderBtn.disabled = (directPurchaseItem ? false : cartItems.length === 0) || !checkoutReceiptFile;
+        submitOrderBtn.disabled = (window.directPurchaseItem ? false : (window.cartItems || []).length === 0) || !checkoutReceiptFile;
     }
     
     // تحديث معلومات البنك
@@ -154,26 +154,26 @@ function updateCheckoutSummary() {
 }
 
 function updateCheckoutItemQty(productId, change) {
-    const product = allProducts.find(p => p.id === productId);
+    const product = typeof allProducts !== 'undefined' ? allProducts.find(p => p.id === productId) : null;
     
-    if (directPurchaseItem && directPurchaseItem.id === productId) {
-        const newQty = directPurchaseItem.quantity + change;
+    if (window.directPurchaseItem && window.directPurchaseItem.id === productId) {
+        const newQty = window.directPurchaseItem.quantity + change;
         if (newQty < 1) return;
         
-        const availableStock = product ? product.stock : (directPurchaseItem.stock || 99);
+        const availableStock = product ? product.stock : (window.directPurchaseItem.stock || 99);
         if (newQty > availableStock) {
             if (typeof showToast === 'function') showToast('لا توجد كمية كافية في المخزون', 'warning');
             return;
         }
-        directPurchaseItem.quantity = newQty;
+        window.directPurchaseItem.quantity = newQty;
     } else {
-        const item = cartItems.find(i => i.id === productId);
+        const item = window.cartItems.find(i => i.id === productId);
         if (item) {
             const newQty = item.quantity + change;
             if (newQty < 1) {
                 if (typeof removeFromCart === 'function') removeFromCart(productId);
                 // إذا تمت الإزالة، نعود للقائمة السابقة
-                if (cartItems.length === 0) {
+                if (window.cartItems.length === 0) {
                     if (typeof showSection === 'function') showSection('cart');
                     return;
                 }
