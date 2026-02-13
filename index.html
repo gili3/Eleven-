@@ -15,7 +15,7 @@
     <script type="module">
         import { initializeApp } from "https://www.gstatic.com/firebasejs/10.7.1/firebase-app.js";
         import { getAuth, onAuthStateChanged, GoogleAuthProvider, signInWithPopup, signInWithEmailAndPassword, createUserWithEmailAndPassword, signOut, updateProfile } from "https://www.gstatic.com/firebasejs/10.7.1/firebase-auth.js";
-        import { getFirestore, doc, collection, getDoc, getDocs, setDoc, updateDoc, query, where, orderBy, serverTimestamp, deleteDoc, addDoc, increment } from "https://www.gstatic.com/firebasejs/10.7.1/firebase-firestore.js";
+        import { getFirestore, doc, collection, getDoc, getDocs, setDoc, updateDoc, query, where, orderBy, serverTimestamp, deleteDoc, addDoc, increment, limit, startAfter } from "https://www.gstatic.com/firebasejs/10.7.1/firebase-firestore.js";
         import { getStorage, ref, uploadBytes, getDownloadURL, uploadBytesResumable } from "https://www.gstatic.com/firebasejs/10.7.1/firebase-storage.js";
 
         window.firebaseModules = { 
@@ -42,6 +42,8 @@
             orderBy,
             serverTimestamp,
             increment,
+            limit,
+            startAfter,
             getStorage,
             ref,
             uploadBytes,
@@ -75,33 +77,61 @@
             position: fixed;
             top: 0;
             left: 0;
-            width: 100vw;
-            height: 100vh;
-            background-color: #fff;
+            width: 100%;
+            height: 100%;
+            background-color: #ffffff;
             display: flex;
             flex-direction: column;
             justify-content: center;
             align-items: center;
-            z-index: 9999;
-            transition: opacity 0.5s ease;
+            z-index: 10001;
+            transition: opacity 0.5s ease-out, visibility 0.5s;
         }
-        .loader-spinner {
-            width: 50px;
-            height: 50px;
-            border: 5px solid #f3f3f3;
-            border-top: 5px solid var(--primary-color, #555555);
+        .loader-content {
+            text-align: center;
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            gap: 20px;
+        }
+        .loader-logo {
+            width: 100px;
+            height: 100px;
+            object-fit: contain;
+            animation: pulse 2s infinite ease-in-out;
+        }
+        .modern-loader {
+            width: 48px;
+            height: 48px;
+            border: 3px solid #f3f3f3;
+            border-bottom-color: #c9a24d;
             border-radius: 50%;
-            animation: spin 1s linear infinite;
-            margin-bottom: 15px;
+            display: inline-block;
+            box-sizing: border-box;
+            animation: rotation 1s linear infinite;
         }
-        @keyframes spin {
+        .loader-text {
+            font-family: 'Cairo', sans-serif;
+            color: #333;
+            font-size: 18px;
+            font-weight: 600;
+            margin-top: 10px;
+        }
+        @keyframes rotation {
             0% { transform: rotate(0deg); }
             100% { transform: rotate(360deg); }
+        }
+        @keyframes pulse {
+            0% { transform: scale(1); opacity: 0.8; }
+            50% { transform: scale(1.05); opacity: 1; }
+            100% { transform: scale(1); opacity: 0.8; }
         }
         
         /* إخفاء العناصر الرئيسية حتى يتم التحقق من المصادقة */
         #authScreen, #appContainer {
             display: none !important;
+            visibility: hidden !important;
+            opacity: 0 !important;
         }
         
         /* أنماط جديدة للصور والإيصالات */
@@ -362,8 +392,11 @@
 <body>
     <!-- شاشة التحميل الأولية -->
     <div id="initialLoader">
-        <div class="loader-spinner"></div>
-        <p>جاري التحميل...</p>
+        <div class="loader-content">
+            <img src="https://i.ibb.co/fVn1SghC/file-00000000cf8071f498fc71b66e09f615.png" alt="Eleven" class="loader-logo">
+            <span class="modern-loader"></span>
+            <div class="loader-text">Eleven Store</div>
+        </div>
     </div>
     
     <!-- تم نقل شاشة المصادقة إلى login.html -->
@@ -492,8 +525,6 @@
         </div>
     </div>
 
-        </div>
-
     <!-- التطبيق الرئيسي -->
     <div id="appContainer" class="app-container" style="display: none;">
         <!-- الهيدر المعدل -->
@@ -539,7 +570,7 @@
         <nav class="mobile-nav" id="mobileNav">
             <div class="mobile-nav-header">
                 <div class="user-info">
-                    <img id="mobileUserImage" src="https://i.ibb.co/nNx4v1x5/images-1.png" alt="صورة المستخدم" loading="lazy">
+                    <img id="mobileUserImage" src="https://cdn-icons-png.flaticon.com/512/3135/3135715.png" alt="صورة المستخدم" loading="lazy">
                     <div>
                         <h3 id="mobileUserName">زائر</h3>
                         <p id="mobileUserEmail">ليس لديك حساب</p>
@@ -551,23 +582,12 @@
             </div>
             
             <ul class="mobile-nav-links">
-                <li><a href="#" data-section="home"><i class="fas fa-home"></i> الصفحة الرئيسية</a></li>
-                <li><a href="#" data-section="products"><i class="fas fa-store"></i> جميع المنتجات</a></li>
-                <li><a href="#" data-section="cart"><i class="fas fa-shopping-cart"></i> سلة التسوق</a></li>
-                <li><a href="#" data-section="favorites"><i class="fas fa-heart"></i> المفضلة</a></li>
-                <li><a href="#" data-section="my-orders"><i class="fas fa-shopping-bag"></i> طلباتي</a></li>
-                <li><a href="#" data-section="profile"><i class="fas fa-user"></i> الملف الشخصي</a></li>
+                <li><a href="#" data-section="home"><i class="fas fa-home"></i> الرئيسية</a></li>
+                <li><a href="#" data-section="about"><i class="fas fa-info-circle"></i> عن المتجر</a></li>
+                <li><a href="#" data-section="contact"><i class="fas fa-phone-alt"></i> تواصل معنا</a></li>
                 <li id="adminMobileLink" style="display: none;">
                     <a href="admin.html"><i class="fas fa-cog"></i> لوحة التحكم</a>
                 </li>
-                
-                <li class="nav-divider" style="height: 1px; background: #eee; margin: 10px 20px;"></li>
-                
-                <li class="nav-contact-header" style="padding: 10px 20px; font-size: 14px; color: #888; font-weight: 600;">تواصل معنا</li>
-                <li><a href="mailto:yxr.249@gmail.com"><i class="fas fa-envelope"></i> البريد الإلكتروني</a></li>
-                <li><a href="tel:+249933002015"><i class="fas fa-phone"></i> اتصل بنا</a></li>
-                <li><a href="https://wa.me/249933002015" target="_blank"><i class="fab fa-whatsapp"></i> واتساب</a></li>
-                
                 <li class="logout-item">
                     <a href="#" id="mobileLogoutBtn" class="logout-link">
                         <i class="fas fa-sign-out-alt"></i> تسجيل الخروج
@@ -578,41 +598,160 @@
 
         <!-- المحتوى الرئيسي -->
         <main class="main-content">
-            <!-- قسم البطل -->
-            <section id="home" class="section active">
-                <!-- كل المنتجات مع الفلترة -->
-                <div class="featured-products">
-                    <h2 class="section-title">اكتشف منتجاتنا</h2>
-                    
-                    <!-- نظام الفلترة السريع -->
-                    <div class="quick-filters" style="display: flex; gap: 10px; margin-bottom: 20px; overflow-x: auto; padding-bottom: 10px; scrollbar-width: none;">
-                        <button class="filter-tab active" onclick="filterMainProducts('all', this)" style="padding: 10px 20px; border-radius: 20px; border: 1px solid var(--primary-color); background: var(--primary-color); color: white; cursor: pointer; white-space: nowrap; font-family: 'Cairo'; min-height: 44px;">الكل</button>
-                        <button class="filter-tab" onclick="filterMainProducts('isNew', this)" style="padding: 10px 20px; border-radius: 20px; border: 1px solid #ddd; background: white; cursor: pointer; white-space: nowrap; font-family: 'Cairo'; min-height: 44px;">وصل حديثاً</button>
-                        <button class="filter-tab" onclick="filterMainProducts('isSale', this)" style="padding: 10px 20px; border-radius: 20px; border: 1px solid #ddd; background: white; cursor: pointer; white-space: nowrap; font-family: 'Cairo'; min-height: 44px;">العروض</button>
-                        <button class="filter-tab" onclick="filterMainProducts('isBest', this)" style="padding: 10px 20px; border-radius: 20px; border: 1px solid #ddd; background: white; cursor: pointer; white-space: nowrap; font-family: 'Cairo'; min-height: 44px;">الأكثر مبيعاً</button>
-                    </div>
+            <!-- قسم المفضلة -->
+            <section id="favorites" class="section">
+                <h2 class="section-title">المفضلة</h2>
+                <div id="favoritesList" class="products-grid"></div>
+                <div id="emptyFavoritesMessage" style="display: none; text-align: center; padding: 40px;">
+                    <i class="fas fa-heart fa-3x" style="color: #eee; margin-bottom: 20px;"></i>
+                    <h3>قائمة المفضلة فارغة</h3>
+                    <p>لم تقم بإضافة أي منتجات للمفضلة بعد</p>
+                </div>
+            </section>
 
-                    <div class="products-grid" id="featuredProductsGrid">
-                        <!-- سيتم تعبئتها بواسطة JavaScript -->
+            <!-- قسم طلباتي -->
+            <section id="my-orders" class="section">
+                <h2 class="section-title">طلباتي</h2>
+                <div id="myOrdersList"></div>
+                <div id="emptyOrdersMessage" style="display: none; text-align: center; padding: 40px;">
+                    <i class="fas fa-shopping-bag fa-3x" style="color: #eee; margin-bottom: 20px;"></i>
+                    <h3>لا توجد طلبات سابقة</h3>
+                    <p>لم تقم بإجراء أي طلبات بعد</p>
+                </div>
+            </section>
+
+            <!-- قسم الملف الشخصي -->
+            <section id="profile" class="section">
+                <h2 class="section-title">الملف الشخصي</h2>
+                <div class="profile-container" style="background: white; border-radius: 20px; padding: 30px; box-shadow: 0 5px 20px rgba(0,0,0,0.05);">
+                    <div class="profile-header" style="text-align: center; margin-bottom: 30px;">
+                        <img id="profileImage" src="https://cdn-icons-png.flaticon.com/512/3135/3135715.png" style="width: 100px; height: 100px; border-radius: 50%; margin-bottom: 15px; border: 3px solid var(--secondary-color); padding: 5px;">
+                        <h3 id="profileName">زائر</h3>
+                        <p id="profileEmail" style="color: #888;">ليس لديك حساب</p>
+                    </div>
+                    <div class="profile-details">
+                        <div class="detail-item" style="margin-bottom: 15px; display: flex; justify-content: space-between; border-bottom: 1px solid #eee; padding-bottom: 10px;">
+                            <strong>الاسم:</strong> <span id="detailName">--</span>
+                        </div>
+                        <div class="detail-item" style="margin-bottom: 15px; display: flex; justify-content: space-between; border-bottom: 1px solid #eee; padding-bottom: 10px;">
+                            <strong>الهاتف:</strong> <span id="detailPhone">--</span>
+                        </div>
+                        <div class="detail-item" style="margin-bottom: 15px; display: flex; justify-content: space-between; border-bottom: 1px solid #eee; padding-bottom: 10px;">
+                            <strong>العنوان:</strong> <span id="detailAddress">--</span>
+                        </div>
+                    </div>
+                    <button id="editProfileBtn" class="btn-primary" style="width: 100%; margin-top: 20px;">تعديل الملف الشخصي</button>
+                </div>
+            </section>
+
+            <!-- قسم عن المتجر -->
+            <section id="about" class="section">
+                <h2 class="section-title">عن المتجر</h2>
+                <div class="about-container" style="background: white; border-radius: 20px; padding: 30px; box-shadow: 0 5px 20px rgba(0,0,0,0.05); line-height: 1.8;">
+                    <div id="aboutContent" style="text-align: center;">
+                        <img src="https://i.ibb.co/fVn1SghC/file-00000000cf8071f498fc71b66e09f615.png" style="width: 120px; margin-bottom: 20px;">
+                        <div id="aboutStoreDescription">جاري تحميل الوصف...</div>
                     </div>
                 </div>
-                
-                <!-- قسم المميزات -->
-                <div class="features-section">
-                    <div class="feature">
-                        <i class="fas fa-shipping-fast"></i>
-                        <h3>شحن سريع</h3>
-                        <p>توصيل لجميع أنحاء الخرطوم</p>
+            </section>
+
+            <!-- قسم تواصل معنا -->
+            <section id="contact" class="section">
+                <h2 class="section-title">تواصل معنا</h2>
+                <div class="contact-container" style="background: white; border-radius: 20px; padding: 30px; box-shadow: 0 5px 20px rgba(0,0,0,0.05);">
+                    <div class="contact-links" style="display: flex; flex-direction: column; gap: 20px;">
+                        <a id="contactWhatsapp" href="#" target="_blank" style="display: flex; align-items: center; gap: 15px; padding: 15px; background: #25D366; color: white; border-radius: 12px; text-decoration: none; font-weight: 600;">
+                            <i class="fab fa-whatsapp fa-2x"></i>
+                            <span>واتساب</span>
+                        </a>
+                        <a id="contactInstagram" href="#" target="_blank" style="display: flex; align-items: center; gap: 15px; padding: 15px; background: linear-gradient(45deg, #f09433 0%,#e6683c 25%,#dc2743 50%,#cc2366 75%,#bc1888 100%); color: white; border-radius: 12px; text-decoration: none; font-weight: 600;">
+                            <i class="fab fa-instagram fa-2x"></i>
+                            <span>إنستغرام</span>
+                        </a>
+                        <a id="contactEmail" href="#" style="display: flex; align-items: center; gap: 15px; padding: 15px; background: #f1f1f1; color: #333; border-radius: 12px; text-decoration: none; font-weight: 600;">
+                            <i class="fas fa-envelope fa-2x" style="color: #EA4335;"></i>
+                            <span id="contactEmailText">Yxr.249@gmail.com</span>
+                        </a>
+                        <a id="contactPhone" href="#" style="display: flex; align-items: center; gap: 15px; padding: 15px; background: #f1f1f1; color: #333; border-radius: 12px; text-decoration: none; font-weight: 600;">
+                            <i class="fas fa-phone-alt fa-2x" style="color: #3498db;"></i>
+                            <span id="contactPhoneText">0933002015</span>
+                        </a>
+                        <div style="display: flex; align-items: center; gap: 15px; padding: 15px; background: #f1f1f1; color: #333; border-radius: 12px;">
+                            <i class="fas fa-map-marker-alt fa-2x" style="color: #e74c3c;"></i>
+                            <span id="contactAddressText">العنوان</span>
+                        </div>
                     </div>
-                    <div class="feature">
-                        <i class="fas fa-check-circle"></i>
-                        <h3>براندات عالمية</h3>
-                        <p>ضمان الجودة والأصالة</p>
+                </div>
+            </section>
+
+            <!-- قسم إتمام الطلب -->
+            <section id="checkout" class="section">
+                <h2 class="section-title">إتمام الطلب</h2>
+                <div class="checkout-container">
+                    <div id="checkoutItems" class="checkout-items-list"></div>
+                    <div class="bank-transfer-info" style="background: #f9f9f9; padding: 20px; border-radius: 15px; margin: 20px 0;">
+                        <h4>معلومات التحويل البنكي</h4>
+                        <p>البنك: <strong id="checkoutBankName">--</strong></p>
+                        <p>رقم الحساب: <strong id="checkoutBankAccount">--</strong></p>
+                        <p>باسم: <strong id="checkoutBankAccountName">--</strong></p>
                     </div>
-                    <div class="feature">
-                        <i class="fas fa-headset"></i>
-                        <h3>دعم فني</h3>
-                        <p>خدمة عملاء 24/7</p>
+                    <div class="form-group">
+                        <label>رقم الهاتف للتواصل</label>
+                        <input type="tel" id="checkoutPhone" placeholder="09xxxxxxx">
+                    </div>
+                    <div class="form-group">
+                        <label>عنوان التوصيل</label>
+                        <textarea id="checkoutAddress" placeholder="المدينة، الحي، رقم المنزل..."></textarea>
+                    </div>
+                    <div class="form-group">
+                        <label>ملاحظات</label>
+                        <textarea id="checkoutNotes" placeholder="أي ملاحظات إضافية..."></textarea>
+                    </div>
+                    <div class="receipt-upload" style="margin: 20px 0;">
+                        <label id="receiptUploadLabel" for="checkoutReceipt" class="upload-label">
+                            <i class="fas fa-cloud-upload-alt"></i> ارفع صورة الإيصال
+                        </label>
+                        <input type="file" id="checkoutReceipt" accept="image/*" style="display: none;" onchange="previewCheckoutReceipt(this)">
+                        <div id="checkoutReceiptPreview" style="display: none; text-align: center;">
+                            <img id="checkoutReceiptImg" src="" style="max-width: 200px; border-radius: 10px;">
+                            <button onclick="removeCheckoutReceipt()" class="btn-danger">إزالة</button>
+                        </div>
+                    </div>
+                    <div class="checkout-summary" style="background: white; padding: 20px; border-radius: 15px; box-shadow: 0 4px 15px rgba(0,0,0,0.05);">
+                        <div style="display: flex; justify-content: space-between; margin-bottom: 10px;">
+                            <span>الإجمالي:</span> <span id="checkoutSubtotal">0 SDG</span>
+                        </div>
+                        <div style="display: flex; justify-content: space-between; margin-bottom: 10px;">
+                            <span>الشحن:</span> <span id="checkoutShipping">0 SDG</span>
+                        </div>
+                        <div style="display: flex; justify-content: space-between; font-weight: 700; font-size: 1.2em;">
+                            <span>المجموع:</span> <span id="checkoutTotal">0 SDG</span>
+                        </div>
+                    </div>
+                    <button id="submitOrderBtn" onclick="submitCheckoutOrder()" class="btn-primary" style="width: 100%; margin-top: 20px;" disabled>تأكيد الطلب وإرسال الإيصال</button>
+                </div>
+            </section>
+
+            <!-- قسم البطل - الصفحة الرئيسية المبسطة -->
+            <section id="home" class="section active">
+                <!-- قسم واحد فقط: كل المنتجات -->
+                <div class="all-products-home">
+                    <h2 class="section-title">اكتشف منتجاتنا</h2>
+                    
+                    <!-- شبكة المنتجات مع التحميل اللانهائي -->
+                    <div class="products-grid" id="homeProductsGrid">
+                        <!-- سيتم تعبئتها بواسطة JavaScript مع التحميل اللانهائي -->
+                    </div>
+                    <div class="loading-more" id="homeProductsLoading" style="display: none;">
+                        <div class="loading-spinner-small"></div>
+                        <p>جاري تحميل المزيد من المنتجات...</p>
+                    </div>
+                    
+                    <!-- زر تحميل المزيد يدوي (بديل للتمرير) -->
+                    <div style="text-align: center; margin-top: 30px; display: none;" id="homeLoadMoreBtnContainer">
+                        <button id="homeLoadMoreBtn" class="btn-primary" onclick="loadHomeProducts(true)" style="padding: 12px 30px;">
+                            <i class="fas fa-arrow-down"></i> تحميل المزيد
+                        </button>
                     </div>
                 </div>
             </section>
@@ -661,9 +800,15 @@
                     <div class="loading-spinner-small"></div>
                     <p>جاري تحميل المزيد من المنتجات...</p>
                 </div>
-            </section>
-
-            <!-- قسم سلة التسوق -->
+                
+                <!-- زر تحميل المزيد -->
+                <!-- تم إخفاء زر تحميل المزيد والاعتماد على التمرير اللانهائي -->
+                    <<!-- تم إخفاء زر تحميل المزيد والاعتماد على التمرير اللانهائي -->
+                <div id="homeLoadMoreContainer" style="text-align: center; margin-top: 30px; display: none;">
+                    <button id="homeLoadMoreBtn" class="btn-secondary" onclick="loadHomeProducts(true)" style="display: none;">
+                        <i class="fas fa-arrow-down"></i> تحميل المزيد من المنتجات
+                    </button>
+                </div>        </div>        <!-- قسم سلة التسوق -->
             <section id="cart" class="section">
                 <h2 class="section-title">سلة التسوق</h2>
                 
@@ -953,8 +1098,32 @@
             </section>
         </main>
 
+        <!-- شريط التنقل السفلي (Bottom Navigation) -->
+        <nav class="bottom-nav">
+            <a href="#" class="nav-item active" data-section="home">
+                <i class="fas fa-home"></i>
+                <span>الرئيسية</span>
+            </a>
+            <a href="#" class="nav-item" data-section="products">
+                <i class="fas fa-store"></i>
+                <span>المتجر</span>
+            </a>
+            <a href="#" class="nav-item" data-section="favorites">
+                <i class="fas fa-heart"></i>
+                <span>المفضلة</span>
+            </a>
+            <a href="#" class="nav-item" data-section="my-orders">
+                <i class="fas fa-shopping-bag"></i>
+                <span>طلباتي</span>
+            </a>
+            <a href="#" class="nav-item" data-section="profile">
+                <i class="fas fa-user"></i>
+                <span>حسابي</span>
+            </a>
+        </nav>
+
         <!-- الفوتر البسيط -->
-        <footer class="footer" style="padding: 20px 0; background: #f9f9f9; border-top: 1px solid #eee;">
+        <footer class="footer" style="padding: 20px 0 80px 0; background: #f9f9f9; border-top: 1px solid #eee;">
             <div class="footer-bottom" style="text-align: center;">
                 <div class="footer-logo" style="margin-bottom: 10px; display: flex; align-items: center; justify-content: center; gap: 10px;">
                     <img src="https://i.ibb.co/fVn1SghC/file-00000000cf8071f498fc71b66e09f615.png" alt="Eleven" style="height: 30px;">
@@ -1209,6 +1378,8 @@
     <script src="public/js/app-core.js?v=20"></script>
     <script src="public/js/auth-system.js?v=20"></script>
     <script src="public/js/products-system.js?v=20"></script>
+    <script src="public/js/image-viewer.js?v=20"></script>
+    <script src="public/js/categories-system.js?v=20"></script>
     <script src="public/js/cart-system.js?v=20"></script>
     <script src="public/js/orders-system.js?v=20"></script>
     <script src="public/js/checkout-system.js?v=20"></script>
