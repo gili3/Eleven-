@@ -1,31 +1,43 @@
-// categories-system.js - نظام إدارة الأقسام المحسّن
+// categories-system.js - نظام إدارة الأقسام المحسّن (Firebase Version)
 // ======================== إدارة الأقسام ========================
 
-// قائمة الأقسام المتاحة
 const CATEGORIES = [
-    { id: '', name: 'جميع المنتجات', icon: 'fas fa-th' },
-    { id: 'perfume', name: 'عطور', icon: 'fas fa-spray-can' },
-    { id: 'makeup', name: 'مكياج', icon: 'fas fa-palette' },
-    { id: 'skincare', name: 'عناية بالبشرة', icon: 'fas fa-spa' },
-    { id: 'haircare', name: 'عناية بالشعر', icon: 'fas fa-wind' }
+    { id: '', name: 'جميع المنتجات', icon: 'fas fa-th', color: '#c9a24d' },
+    { id: 'perfume', name: 'عطور', icon: 'fas fa-spray-can', color: '#9b59b6' },
+    { id: 'makeup', name: 'مكياج', icon: 'fas fa-palette', color: '#e84342' },
+    { id: 'skincare', name: 'عناية بالبشرة', icon: 'fas fa-spa', color: '#00b894' },
+    { id: 'haircare', name: 'عناية بالشعر', icon: 'fas fa-wind', color: '#0984e3' },
+    { id: 'bodycare', name: 'عناية بالجسم', icon: 'fas fa-hand-holding-heart', color: '#6c5ce7' },
+    { id: 'gifts', name: 'هدايا', icon: 'fas fa-gift', color: '#d63031' }
 ];
 
-// إنشاء شريط الأقسام الأفقي
+/**
+ * تهيئة شريط الأقسام
+ */
 function initializeCategoriesBar() {
-    console.log('⚙️ تهيئة شريط الأقسام...');
-    
     const productsSection = document.getElementById('products');
-    if (!productsSection) return;
+    if (!productsSection) {
+        console.log('⚠️ قسم المنتجات غير موجود بعد');
+        return;
+    }
     
-    // البحث عن الحاوية أو إنشاء واحدة جديدة
     let categoriesContainer = document.querySelector('.categories-container');
     if (!categoriesContainer) {
-        // إنشاء الحاوية إذا لم تكن موجودة
         const header = productsSection.querySelector('.products-header');
         if (header) {
             const container = document.createElement('div');
             container.className = 'categories-container';
             container.id = 'categoriesBar';
+            container.style.cssText = `
+                display: flex;
+                overflow-x: auto;
+                gap: 10px;
+                padding: 15px 0;
+                margin-bottom: 20px;
+                -webkit-overflow-scrolling: touch;
+                scrollbar-width: thin;
+                white-space: nowrap;
+            `;
             header.insertBefore(container, header.querySelector('.filters-container'));
             categoriesContainer = container;
         }
@@ -34,73 +46,134 @@ function initializeCategoriesBar() {
     if (!categoriesContainer) return;
     
     // إنشاء أزرار الأقسام
-    const categoriesHTML = CATEGORIES.map(category => `
+    categoriesContainer.innerHTML = CATEGORIES.map(category => `
         <button class="category-btn ${category.id === '' ? 'active' : ''}" 
                 data-category="${category.id}" 
-                onclick="filterByCategory('${category.id}')">
-            <i class="${category.icon}"></i> ${category.name}
+                onclick="filterByCategory('${category.id}')"
+                style="
+                    display: inline-flex;
+                    align-items: center;
+                    gap: 8px;
+                    padding: 10px 20px;
+                    border: none;
+                    border-radius: 30px;
+                    background: ${category.id === '' ? 'var(--secondary-color)' : '#f5f5f5'};
+                    color: ${category.id === '' ? 'white' : '#333'};
+                    font-family: 'Cairo';
+                    font-weight: 600;
+                    font-size: 14px;
+                    cursor: pointer;
+                    transition: all 0.3s ease;
+                    white-space: nowrap;
+                ">
+            <i class="${category.icon}" style="color: ${category.id === '' ? 'white' : category.color};"></i>
+            ${category.name}
         </button>
     `).join('');
     
-    categoriesContainer.innerHTML = categoriesHTML;
     console.log('✅ تم تهيئة شريط الأقسام');
 }
 
-// تحديث حالة الأقسام عند الفلترة
+/**
+ * تحديث حالة أزرار الأقسام
+ */
 function updateCategoryButtons(selectedCategory = '') {
-    const buttons = document.querySelectorAll('.category-btn');
-    buttons.forEach(btn => {
-        const category = btn.getAttribute('data-category');
-        if (category === selectedCategory) {
-            btn.classList.add('active');
+    document.querySelectorAll('.category-btn').forEach(btn => {
+        const isActive = btn.getAttribute('data-category') === selectedCategory;
+        btn.classList.toggle('active', isActive);
+        
+        // تحديث الألوان
+        if (isActive) {
+            btn.style.background = 'var(--secondary-color)';
+            btn.style.color = 'white';
+            const icon = btn.querySelector('i');
+            if (icon) icon.style.color = 'white';
         } else {
-            btn.classList.remove('active');
+            btn.style.background = '#f5f5f5';
+            btn.style.color = '#333';
+            const categoryId = btn.getAttribute('data-category');
+            const category = CATEGORIES.find(c => c.id === categoryId);
+            if (category) {
+                const icon = btn.querySelector('i');
+                if (icon) icon.style.color = category.color || '#c9a24d';
+            }
         }
     });
 }
 
-// دالة الفلترة حسب الفئة المحسّنة
+/**
+ * التصفية حسب القسم
+ */
 function filterByCategory(categoryId) {
-    console.log(`🔍 فلترة حسب الفئة: ${categoryId || 'جميع المنتجات'}`);
+    console.log(`📁 تصفية حسب القسم: ${categoryId || 'الكل'}`);
     
-    // تحديث الفئة المختارة في select
+    // تحديث فلتر الفئة في صفحة المنتجات
     const categoryFilter = document.getElementById('categoryFilter');
     if (categoryFilter) {
         categoryFilter.value = categoryId;
     }
     
-    // تحديث أزرار الأقسام
+    // تحديث حالة الأزرار
     updateCategoryButtons(categoryId);
     
-    // تطبيق الفلترة
-    if (typeof filterProducts === 'function') {
-        filterProducts();
+    // إعادة تعيين مؤشرات التحميل في products-system
+    if (typeof window.lastProductDoc !== 'undefined') {
+        window.lastProductDoc = null;
+        window.hasMoreProducts = true;
     }
-}
-
-// دالة الفلترة المتقدمة للمنتجات (تم تعديلها لتعمل مع قاعدة البيانات)
-function filterProducts() {
-    console.log('🔎 جاري إعادة تحميل المنتجات مع الفلاتر من قاعدة البيانات...');
     
-    // مسح حقل البحث عند استخدام الفلاتر
-    const searchInput = document.getElementById('searchInput');
-    if (searchInput) {
-        searchInput.value = '';
-    }
-
-    // استدعاء تحميل المنتجات من Firebase (سيقوم loadProducts بقراءة قيم الفلاتر من DOM وتطبيقها في الاستعلام)
+    // تحميل المنتجات من Firebase مع الفلتر الجديد
     if (typeof loadProducts === 'function') {
-        loadProducts(false); // false تعني البدء من الصفحة الأولى
+        loadProducts(false);
+    }
+    
+    // الانتقال إلى قسم المنتجات إذا لم نكن فيه
+    const currentSection = document.querySelector('.section.active');
+    if (!currentSection || currentSection.id !== 'products') {
+        if (typeof showSection === 'function') {
+            showSection('products');
+        }
     }
 }
 
-// تصدير الدوال للنافذة العالمية
+/**
+ * إعادة تعيين جميع الأقسام (اختيار الكل)
+ */
+function resetCategoryFilter() {
+    filterByCategory('');
+}
+
+/**
+ * الحصول على اسم القسم بالعربية
+ */
+function getCategoryName(categoryId) {
+    const category = CATEGORIES.find(c => c.id === categoryId);
+    return category ? category.name : 'عام';
+}
+
+/**
+ * الحصول على أيقونة القسم
+ */
+function getCategoryIcon(categoryId) {
+    const category = CATEGORIES.find(c => c.id === categoryId);
+    return category ? category.icon : 'fas fa-tag';
+}
+
+// تصدير الدوال
+window.CATEGORIES = CATEGORIES;
 window.initializeCategoriesBar = initializeCategoriesBar;
 window.filterByCategory = filterByCategory;
-window.filterProducts = filterProducts;
 window.updateCategoryButtons = updateCategoryButtons;
+window.resetCategoryFilter = resetCategoryFilter;
+window.getCategoryName = getCategoryName;
+window.getCategoryIcon = getCategoryIcon;
 
-// تهيئة شريط الأقسام عند تحميل الصفحة
+// تهيئة عند تحميل الصفحة
 document.addEventListener('DOMContentLoaded', () => {
-    initializeCategoriesBar();
+    // تأخير بسيط للتأكد من وجود العناصر
+    setTimeout(() => {
+        initializeCategoriesBar();
+    }, 300);
 });
+
+console.log('✅ categories-system.js المحسن loaded');

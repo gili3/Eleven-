@@ -2,7 +2,7 @@
 // ======================== تهيئة التطبيق ================================
 
 async function initializeAppSafely() {
-    if (appInitialized) {
+    if (window.appInitialized) {
         console.log('⚠️ التطبيق مهيأ بالفعل');
         return;
     }
@@ -15,7 +15,7 @@ async function initializeAppSafely() {
     }
 
     console.log('🚀 بدء تهيئة التطبيق (الإصدار المحسن)...');
-    appInitialized = true;
+    window.appInitialized = true;
 
     // تهيئة نظام الأمان الشامل
     if (window.SecurityCore && typeof window.SecurityCore.init === 'function') {
@@ -28,8 +28,8 @@ async function initializeAppSafely() {
     }
     
     // تفعيل حماية الإطارات (Clickjacking)
-    if (typeof SecurityManager !== 'undefined') {
-        SecurityManager.preventFraming();
+    if (typeof window.SecurityManager !== 'undefined') {
+        window.SecurityManager.preventFraming();
     }
     
     if (!checkFirebaseSDK()) {
@@ -72,6 +72,13 @@ async function initializeAppSafely() {
         
         window.authUnsubscribe = unsubscribe;
         
+        // تهيئة الصفحة الرئيسية بعد تحميل كل شيء
+        setTimeout(() => {
+            if (typeof initializeHomePage === 'function') {
+                initializeHomePage();
+            }
+        }, 300);
+        
     } catch (error) {
         console.error('❌ خطأ في تهيئة التطبيق:', error);
         forceHideLoader();
@@ -90,8 +97,109 @@ function setupAllEventListeners() {
     setupAppEventListeners();
     setupModalEventListeners();
     setupRegistrationEventListeners();
+    setupFilterEventListeners(); // إضافة مستمعات الفلاتر
     
     console.log('✅ جميع الأحداث جاهزة');
+}
+
+/**
+ * إضافة مستمعات الأحداث للفلاتر
+ */
+function setupFilterEventListeners() {
+    // فلتر الفئة
+    const categoryFilter = document.getElementById('categoryFilter');
+    if (categoryFilter) {
+        categoryFilter.addEventListener('change', function() {
+            console.log('📁 تغيير فلتر الفئة:', this.value);
+            
+            // إعادة تعيين مؤشرات التحميل
+            if (typeof lastProductDoc !== 'undefined') {
+                window.lastProductDoc = null;
+                window.hasMoreProducts = true;
+            }
+            
+            // تحميل المنتجات من جديد
+            if (typeof loadProducts === 'function') {
+                loadProducts(false);
+            }
+            
+            // تحديث أزرار الأقسام
+            if (typeof updateCategoryButtons === 'function') {
+                updateCategoryButtons(this.value);
+            }
+        });
+    }
+    
+    // فلتر الترتيب
+    const sortFilter = document.getElementById('sortFilter');
+    if (sortFilter) {
+        sortFilter.addEventListener('change', function() {
+            console.log('📊 تغيير فلتر الترتيب:', this.value);
+            
+            if (typeof lastProductDoc !== 'undefined') {
+                window.lastProductDoc = null;
+                window.hasMoreProducts = true;
+            }
+            
+            if (typeof loadProducts === 'function') {
+                loadProducts(false);
+            }
+        });
+    }
+    
+    // أزرار الفلاتر (جديد، عروض، الأفضل)
+    document.querySelectorAll('.filter-btn').forEach(btn => {
+        btn.addEventListener('click', function() {
+            this.classList.toggle('active');
+            
+            console.log('🔘 تغيير فلتر:', this.getAttribute('data-filter'), 'نشط:', this.classList.contains('active'));
+            
+            if (typeof lastProductDoc !== 'undefined') {
+                window.lastProductDoc = null;
+                window.hasMoreProducts = true;
+            }
+            
+            if (typeof loadProducts === 'function') {
+                loadProducts(false);
+            }
+        });
+    });
+    
+    // أزرار الأقسام (Categories)
+    document.querySelectorAll('.category-btn').forEach(btn => {
+        btn.addEventListener('click', function(e) {
+            e.preventDefault();
+            const category = this.getAttribute('data-category') || '';
+            
+            console.log('📁 اختيار قسم:', category);
+            
+            // تحديث فلتر الفئة
+            const categoryFilter = document.getElementById('categoryFilter');
+            if (categoryFilter) {
+                categoryFilter.value = category;
+            }
+            
+            // تحديث حالة الأزرار
+            document.querySelectorAll('.category-btn').forEach(b => b.classList.remove('active'));
+            this.classList.add('active');
+            
+            // إعادة تعيين التحميل
+            if (typeof lastProductDoc !== 'undefined') {
+                window.lastProductDoc = null;
+                window.hasMoreProducts = true;
+            }
+            
+            // تحميل المنتجات
+            if (typeof loadProducts === 'function') {
+                loadProducts(false);
+            }
+            
+            // الانتقال إلى قسم المنتجات
+            if (typeof showSection === 'function') {
+                showSection('products');
+            }
+        });
+    });
 }
 
 function setupAuthEventListeners() {
@@ -204,32 +312,27 @@ function setupAppEventListeners() {
     
     if (searchBtn && searchInput) {
         searchBtn.addEventListener('click', performSearch);
-        // دعم البحث المباشر أثناء الكتابة (Live Search)
-        searchInput.addEventListener('input', performSearch);
+        // دعم البحث المباشر أثناء الكتابة (مع debounce)
+        searchInput.addEventListener('input', debounce(performSearch, 500));
         searchInput.addEventListener('keypress', (e) => {
             if (e.key === 'Enter') performSearch();
         });
     }
-    
-    const categoryFilter = document.getElementById('categoryFilter');
-    const sortFilter = document.getElementById('sortFilter');
-    
-    if (categoryFilter) {
-        categoryFilter.addEventListener('change', filterProducts);
-    }
-    
-    if (sortFilter) {
-        sortFilter.addEventListener('change', filterProducts);
-    }
-    
-    document.querySelectorAll('.filter-btn').forEach(btn => {
-        if (btn) {
-            btn.addEventListener('click', function() {
-                this.classList.toggle('active');
-                filterProducts();
-            });
-        }
-    });
+}
+
+/**
+ * دالة debounce لمنع التنفيذ المتكرر
+ */
+function debounce(func, wait) {
+    let timeout;
+    return function executedFunction(...args) {
+        const later = () => {
+            clearTimeout(timeout);
+            func(...args);
+        };
+        clearTimeout(timeout);
+        timeout = setTimeout(later, wait);
+    };
 }
 
 function setupModalEventListeners() {
@@ -256,6 +359,17 @@ function setupModalEventListeners() {
             });
         }
     });
+    
+    // أزرار نافذة الكمية
+    const confirmAddBtn = document.getElementById('confirmAddToCartBtn');
+    if (confirmAddBtn) {
+        confirmAddBtn.addEventListener('click', confirmAddToCart);
+    }
+    
+    const confirmBuyBtn = document.getElementById('confirmBuyNowBtn');
+    if (confirmBuyBtn) {
+        confirmBuyBtn.addEventListener('click', confirmBuyNow);
+    }
 }
 
 function setupRegistrationEventListeners() {
@@ -299,17 +413,22 @@ function showSection(sectionId) {
         if (typeof updateCartDisplay === 'function') updateCartDisplay();
     } else if (sectionId === 'favorites') {
         if (typeof updateFavoritesDisplay === 'function') updateFavoritesDisplay();
+    } else if (sectionId === 'home') {
+        if (typeof initializeHomePage === 'function') {
+            setTimeout(() => initializeHomePage(), 100);
+        }
     } else if (sectionId === 'products') {
-        if (typeof loadProducts === 'function') loadProducts(false);
-    }
-    
-    // إعادة تعيين الفلاتر عند الخروج من صفحة المنتجات
-    if (currentSection && currentSection.id === 'products' && sectionId !== 'products') {
-        if (typeof resetAllFilters === 'function') resetAllFilters();
+        // تحميل المنتجات إذا كانت الشبكة فارغة
+        const productsGrid = document.getElementById('productsGrid');
+        if (productsGrid && productsGrid.children.length === 0) {
+            if (typeof loadProducts === 'function') {
+                loadProducts(false);
+            }
+        }
     }
 
-    if (!navigationHistory.includes(sectionId)) {
-        navigationHistory.push(sectionId);
+    if (!window.navigationHistory.includes(sectionId)) {
+        window.navigationHistory.push(sectionId);
     }
 
     updateHeaderState(sectionId);
@@ -331,38 +450,6 @@ function showSection(sectionId) {
         window.scrollTo({ top: 0, behavior: 'instant' });
         document.documentElement.scrollTop = 0;
         document.body.scrollTop = 0;
-
-        // نظام التحميل الذكي (Lazy Loading) - تحميل البيانات فقط عند الحاجة
-        const lazyLoadData = async () => {
-            switch(sectionId) {
-                case 'cart':
-                    if (typeof updateCartDisplay === 'function') updateCartDisplay();
-                    break;
-                case 'favorites':
-                    if (typeof displayFavorites === 'function') displayFavorites();
-                    if (typeof updateProfileStats === 'function') updateProfileStats();
-                    break;
-                case 'my-orders':
-                    if (typeof loadMyOrders === 'function') loadMyOrders(false);
-                    break;
-                case 'products':
-                    // تحميل المنتجات من Firebase وإعداد التمرير اللانهائي
-                    if (typeof loadProducts === 'function') {
-                        await loadProducts(false);
-                        if (typeof setupInfiniteScroll === 'function') setupInfiniteScroll();
-                    }
-                    break;
-                case 'home':
-                    // تحميل الصفحة الرئيسية عند العرض
-                    if (typeof initializeHomePage === 'function') {
-                        initializeHomePage();
-                    } else if (typeof loadHomeProducts === 'function') {
-                        loadHomeProducts(false);
-                    }
-                    break;
-            }
-        };
-        lazyLoadData();
         
         if (sectionId === 'checkout') {
             const savedPhone = localStorage.getItem('userPhone');
@@ -384,39 +471,97 @@ function showSection(sectionId) {
     }
 }
 
-// ======================== تحسينات نظام الإشعارات ========================
+// ======================== دوال البحث ========================
 
-function setupLightweightNotifications() {
-    if (window.notificationListeners) return;
+let searchDebounceTimer;
+
+function performSearch() {
+    const searchInput = document.getElementById('searchInput');
+    if (!searchInput) return;
     
-    window.notificationListeners = {
-        orders: null,
-        admin: null
-    };
+    const searchTerm = searchInput.value.trim().toLowerCase();
+    console.log(`🔍 البحث عن: ${searchTerm}`);
     
-    document.addEventListener('visibilitychange', () => {
-        if (document.hidden) {
-            pauseNotificationListeners();
-        } else {
-            resumeNotificationListeners();
+    // استخدام Debouncing
+    clearTimeout(searchDebounceTimer);
+    searchDebounceTimer = setTimeout(() => {
+        executeSmartSearch(searchTerm);
+    }, 300);
+}
+
+function executeSmartSearch(searchTerm) {
+    console.log(`🔍 [Firebase Search] تنفيذ البحث: ${searchTerm}`);
+    
+    // الانتقال لقسم المنتجات
+    if (typeof showSection === 'function') {
+        const currentSection = document.querySelector('.section.active');
+        if (!currentSection || currentSection.id !== 'products') {
+            showSection('products');
         }
+    }
+
+    // إعادة تعيين مؤشرات التحميل
+    if (typeof window.lastProductDoc !== 'undefined') {
+        window.lastProductDoc = null;
+        window.hasMoreProducts = true;
+    }
+    
+    // تصفير فلاتر الفئات
+    const categoryFilter = document.getElementById('categoryFilter');
+    if (categoryFilter) categoryFilter.value = '';
+    
+    document.querySelectorAll('.filter-btn').forEach(btn => {
+        btn.classList.remove('active');
     });
-}
+    
+    // تحديث أزرار الأقسام
+    if (typeof updateCategoryButtons === 'function') {
+        updateCategoryButtons('');
+    }
 
-function pauseNotificationListeners() {
-    if (window.notificationListeners.orders) {
-        window.notificationListeners.orders();
-        window.notificationListeners.orders = null;
+    // تحميل المنتجات من Firebase
+    if (typeof loadProducts === 'function') {
+        loadProducts(false);
     }
 }
 
-function resumeNotificationListeners() {
-    if (!window.notificationListeners.orders && currentUser && !isGuest) {
-        setupOrderStatusListener();
+// ======================== دوال إضافية ========================
+
+function updateHeaderState(sectionId) {
+    const header = document.getElementById('mainHeader');
+    const backBtn = document.getElementById('backBtn');
+    const menuToggle = document.getElementById('menuToggle');
+    const homeSearchContainer = document.getElementById('homeSearchContainer');
+    const homeHeaderIcons = document.getElementById('homeHeaderIcons');
+    
+    if (!header) return;
+
+    if (sectionId === 'home') {
+        if (backBtn) backBtn.style.display = 'none';
+        if (homeSearchContainer) homeSearchContainer.style.display = 'flex';
+        if (menuToggle) menuToggle.style.display = 'flex';
+        if (homeHeaderIcons) homeHeaderIcons.style.display = 'flex';
+    } else {
+        if (backBtn) {
+            backBtn.style.display = 'flex';
+        }
+        if (homeSearchContainer) homeSearchContainer.style.display = 'none';
+        if (menuToggle) menuToggle.style.display = 'flex';
+        if (homeHeaderIcons) homeHeaderIcons.style.display = 'none';
     }
 }
 
-// ======================== مراقبة الأداء ========================
+function goBack() {
+    if (window.navigationHistory && window.navigationHistory.length > 1) {
+        window.navigationHistory.pop();
+        const previousSection = window.navigationHistory.pop();
+        showSection(previousSection);
+    } else {
+        showSection('home');
+    }
+}
+
+// ======================== تحسينات الأداء ========================
 
 function initPerformanceMonitoring() {
     window.addEventListener('load', () => {
@@ -424,10 +569,10 @@ function initPerformanceMonitoring() {
             const timing = performance.timing;
             const loadTime = timing.loadEventEnd - timing.navigationStart;
             
-            console.log(`⏱️ Page loaded in ${loadTime}ms`);
+            console.log(`⏱️ تم تحميل الصفحة في ${loadTime}ms`);
             
             if (loadTime > 3000) {
-                console.warn('⚠️ Page load time is high, consider optimization');
+                console.warn('⚠️ وقت تحميل الصفحة مرتفع، يفضل تحسين الأداء');
             }
         }
     });
@@ -435,8 +580,8 @@ function initPerformanceMonitoring() {
     if ('memory' in performance) {
         setInterval(() => {
             const memory = performance.memory;
-            if (memory.usedJSHeapSize > 50000000) {
-                console.warn('⚠️ High memory usage:', memory.usedJSHeapSize);
+            if (memory.usedJSHeapSize > 50000000) { // 50MB
+                console.warn('⚠️ استخدام عالي للذاكرة:', memory.usedJSHeapSize);
                 if (typeof cleanupUnusedData === 'function') cleanupUnusedData();
             }
         }, 30000);
@@ -444,7 +589,7 @@ function initPerformanceMonitoring() {
     
     if ('connection' in navigator) {
         const connection = navigator.connection;
-        console.log('📶 Network type:', connection.effectiveType);
+        console.log('📶 نوع الشبكة:', connection.effectiveType);
         
         if (connection.effectiveType === '2g' || connection.saveData) {
             enableDataSaverMode();
@@ -453,92 +598,50 @@ function initPerformanceMonitoring() {
 }
 
 function enableDataSaverMode() {
-    console.log('📱 Enabling data saver mode');
+    console.log('📱 تفعيل وضع توفير البيانات');
     
     const images = document.querySelectorAll('img');
     images.forEach(img => {
-        if (img.src.includes('firebasestorage')) {
-            img.src = optimizeImageUrl(img.src, 150);
+        if (img.src && img.src.includes('firebasestorage')) {
+            if (typeof optimizeImageUrl === 'function') {
+                img.src = optimizeImageUrl(img.src, 150);
+            }
         }
     });
-    
-    if (typeof setupInfiniteScroll === 'function') {
-        setupInfiniteScroll();
-    }
 }
 
-// ======================== التصدير للاستخدام في HTML ========================
+function setupLightweightNotifications() {
+    // تنفيذ بسيط للإشعارات
+    console.log('🔔 تم إعداد نظام الإشعارات');
+}
 
+// ======================== التصدير للاستخدام العام ========================
+
+window.initializeAppSafely = initializeAppSafely;
 window.showSection = showSection;
-window.addToCart = addToCartWithQuantity;
-window.toggleFavorite = toggleFavorite;
-window.updateCartQuantity = updateCartQuantity;
-window.removeFromCart = removeFromCart;
-window.signInAsGuest = signInAsGuest;
-window.signInWithGoogle = signInWithGoogle;
-window.signOutUser = signOutUser;
-window.clearCart = clearCart;
-window.editProfile = editProfile;
-window.saveProfileChanges = saveProfileChanges;
 window.performSearch = performSearch;
-window.filterProducts = filterProducts;
-window.previewReceipt = previewReceipt;
-window.removeReceiptPreview = removeReceiptPreview;
-window.viewReceipt = viewReceipt;
-window.buyNowDirect = buyNowDirect;
-window.signUpWithEmail = signUpWithEmail;
-window.handleRegistration = handleRegistration;
-window.handleLogin = handleLogin;
-window.showRegistrationForm = showRegistrationForm;
-window.showLoginForm = showLoginForm;
-window.filterMainProducts = filterMainProducts;
-window.hideLoader = hideLoader;
-window.formatNumber = formatNumber;
-window.generateGuestUID = generateGuestUID;
-// تم نقل تعريفات الدوال التالية إلى products-system.js لتنظيم الكود
-// window.openProductDetails = openProductDetails;
-// window.closeProductDetailsModal = closeProductDetailsModal;
-// window.openQuantityModal = openQuantityModal;
-// window.closeQuantityModal = closeQuantityModal;
-// window.changeModalQuantity = changeModalQuantity;
-window.enableDataEdit = enableDataEdit;
-window.updateHeaderLayout = updateHeaderLayout;
 window.goBack = goBack;
-window.previewCheckoutReceipt = previewCheckoutReceipt;
-window.removeCheckoutReceipt = removeCheckoutReceipt;
-window.submitCheckoutOrder = submitCheckoutOrder;
-window.updateCheckoutItemQty = updateCheckoutItemQty;
-window.setupLightweightNotifications = setupLightweightNotifications;
-window.initPerformanceMonitoring = initPerformanceMonitoring;
-window.loadHomeProducts = loadHomeProducts;
-window.initializeHomePage = initializeHomePage;
-window.setupHomeInfiniteScroll = setupHomeInfiniteScroll;
+window.updateHeaderState = updateHeaderState;
+window.debounce = debounce;
 
-window.addEventListener('resize', adjustLayout);
-
-// تهيئة التحميل بالتمرير عند تحميل الصفحة
-document.addEventListener('DOMContentLoaded', () => {
-    if (typeof setupHomeInfiniteScroll === 'function') {
-        setupHomeInfiniteScroll();
-    }
+// تهيئة التطبيق عند تحميل الصفحة
+document.addEventListener('DOMContentLoaded', function() {
+    console.log('📄 بدء تحميل التطبيق (main.js)...');
+    
+    setTimeout(() => {
+        if (typeof initializeAppSafely === 'function') {
+            initializeAppSafely();
+        }
+    }, 100);
 });
 
-// إذا فتح المستخدم الصفحة الرئيسية مباشرة
-if (window.location.hash === '#home' || !window.location.hash) {
-    setTimeout(() => {
-        if (typeof initializeHomePage === 'function') {
-            initializeHomePage();
-        }
-    }, 500);
-}
-
-// تسجيل Service Worker المتقدم
+// تسجيل Service Worker
 if ('serviceWorker' in navigator) {
     window.addEventListener('load', () => {
         navigator.serviceWorker.register('/sw-advanced.js')
-            .then(reg => console.log('✅ Advanced Service Worker Registered'))
-            .catch(err => console.error('❌ Service Worker Registration Failed:', err));
+            .then(reg => console.log('✅ Service Worker مسجل'))
+            .catch(err => console.error('❌ فشل تسجيل Service Worker:', err));
     });
 }
 
-console.log('🚀 تطبيق Eleven Store المحسن جاهز للعمل!');
+console.log('🚀 main.js المحسن جاهز للعمل!');

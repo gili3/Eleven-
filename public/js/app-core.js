@@ -1,74 +1,78 @@
 // app-core.js - الدوال الأساسية والتهيئة (الإصدار المحسن)
 // ======================== دوال UTILS المدمجة في البداية ========================
 
+// ملاحظة: تم نقل دوال التنسيق والإشعارات إلى utils.js لتجنب التكرار
+// نستخدم الدوال من window إذا كانت متاحة
+
 function formatNumber(num) {
+    if (typeof window.formatNumber === 'function') {
+        return window.formatNumber(num);
+    }
     if (num === null || num === undefined) return "0";
     return num.toString().replace(/\B(?=(\d{3})+(?!\d))/g, ",");
 }
 
-let lastToastTime = 0;
 function showToast(message, type = 'info', duration = 3000) {
-    const now = Date.now();
-    if (now - lastToastTime < 300) return;
-    lastToastTime = now;
-
-    const toast = document.createElement('div');
-    toast.className = `toast toast-${type}`;
-    
-    let icon = 'fas fa-info-circle', bgColor = '#3498db';
-    switch(type) {
-        case 'success': icon = 'fas fa-check-circle'; bgColor = '#27ae60'; break;
-        case 'error': icon = 'fas fa-times-circle'; bgColor = '#e74c3c'; break;
-        case 'warning': icon = 'fas fa-exclamation-circle'; bgColor = '#f39c12'; break;
+    if (typeof window.showToast === 'function') {
+        window.showToast(message, type, duration);
+    } else {
+        console.log(`[Toast] ${type}: ${message}`);
     }
-    
-    toast.innerHTML = `<div style="display: flex; align-items: center; gap: 10px;"><i class="${icon}"></i><span>${message}</span></div>`;
-    toast.style.cssText = `position: fixed; bottom: 20px; right: 20px; background: ${bgColor}; color: white; padding: 15px 20px; border-radius: 8px; box-shadow: 0 4px 12px rgba(0,0,0,0.15); z-index: 10000; font-family: 'Cairo'; animation: slideInUp 0.3s ease; max-width: 300px;`;
-    
-    document.body.appendChild(toast);
-    setTimeout(() => {
-        toast.style.animation = 'slideOutDown 0.3s ease';
-        setTimeout(() => toast.remove(), 300);
-    }, duration);
 }
 
 function showLoadingSpinner(message = 'جاري التحميل...') {
-    const spinner = document.createElement('div');
-    spinner.id = 'customLoadingSpinner';
-    spinner.style.cssText = `
-        position: fixed; top: 0; left: 0; width: 100%; height: 100%;
-        background: rgba(0,0,0,0.7); display: flex; flex-direction: column;
-        justify-content: center; align-items: center; z-index: 9999;
-        color: white; font-family: 'Cairo';
-    `;
-    spinner.innerHTML = `
-        <div class="loader-spinner" style="width: 50px; height: 50px; border: 5px solid #f3f3f3; border-top: 5px solid var(--primary-color); border-radius: 50%; animation: spin 1s linear infinite;"></div>
-        <p style="margin-top: 15px;">${message}</p>
-    `;
-    document.body.appendChild(spinner);
+    if (typeof window.showLoadingSpinner === 'function') {
+        window.showLoadingSpinner(message);
+    } else {
+        const spinner = document.createElement('div');
+        spinner.id = 'customLoadingSpinner';
+        spinner.style.cssText = `
+            position: fixed; top: 0; left: 0; width: 100%; height: 100%;
+            background: rgba(0,0,0,0.7); display: flex; flex-direction: column;
+            justify-content: center; align-items: center; z-index: 9999;
+            color: white; font-family: 'Cairo';
+        `;
+        spinner.innerHTML = `
+            <div class="loader-spinner" style="width: 50px; height: 50px; border: 5px solid #f3f3f3; border-top: 5px solid var(--primary-color); border-radius: 50%; animation: spin 1s linear infinite;"></div>
+            <p style="margin-top: 15px;">${message}</p>
+        `;
+        document.body.appendChild(spinner);
+    }
 }
 
 function hideLoadingSpinner() {
-    const spinner = document.getElementById('customLoadingSpinner');
-    if (spinner) spinner.remove();
+    if (typeof window.hideLoadingSpinner === 'function') {
+        window.hideLoadingSpinner();
+    } else {
+        const spinner = document.getElementById('customLoadingSpinner');
+        if (spinner) spinner.remove();
+    }
 }
 
 function isValidEmail(email) {
+    if (typeof window.validateEmail === 'function') {
+        return window.validateEmail(email);
+    }
     return /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email);
 }
 
 function isValidPhone(phone) {
+    if (typeof window.isValidPhone === 'function') {
+        return window.isValidPhone(phone);
+    }
     const cleanPhone = phone.replace(/\D/g, '');
     return (cleanPhone.length >= 9 && cleanPhone.length <= 13);
 }
 
 function formatSudanPhone(phone) {
+    if (typeof window.formatSudanPhone === 'function') {
+        return window.formatSudanPhone(phone);
+    }
     let clean = phone.replace(/\D/g, '');
     
     if (clean.startsWith('0')) {
         clean = '249' + clean.substring(1);
-    }
-    else if (!clean.startsWith('249')) {
+    } else if (!clean.startsWith('249')) {
         clean = '249' + clean;
     }
     
@@ -89,7 +93,6 @@ function safeElementUpdate(id, value, isHTML = false) {
         }
         return true;
     } else {
-        // تقليل الضجيج في الكونسول للعناصر الاختيارية مثل الـ footer
         if (!id.startsWith('footer')) {
             console.warn(`⚠️ لم يتم العثور على العنصر: ${id}`);
         }
@@ -101,13 +104,11 @@ function safeElementUpdate(id, value, isHTML = false) {
  * نظام حماية الجلسات والتحقق من سلامة البيانات
  */
 const SecurityManager = {
-    // منع التلاعب بالبيانات في localStorage
     validateSession: function() {
         const session = localStorage.getItem('currentUser');
         if (!session) return true;
         try {
             const data = JSON.parse(session);
-            // إذا كان هناك تلاعب في الحقول الأساسية، قم بتسجيل الخروج
             if (data.isAdmin && !auth.currentUser) {
                 console.warn('⚠️ محاولة تلاعب بالصلاحيات تم اكتشافها');
                 this.forceLogout();
@@ -125,7 +126,6 @@ const SecurityManager = {
         if (auth) window.firebaseModules.signOut(auth);
         window.location.reload();
     },
-    // حماية ضد هجمات Clickjacking
     preventFraming: function() {
         if (window.self !== window.top) {
             window.top.location = window.self.location;
@@ -212,52 +212,31 @@ async function checkFirebaseConnection() {
 // ======================== نظام التخزين المؤقت المحسن ========================
 
 let cachedData = {
-    products: {
-        data: null,
-        timestamp: 0
-    },
-    settings: {
-        data: null,
-        timestamp: 0
-    },
-    theme: {
-        data: null,
-        timestamp: 0
-    }
+    products: { data: null, timestamp: 0 },
+    settings: { data: null, timestamp: 0 },
+    theme: { data: null, timestamp: 0 }
 };
 
 async function loadWithCache(key, loaderFn, maxAge = 300000) {
     const now = Date.now();
     
-    // التحقق من التخزين المؤقت في الذاكرة
     if (cachedData[key]?.data && (now - cachedData[key].timestamp < maxAge)) {
         console.log(`📦 [Cache] تحميل ${key} من الذاكرة`);
         return cachedData[key].data;
     }
     
-    // التحقق من localStorage
     const localCache = getLocalCache(key, maxAge);
     if (localCache) {
-        cachedData[key] = {
-            data: localCache,
-            timestamp: now
-        };
+        cachedData[key] = { data: localCache, timestamp: now };
         console.log(`📦 [Cache] تحميل ${key} من localStorage`);
         return localCache;
     }
     
-    // إذا لم توجد في الذاكرة، جلب من المصدر
     try {
         console.log(`🔄 [Cache] جلب ${key} من المصدر...`);
         const data = await loaderFn();
         
-        // حفظ في الذاكرة
-        cachedData[key] = {
-            data: data,
-            timestamp: now
-        };
-        
-        // حفظ في localStorage
+        cachedData[key] = { data: data, timestamp: now };
         cacheLocally(key, data, now);
         
         console.log(`✅ [Cache] تم تخزين ${key} في الذاكرة`);
@@ -270,10 +249,7 @@ async function loadWithCache(key, loaderFn, maxAge = 300000) {
 
 function cacheLocally(key, data, timestamp = Date.now()) {
     try {
-        localStorage.setItem(`cache_${key}`, JSON.stringify({
-            data: data,
-            timestamp: timestamp
-        }));
+        localStorage.setItem(`cache_${key}`, JSON.stringify({ data, timestamp }));
         console.log(`💾 [Cache] حفظ ${key} في localStorage`);
     } catch (e) {
         console.warn(`⚠️ [Cache] فشل حفظ ${key} في localStorage:`, e);
@@ -303,23 +279,12 @@ function getLocalCache(key, maxAge = 600000) {
 
 function clearCache(key = null) {
     if (key) {
-        // مسح كاش محدد
-        if (cachedData[key]) {
-            cachedData[key] = { data: null, timestamp: 0 };
-        }
+        if (cachedData[key]) cachedData[key] = { data: null, timestamp: 0 };
         localStorage.removeItem(`cache_${key}`);
         console.log(`🧹 [Cache] تم مسح ${key}`);
     } else {
-        // مسح كل الكاش
-        Object.keys(cachedData).forEach(k => {
-            cachedData[k] = { data: null, timestamp: 0 };
-        });
-        
-        Object.keys(localStorage).forEach(k => {
-            if (k.startsWith('cache_')) {
-                localStorage.removeItem(k);
-            }
-        });
+        Object.keys(cachedData).forEach(k => cachedData[k] = { data: null, timestamp: 0 });
+        Object.keys(localStorage).forEach(k => { if (k.startsWith('cache_')) localStorage.removeItem(k); });
         console.log('🧹 [Cache] تم مسح كل الذاكرة المؤقتة');
     }
 }
@@ -328,22 +293,14 @@ function clearCache(key = null) {
 
 function sanitizeProducts(products) {
     if (!products || !Array.isArray(products)) return [];
-    
     return products.map(product => {
-        if (window.SecurityCore?.sanitizeObject) {
-            return window.SecurityCore.sanitizeObject(product);
-        }
-        return product;
+        return window.SecurityCore?.sanitizeObject ? window.SecurityCore.sanitizeObject(product) : product;
     });
 }
 
 function sanitizeUserInput(input) {
     if (!input || typeof input !== 'string') return input;
-    
-    if (window.SecurityCore?.sanitizeHTML) {
-        return window.SecurityCore.sanitizeHTML(input);
-    }
-    return input.replace(/[<>]/g, '');
+    return window.SecurityCore?.sanitizeHTML ? window.SecurityCore.sanitizeHTML(input) : input.replace(/[<>]/g, '');
 }
 
 // ======================== المتغيرات العامة ========================
@@ -365,6 +322,8 @@ let selectedProductForQuantity = null;
 let directPurchaseItem = null;
 let lastScrollTop = 0;
 let app, auth, db, storage;
+
+// ملاحظة: تم نقل searchDebounceTimer إلى main.js لتجنب التكرار
 
 // ======================== إدارة شاشة التحميل ========================
 
@@ -393,9 +352,7 @@ function forceHideLoader() {
     const loader = document.getElementById('initialLoader');
     if (loader) {
         loader.style.opacity = '0';
-        setTimeout(() => {
-            loader.style.display = 'none';
-        }, 100);
+        setTimeout(() => { loader.style.display = 'none'; }, 100);
     }
     isLoading = false;
 }
@@ -498,27 +455,13 @@ async function loadThemeColors() {
 function applyThemeColors(colors) {
     const root = document.documentElement;
     
-    if (colors.primaryColor) {
-        root.style.setProperty('--primary-color', colors.primaryColor);
-    }
-    if (colors.secondaryColor) {
-        root.style.setProperty('--secondary-color', colors.secondaryColor);
-    }
-    if (colors.successColor) {
-        root.style.setProperty('--success-color', colors.successColor);
-    }
-    if (colors.dangerColor) {
-        root.style.setProperty('--danger-color', colors.dangerColor);
-    }
-    if (colors.warningColor) {
-        root.style.setProperty('--warning-color', colors.warningColor);
-    }
-    if (colors.lightColor) {
-        root.style.setProperty('--light-color', colors.lightColor);
-    }
-    if (colors.buttonPressColor) {
-        root.style.setProperty('--button-press-color', colors.buttonPressColor);
-    }
+    if (colors.primaryColor) root.style.setProperty('--primary-color', colors.primaryColor);
+    if (colors.secondaryColor) root.style.setProperty('--secondary-color', colors.secondaryColor);
+    if (colors.successColor) root.style.setProperty('--success-color', colors.successColor);
+    if (colors.dangerColor) root.style.setProperty('--danger-color', colors.dangerColor);
+    if (colors.warningColor) root.style.setProperty('--warning-color', colors.warningColor);
+    if (colors.lightColor) root.style.setProperty('--light-color', colors.lightColor);
+    if (colors.buttonPressColor) root.style.setProperty('--button-press-color', colors.buttonPressColor);
 }
 
 // ======================== تحميل إعدادات الموقع ========================
@@ -563,18 +506,12 @@ function updateUIWithSettings() {
     };
     
     for (const [elementId, settingKey] of Object.entries(footerElements)) {
-        if (siteSettings[settingKey]) {
-            safeElementUpdate(elementId, siteSettings[settingKey]);
-        }
+        if (siteSettings[settingKey]) safeElementUpdate(elementId, siteSettings[settingKey]);
     }
     
-    // تحديث قسم "عن المتجر"
     const aboutStoreDesc = document.getElementById('aboutStoreDescription');
-    if (aboutStoreDesc && siteSettings.aboutUs) {
-        aboutStoreDesc.innerHTML = siteSettings.aboutUs;
-    }
+    if (aboutStoreDesc && siteSettings.aboutUs) aboutStoreDesc.innerHTML = siteSettings.aboutUs;
     
-    // تحديث قسم "تواصل معنا"
     const whatsappLink = document.getElementById('contactWhatsapp');
     if (whatsappLink) {
         const whatsappPhone = siteSettings.phone ? siteSettings.phone.replace(/\D/g, '') : '249933002015';
@@ -582,9 +519,7 @@ function updateUIWithSettings() {
     }
 
     const instagramLink = document.getElementById('contactInstagram');
-    if (instagramLink && siteSettings.instagramUrl) {
-        instagramLink.href = siteSettings.instagramUrl;
-    }
+    if (instagramLink && siteSettings.instagramUrl) instagramLink.href = siteSettings.instagramUrl;
 
     const emailText = document.getElementById('contactEmailText');
     const emailLink = document.getElementById('contactEmail');
@@ -601,9 +536,7 @@ function updateUIWithSettings() {
     }
 
     const addressText = document.getElementById('contactAddressText');
-    if (addressText && siteSettings.address) {
-        addressText.textContent = siteSettings.address;
-    }
+    if (addressText && siteSettings.address) addressText.textContent = siteSettings.address;
     
     const socialLinks = {
         'footerFacebook': 'facebookUrl',
@@ -615,12 +548,8 @@ function updateUIWithSettings() {
     for (const [elementId, settingKey] of Object.entries(socialLinks)) {
         const element = document.getElementById(elementId);
         if (element) {
-            if (siteSettings[settingKey]) {
-                element.href = siteSettings[settingKey];
-                element.style.display = 'flex';
-            } else {
-                element.style.display = 'none';
-            }
+            element.href = siteSettings[settingKey] || '#';
+            element.style.display = siteSettings[settingKey] ? 'flex' : 'none';
         }
     }
 
@@ -663,7 +592,6 @@ function setupSmartHeader() {
 }
 
 function showAuthScreen() {
-    // إذا كنا في صفحة index.html، نتوجه لصفحة login.html
     if (window.location.pathname.endsWith('index.html') || window.location.pathname.endsWith('/') || !window.location.pathname.includes('.html')) {
         window.location.href = 'login.html';
         return;
@@ -672,20 +600,13 @@ function showAuthScreen() {
     const authScreen = document.getElementById('authScreen');
     const appContainer = document.getElementById('appContainer');
     
-    document.querySelectorAll('input').forEach(i => {
-        if (i) i.value = '';
-    });
+    document.querySelectorAll('input').forEach(i => { if (i) i.value = ''; });
     
-    if (authScreen) {
-        authScreen.style.setProperty('display', 'flex', 'important');
-    }
-    if (appContainer) {
-        appContainer.style.setProperty('display', 'none', 'important');
-    }
+    if (authScreen) authScreen.style.setProperty('display', 'flex', 'important');
+    if (appContainer) appContainer.style.setProperty('display', 'none', 'important');
 }
 
 function showMainApp() {
-    // إذا كنا في صفحة login.html، نتوجه لصفحة index.html
     if (window.location.pathname.endsWith('login.html')) {
         window.location.href = 'index.html';
         return;
@@ -704,12 +625,8 @@ function showMainApp() {
         appContainer.style.setProperty('opacity', '1', 'important');
     }
     
-    // إخفاء شاشة التحميل
-    if (typeof forceHideLoader === 'function') {
-        forceHideLoader();
-    } else if (typeof hideLoader === 'function') {
-        hideLoader();
-    }
+    if (typeof forceHideLoader === 'function') forceHideLoader();
+    else if (typeof hideLoader === 'function') hideLoader();
 }
 
 function showEmailAuthForm() {
@@ -766,9 +683,7 @@ function updateHeaderState(sectionId) {
         if (headerSearch) headerSearch.style.display = 'flex';
         if (menuToggle) menuToggle.style.display = 'flex';
     } else {
-        if (backBtn) {
-            backBtn.style.display = 'flex';
-        }
+        if (backBtn) backBtn.style.display = 'flex';
         if (headerSearch) headerSearch.style.display = 'none';
         if (menuToggle) menuToggle.style.display = 'flex';
     }
@@ -822,55 +737,22 @@ function updateHeaderLayout() {
 
 // ======================== دوال إضافية ========================
 
-// نظام البحث الذكي والاحترافي (Smart Search System)
-let searchDebounceTimer;
+// ملاحظة: تم نقل دوال البحث إلى main.js لتجنب التكرار
+// نستخدم الدوال من window إذا كانت متاحة
+
 function performSearch() {
-    const searchInput = document.getElementById('searchInput');
-    if (!searchInput) return;
-    
-    const searchTerm = searchInput.value.trim().toLowerCase();
-    
-    // استخدام Debouncing لتحسين الأداء ومنع العمليات المتكررة
-    clearTimeout(searchDebounceTimer);
-    searchDebounceTimer = setTimeout(() => {
-        executeSmartSearch(searchTerm);
-    }, 300);
-}
-
-function executeSmartSearch(searchTerm) {
-    console.log(`🔍 [Database Search] البحث عن: ${searchTerm}`);
-    
-    // إخفاء الفلاتر عند البحث
-    const filtersContainer = document.querySelector('.filters-container');
-    if (filtersContainer) {
-        filtersContainer.style.display = 'none';
-    }
-    
-    // الانتقال لقسم المنتجات لرؤية النتائج
-    if (typeof showSection === 'function') showSection('products');
-
-    // استدعاء تحميل المنتجات من قاعدة البيانات مباشرة
-    if (typeof loadProducts === 'function') {
-        loadProducts(false);
+    if (typeof window.performSearch === 'function') {
+        window.performSearch();
+    } else {
+        console.log('🔍 دالة البحث غير متاحة');
     }
 }
 
 function filterProducts() {
-    // إظهار الفلاتر عند استخدامها
-    const filtersContainer = document.querySelector('.filters-container');
-    if (filtersContainer) {
-        filtersContainer.style.display = 'flex';
-    }
-    
-    // مسح حقل البحث عند استخدام الفلاتر
-    const searchInput = document.getElementById('searchInput');
-    if (searchInput) {
-        searchInput.value = '';
-    }
-    
-    // استدعاء تحميل المنتجات من Firebase مع الفلاتر الجديدة
-    if (typeof loadProducts === 'function') {
-        loadProducts(false); // false تعني إعادة التحميل من البداية بالفلاتر الجديدة
+    if (typeof window.filterProducts === 'function') {
+        window.filterProducts();
+    } else {
+        console.log('🔍 دالة تصفية المنتجات غير متاحة');
     }
 }
 
@@ -891,11 +773,8 @@ function filterMainProducts(filterType, btn) {
     }
     
     let filtered;
-    if (filterType === 'all') {
-        filtered = allProducts;
-    } else {
-        filtered = allProducts.filter(p => p[filterType] === true || p[filterType] === 'true');
-    }
+    if (filterType === 'all') filtered = allProducts;
+    else filtered = allProducts.filter(p => p[filterType] === true || p[filterType] === 'true');
     
     if (typeof displayFeaturedProducts === 'function') displayFeaturedProducts(filtered);
 }
@@ -913,7 +792,6 @@ async function syncUserDataFromFirestore() {
             favorites = data.favorites || [];
             console.log('✅ تم مزامنة البيانات من السحابة');
             
-            // تحديث العرض بعد المزامنة
             if (typeof updateCartCount === 'function') updateCartCount();
             if (typeof updateFavoritesDisplay === 'function') updateFavoritesDisplay();
         }
@@ -949,7 +827,6 @@ async function toggleFavorite(productId) {
     await saveUserDataToFirestore();
     updateFavoritesDisplay();
     
-    // تحديث أيقونة القلب في شبكة المنتجات
     const favBtns = document.querySelectorAll(`.product-card[data-id="${productId}"] .favorite-btn`);
     favBtns.forEach(btn => {
         const icon = btn.querySelector('i');
@@ -1031,12 +908,10 @@ function optimizeImageUrl(url, width = 300) {
     if (!url) return 'https://via.placeholder.com/300x200?text=Eleven+Store';
     if (!url.includes('firebasestorage')) return url;
     
-    // تحسين روابط Firebase Storage للتحميل الأسرع
     const separator = url.includes('?') ? '&' : '?';
     return `${url}${separator}alt=media&width=${width}&quality=75`;
 }
 
-// نظام مراقبة الأداء (Performance Monitoring) لضمان السرعة
 function initPerformanceMonitoring() {
     window.addEventListener('load', () => {
         setTimeout(() => {
@@ -1046,7 +921,7 @@ function initPerformanceMonitoring() {
             
             if (loadTime > 3) {
                 console.warn('⚠️ الموقع يستغرق وقتاً طويلاً للتحميل، جاري تحسين الذاكرة المؤقتة...');
-                clearCache('products'); // مسح الكاش القديم لتحديثه ببيانات أسرع
+                clearCache('products');
             }
         }, 0);
     });
@@ -1056,18 +931,13 @@ initPerformanceMonitoring();
 // ======================== إدارة الذاكرة ========================
 
 function cleanupUnusedData() {
-    if (allProducts.length > 100) {
-        allProducts = allProducts.slice(0, 100);
-        console.log('🔄 تم تنظيف الذاكرة، الاحتفاظ بـ 100 منتج فقط');
-    }
+    if (allProducts.length > 100) allProducts = allProducts.slice(0, 100);
     
     Object.keys(localStorage).forEach(key => {
         if (key.startsWith('cache_')) {
             try {
                 const cached = JSON.parse(localStorage.getItem(key));
-                if (Date.now() - cached.timestamp > 3600000) {
-                    localStorage.removeItem(key);
-                }
+                if (Date.now() - cached.timestamp > 3600000) localStorage.removeItem(key);
             } catch (e) {
                 localStorage.removeItem(key);
             }
@@ -1076,9 +946,7 @@ function cleanupUnusedData() {
 }
 
 function initMemoryManagement() {
-    setInterval(() => {
-        cleanupUnusedData();
-    }, 600000);
+    setInterval(() => cleanupUnusedData(), 600000);
 }
 
 // ======================== التصدير للاستخدام العام ========================
@@ -1112,6 +980,7 @@ window.getLocalCache = getLocalCache;
 window.clearCache = clearCache;
 window.sanitizeUserInput = sanitizeUserInput;
 window.sanitizeProducts = sanitizeProducts;
+window.navigationHistory = navigationHistory;
 
 // تهيئة التطبيق
 document.addEventListener('DOMContentLoaded', function() {
