@@ -3188,6 +3188,17 @@ button {
     }
 }
 
+/* أنماط مراقب التمرير */
+.scroll-sentinel {
+    height: 50px;
+    width: 100%;
+    margin-top: 20px;
+    display: flex;
+    justify-content: center;
+    align-items: center;
+    clear: both;
+}
+
 /* تحسين التجاوب */
 @media (max-width: 768px) {
     .receipt-section img {
