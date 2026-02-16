@@ -7,6 +7,12 @@ console.log('🔔 Professional Notifications System Loaded');
  * تهيئة نظام الإشعارات الاحترافي
  */
 async function initProfessionalNotifications() {
+    // التحقق من دعم onSnapshot في firebaseModules
+    if (!window.firebaseModules || typeof window.firebaseModules.onSnapshot !== 'function') {
+        console.warn('⚠️ Firebase onSnapshot غير مدعوم في هذا المتصفح أو غير متوفر');
+        return false;
+    }
+    
     // طلب الإذن لإشعارات المتصفح بشكل استباقي
     if ('Notification' in window) {
         if (Notification.permission === 'default') {
@@ -30,7 +36,10 @@ async function initProfessionalNotifications() {
 async function setupAdminNotificationsListener() {
     try {
         const db = window.getFirebaseInstance ? window.getFirebaseInstance().db : null;
-        if (!db) return;
+        if (!db || !window.firebaseModules || typeof window.firebaseModules.onSnapshot !== 'function') {
+            console.warn('⚠️ لا يمكن إعداد مستمع الطلبات للمدير');
+            return;
+        }
 
         console.log('👂 Admin: Monitoring New Orders...');
 
@@ -62,6 +71,9 @@ async function setupAdminNotificationsListener() {
                         }
                     }
                 });
+            },
+            (error) => {
+                console.error('❌ Error in Admin Notifications Listener:', error);
             }
         );
     } catch (error) {
@@ -101,7 +113,10 @@ function showBrowserNotification(title, body, icon = '/favicon.ico', data = {}) 
 async function setupOrderStatusListener() {
     try {
         const db = window.getFirebaseInstance ? window.getFirebaseInstance().db : null;
-        if (!db || !window.currentUser || window.currentUser.isGuest) return;
+        if (!db || !window.currentUser || window.currentUser.isGuest || 
+            !window.firebaseModules || typeof window.firebaseModules.onSnapshot !== 'function') {
+            return;
+        }
 
         console.log('👂 Monitoring Order Status for:', window.currentUser.uid);
 
@@ -117,6 +132,9 @@ async function setupOrderStatusListener() {
                         handleOrderStatusChange(order, change.doc.id);
                     }
                 });
+            },
+            (error) => {
+                console.error('❌ Error in Order Status Listener:', error);
             }
         );
     } catch (error) {
@@ -190,7 +208,7 @@ function handleOrderStatusChange(order, orderId) {
 async function sendPromotionNotification(title, body, imageUrl = null) {
     try {
         const db = window.getFirebaseInstance ? window.getFirebaseInstance().db : null;
-        if (!db) return;
+        if (!db || !window.firebaseModules) return;
         
         const notificationsRef = window.firebaseModules.collection(db, 'global_notifications');
         await window.firebaseModules.addDoc(notificationsRef, {
@@ -211,7 +229,10 @@ async function sendPromotionNotification(title, body, imageUrl = null) {
 function setupGlobalNotificationsListener() {
     try {
         const db = window.getFirebaseInstance ? window.getFirebaseInstance().db : null;
-        if (!db) return;
+        if (!db || !window.firebaseModules || typeof window.firebaseModules.onSnapshot !== 'function') {
+            console.warn('⚠️ لا يمكن إعداد مستمع الإشعارات العامة');
+            return;
+        }
 
         window.firebaseModules.onSnapshot(
             window.firebaseModules.query(
@@ -240,6 +261,9 @@ function setupGlobalNotificationsListener() {
                         }
                     }
                 });
+            },
+            (error) => {
+                console.error('❌ Error in Global Listener:', error);
             }
         );
     } catch (error) {
@@ -276,3 +300,11 @@ window.addEventListener('firebase-ready', initProfessionalNotifications);
 window.addEventListener('load', () => {
     if (window.firebaseApp) initProfessionalNotifications();
 });
+
+// تصدير الدوال للاستخدام العام
+window.initProfessionalNotifications = initProfessionalNotifications;
+window.setupOrderStatusListener = setupOrderStatusListener;
+window.showBrowserNotification = showBrowserNotification;
+window.sendPromotionNotification = sendPromotionNotification;
+
+console.log('✅ Professional Notifications System Ready');

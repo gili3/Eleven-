@@ -113,9 +113,8 @@ function setupFilterEventListeners() {
             console.log('📁 تغيير فلتر الفئة:', this.value);
             
             // إعادة تعيين مؤشرات التحميل
-            if (typeof lastProductDoc !== 'undefined') {
-                window.lastProductDoc = null;
-                window.hasMoreProducts = true;
+            if (typeof window.resetProductsState === 'function') {
+                window.resetProductsState();
             }
             
             // تحميل المنتجات من جديد
@@ -136,9 +135,8 @@ function setupFilterEventListeners() {
         sortFilter.addEventListener('change', function() {
             console.log('📊 تغيير فلتر الترتيب:', this.value);
             
-            if (typeof lastProductDoc !== 'undefined') {
-                window.lastProductDoc = null;
-                window.hasMoreProducts = true;
+            if (typeof window.resetProductsState === 'function') {
+                window.resetProductsState();
             }
             
             if (typeof loadProducts === 'function') {
@@ -154,9 +152,8 @@ function setupFilterEventListeners() {
             
             console.log('🔘 تغيير فلتر:', this.getAttribute('data-filter'), 'نشط:', this.classList.contains('active'));
             
-            if (typeof lastProductDoc !== 'undefined') {
-                window.lastProductDoc = null;
-                window.hasMoreProducts = true;
+            if (typeof window.resetProductsState === 'function') {
+                window.resetProductsState();
             }
             
             if (typeof loadProducts === 'function') {
@@ -184,9 +181,8 @@ function setupFilterEventListeners() {
             this.classList.add('active');
             
             // إعادة تعيين التحميل
-            if (typeof lastProductDoc !== 'undefined') {
-                window.lastProductDoc = null;
-                window.hasMoreProducts = true;
+            if (typeof window.resetProductsState === 'function') {
+                window.resetProductsState();
             }
             
             // تحميل المنتجات
@@ -394,11 +390,16 @@ function setupRegistrationEventListeners() {
     }
 }
 
-// ======================== دالة showSection الرئيسية ========================
+// ======================== دالة showSection الرئيسية (محدثة) ========================
 
 function showSection(sectionId) {
     const currentSection = document.querySelector('.section.active');
     
+    // 1. إعادة تعيين التمرير فوراً عند الانتقال لصفحة جديدة
+    window.scrollTo(0, 0);
+    const appContainer = document.getElementById('appContainer');
+    if (appContainer) appContainer.scrollTop = 0;
+
     // تحديث الحالة النشطة في شريط التنقل السفلي والقائمة الجانبية
     document.querySelectorAll('.nav-item, .mobile-nav-links a').forEach(item => {
         if (item.getAttribute('data-section') === sectionId) {
@@ -410,20 +411,30 @@ function showSection(sectionId) {
     
     // تحديث العرض عند التبديل للأقسام المعنية
     if (sectionId === 'cart') {
-        if (typeof updateCartDisplay === 'function') updateCartDisplay();
+        if (typeof window.updateCartDisplay === 'function') window.updateCartDisplay();
     } else if (sectionId === 'favorites') {
-        if (typeof updateFavoritesDisplay === 'function') updateFavoritesDisplay();
+        if (typeof window.updateFavoritesDisplay === 'function') window.updateFavoritesDisplay();
     } else if (sectionId === 'home') {
-        if (typeof initializeHomePage === 'function') {
-            setTimeout(() => initializeHomePage(), 100);
+        if (typeof window.initializeHomePage === 'function') {
+            setTimeout(() => window.initializeHomePage(), 100);
         }
     } else if (sectionId === 'products') {
         // تحميل المنتجات إذا كانت الشبكة فارغة
         const productsGrid = document.getElementById('productsGrid');
         if (productsGrid && productsGrid.children.length === 0) {
-            if (typeof loadProducts === 'function') {
-                loadProducts(false);
+            if (typeof window.loadProducts === 'function') {
+                window.loadProducts(false);
             }
+        } else {
+            // إعادة تعيين المراقبين للتحميل اللانهائي
+            if (typeof window.resetObservers === 'function') {
+                window.resetObservers();
+            }
+        }
+    } else if (sectionId === 'my-orders') {
+        // تحميل الطلبات عند الانتقال لصفحة الطلبات
+        if (typeof window.loadMyOrders === 'function') {
+            window.loadMyOrders(false);
         }
     }
 
@@ -469,6 +480,13 @@ function showSection(sectionId) {
             }
         }
     }
+    
+    // إعادة تعيين المراقبين بعد تغيير القسم (لضمان عمل التحميل اللانهائي)
+    setTimeout(() => {
+        if (typeof window.resetObservers === 'function') {
+            window.resetObservers();
+        }
+    }, 300);
 }
 
 // ======================== دوال البحث ========================
@@ -501,9 +519,8 @@ function executeSmartSearch(searchTerm) {
     }
 
     // إعادة تعيين مؤشرات التحميل
-    if (typeof window.lastProductDoc !== 'undefined') {
-        window.lastProductDoc = null;
-        window.hasMoreProducts = true;
+    if (typeof window.resetProductsState === 'function') {
+        window.resetProductsState();
     }
     
     // تصفير فلاتر الفئات

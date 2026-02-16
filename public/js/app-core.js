@@ -1,9 +1,6 @@
 // app-core.js - الدوال الأساسية والتهيئة (الإصدار المحسن)
 // ======================== دوال UTILS المدمجة في البداية ========================
 
-// ملاحظة: تم نقل دوال التنسيق والإشعارات إلى utils.js لتجنب التكرار
-// نستخدم الدوال من window إذا كانت متاحة
-
 function formatNumber(num) {
     if (typeof window.formatNumber === 'function') {
         return window.formatNumber(num);
@@ -168,6 +165,8 @@ function initializeFirebaseApp(appName = 'DefaultApp') {
             firebaseAuth = auth; 
             firebaseDb = db; 
             firebaseStorage = storage;
+            window.firebaseDb = db; // ✅ تعيين المتغير العام
+            window.firebaseAuth = auth; // ✅ للاستخدام العام
         }
 
         console.log(`✅ Firebase مهيأ (${appName})`);
@@ -189,7 +188,7 @@ function initializeFirebaseApp(appName = 'DefaultApp') {
 function getFirebaseInstance() {
     if (!firebaseApp) {
         console.warn('⚠️ محاولة الوصول إلى Firebase قبل التهيئة، جاري التهيئة...');
-        const instance = initializeFirebase();
+        const instance = initializeFirebaseApp();
         if (!instance) throw new Error('Firebase لم يتم تهيئته بعد');
         return instance;
     }
@@ -198,8 +197,8 @@ function getFirebaseInstance() {
 
 async function checkFirebaseConnection() {
     try {
-        if (!db) throw new Error('قاعدة البيانات غير مهيأة');
-        const settingsRef = window.firebaseModules.collection(db, "settings");
+        if (!firebaseDb) throw new Error('قاعدة البيانات غير مهيأة');
+        const settingsRef = window.firebaseModules.collection(firebaseDb, "settings");
         await window.firebaseModules.getDocs(settingsRef);
         console.log('✅ اتصال Firebase ناجح');
         return true;
@@ -322,8 +321,6 @@ let selectedProductForQuantity = null;
 let directPurchaseItem = null;
 let lastScrollTop = 0;
 let app, auth, db, storage;
-
-// ملاحظة: تم نقل searchDebounceTimer إلى main.js لتجنب التكرار
 
 // ======================== إدارة شاشة التحميل ========================
 
@@ -736,9 +733,6 @@ function updateHeaderLayout() {
 }
 
 // ======================== دوال إضافية ========================
-
-// ملاحظة: تم نقل دوال البحث إلى main.js لتجنب التكرار
-// نستخدم الدوال من window إذا كانت متاحة
 
 function performSearch() {
     if (typeof window.performSearch === 'function') {
