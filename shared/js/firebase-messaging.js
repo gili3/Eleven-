@@ -12,33 +12,62 @@ console.log('🔔 Firebase Messaging Module Loaded');
  */
 async function initializeFirebaseMessaging() {
     try {
+        // التحقق من دعم المتصفح للإشعارات
+        if (!('Notification' in window)) {
+            console.warn('⚠️ هذا المتصفح لا يدعم الإشعارات');
+            return false;
+        }
+        
+        if (!('serviceWorker' in navigator)) {
+            console.warn('⚠️ هذا المتصفح لا يدعم Service Workers');
+            return false;
+        }
+        
         if (!window.firebaseModules) {
             console.error('❌ Firebase Modules غير محملة');
             return false;
         }
 
         // استيراد Firebase Messaging
-        const { getMessaging, getToken, onMessage } = await import(
-            'https://www.gstatic.com/firebasejs/10.7.1/firebase-messaging.js'
-        );
+        try {
+            const { getMessaging, getToken, onMessage } = await import(
+                'https://www.gstatic.com/firebasejs/10.7.1/firebase-messaging.js'
+            );
 
-        const app = window.firebaseApp || (window.getFirebaseInstance ? window.getFirebaseInstance().app : window.firebaseModules.getApp());
-        messaging = getMessaging(app);
+            const app = window.firebaseApp || (window.getFirebaseInstance ? window.getFirebaseInstance().app : window.firebaseModules.getApp());
+            messaging = getMessaging(app);
 
-        console.log('✅ Firebase Messaging مهيأ');
+            console.log('✅ Firebase Messaging مهيأ');
 
-        // طلب إذن المستخدم واستقبال الإشعارات
-        await requestNotificationPermission();
+            // طلب إذن المستخدم واستقبال الإشعارات
+            await requestNotificationPermission();
 
-        // الاستماع للإشعارات عندما يكون التطبيق مفتوحاً
-        onMessage(messaging, (payload) => {
-            console.log('📬 Foreground Notification Received:', payload);
-            handleForegroundNotification(payload);
-        });
+            // الاستماع للإشعارات عندما يكون التطبيق مفتوحاً
+            onMessage(messaging, (payload) => {
+                console.log('📬 Foreground Notification Received:', payload);
+                handleForegroundNotification(payload);
+            });
 
-        return true;
+            return true;
+        } catch (importError) {
+            if (importError.code === 'messaging/unsupported-browser' || 
+                importError.message.includes('unsupported-browser')) {
+                console.warn('⚠️ المتصفح لا يدعم واجهات Firebase Messaging');
+                return false;
+            }
+            throw importError;
+        }
     } catch (error) {
         console.error('❌ خطأ في تهيئة Firebase Messaging:', error);
+        
+        // تسجيل الحدث الأمني إذا كان متاحاً
+        if (window.SecurityManager && window.SecurityManager.logSecurityEvent) {
+            window.SecurityManager.logSecurityEvent('messaging_init_error', {
+                error: error.message,
+                code: error.code
+            });
+        }
+        
         return false;
     }
 }
@@ -156,11 +185,11 @@ async function saveFCMTokenToDatabase(token) {
 function handleForegroundNotification(payload) {
     console.log('📨 Foreground Notification:', payload);
 
-    const { title, body, icon, data } = payload.notification;
+    const { title, body, icon, data } = payload.notification || {};
 
     // عرض إشعار في التطبيق (Toast)
     if (window.showToast) {
-        window.showToast(body || title, 'info');
+        window.showToast(body || title || 'إشعار جديد', 'info');
     }
 
     // إذا كان هناك بيانات إضافية (مثل رقم الطلب)

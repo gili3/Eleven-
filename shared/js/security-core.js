@@ -85,8 +85,8 @@ window.SecurityCore = {
                 .split(/\s+/)
                 .filter(attr => {
                     if (!attr) return false;
-                    const [name, ...valueParts] = attr.split('=');
-                    const attrName = name.toLowerCase();
+                    const [attrKey, ...valueParts] = attr.split('=');
+                    const attrName = attrKey.toLowerCase();
                     
                     // السماح بسمات data-*
                     if (attrName.startsWith('data-')) return true;
@@ -5155,7 +5155,7 @@ function enableDataSaverMode() {
 function setupAppProtection() {
     // منع فتح النوافذ المنبثقة غير المرغوب فيها
     window.originalOpen = window.open;
-    window.open = function(url, name, specs) {
+    window.open = function(url, windowName, specs) {
         // التحقق من الروابط الخطيرة
         if (url && (url.includes('javascript:') || url.includes('data:text/html'))) {
             console.warn('⚠️ محاولة فتح نافذة خطيرة:', url);
@@ -5168,7 +5168,7 @@ function setupAppProtection() {
             SecurityManager.logSecurityEvent('external_window_opened', { url: url });
         }
         
-        return window.originalOpen(url, name, specs);
+        return window.originalOpen(url, windowName, specs);
     };
     
     // حماية ضد تغيير عنوان الصفحة
