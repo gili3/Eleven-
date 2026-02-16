@@ -15,7 +15,7 @@
     <script type="module">
         import { initializeApp } from "https://www.gstatic.com/firebasejs/10.7.1/firebase-app.js";
         import { getAuth, onAuthStateChanged, GoogleAuthProvider, signInWithPopup, signInWithEmailAndPassword, createUserWithEmailAndPassword, signOut, updateProfile } from "https://www.gstatic.com/firebasejs/10.7.1/firebase-auth.js";
-        import { getFirestore, doc, collection, getDoc, getDocs, setDoc, updateDoc, query, where, orderBy, serverTimestamp, deleteDoc, addDoc, increment, limit, startAfter } from "https://www.gstatic.com/firebasejs/10.7.1/firebase-firestore.js";
+        import { getFirestore, doc, collection, getDoc, getDocs, setDoc, updateDoc, query, where, orderBy, serverTimestamp, deleteDoc, addDoc, increment, limit, startAfter, onSnapshot } from "https://www.gstatic.com/firebasejs/10.7.1/firebase-firestore.js";
         import { getStorage, ref, uploadBytes, getDownloadURL, uploadBytesResumable } from "https://www.gstatic.com/firebasejs/10.7.1/firebase-storage.js";
 
         window.firebaseModules = { 
@@ -44,6 +44,7 @@
             increment,
             limit,
             startAfter,
+            onSnapshot,
             getStorage,
             ref,
             uploadBytes,
@@ -383,6 +384,15 @@
             animation: spin 1s linear infinite;
             display: inline-block;
             margin-right: 10px;
+        }
+
+        /* أنماط عناصر المراقبة للتحميل اللانهائي */
+        .scroll-sentinel {
+            height: 20px;
+            width: 100%;
+            margin: 10px 0;
+            background: transparent;
+            pointer-events: none;
         }
     </style>
     
@@ -742,16 +752,13 @@
                     <div class="products-grid" id="homeProductsGrid">
                         <!-- سيتم تعبئتها بواسطة JavaScript مع التحميل اللانهائي -->
                     </div>
+                    
+                    <!-- عنصر مراقبة التحميل اللانهائي للصفحة الرئيسية -->
+                    <div id="homeScrollSentinel" class="scroll-sentinel"></div>
+                    
                     <div class="loading-more" id="homeProductsLoading" style="display: none;">
                         <div class="loading-spinner-small"></div>
                         <p>جاري تحميل المزيد من المنتجات...</p>
-                    </div>
-                    
-                    <!-- زر تحميل المزيد يدوي (بديل للتمرير) -->
-                    <div style="text-align: center; margin-top: 30px; display: none;" id="homeLoadMoreBtnContainer">
-                        <button id="homeLoadMoreBtn" class="btn-primary" onclick="loadHomeProducts(true)" style="padding: 12px 30px;">
-                            <i class="fas fa-arrow-down"></i> تحميل المزيد
-                        </button>
                     </div>
                 </div>
             </section>
@@ -796,19 +803,16 @@
                     <!-- سيتم تعبئتها بواسطة JavaScript -->
                 </div>
                 
+                <!-- عنصر مراقبة التحميل اللانهائي لصفحة المنتجات -->
+                <div id="productsScrollSentinel" class="scroll-sentinel"></div>
+                
                 <div class="loading-more" id="productsLoading" style="display: none;">
                     <div class="loading-spinner-small"></div>
                     <p>جاري تحميل المزيد من المنتجات...</p>
                 </div>
-                
-                <!-- زر تحميل المزيد -->
-                <!-- تم إخفاء زر تحميل المزيد والاعتماد على التمرير اللانهائي -->
-                    <<!-- تم إخفاء زر تحميل المزيد والاعتماد على التمرير اللانهائي -->
-                <div id="homeLoadMoreContainer" style="text-align: center; margin-top: 30px; display: none;">
-                    <button id="homeLoadMoreBtn" class="btn-secondary" onclick="loadHomeProducts(true)" style="display: none;">
-                        <i class="fas fa-arrow-down"></i> تحميل المزيد من المنتجات
-                    </button>
-                </div>        </div>        <!-- قسم سلة التسوق -->
+            </section>
+            
+            <!-- قسم سلة التسوق -->
             <section id="cart" class="section">
                 <h2 class="section-title">سلة التسوق</h2>
                 
@@ -867,6 +871,7 @@
                         <p>لم تقم بإجراء أي طلبات بعد</p>
                         <button class="cta-btn" onclick="showSection('products')">ابدأ التسوق الآن</button>
                     </div>
+                    <div id="ordersScrollSentinel" class="scroll-sentinel"></div>
                 </div>
             </section>
 
@@ -1304,6 +1309,9 @@
                         <p class="product-price" id="modalProductPrice"></p>
                         <div class="product-description" id="modalProductDescription"></div>
                         
+                        <!-- حاوية الخيارات المضافة -->
+                        <div id="modalProductOptions" style="margin-bottom: 20px; display: none;"></div>
+
                         <div class="product-stock-info">
                             <span>المخزون المتوفر: </span>
                             <strong id="modalProductStock">0</strong>
