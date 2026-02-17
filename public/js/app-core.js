@@ -2,7 +2,8 @@
 // ======================== دوال UTILS المدمجة في البداية ========================
 
 function formatNumber(num) {
-    if (typeof window.formatNumber === 'function') {
+    // التحقق من وجود الدالة في window لتجنب التكرار اللانهائي
+    if (window.formatNumber && window.formatNumber !== formatNumber) {
         return window.formatNumber(num);
     }
     if (num === null || num === undefined) return "0";
@@ -10,7 +11,7 @@ function formatNumber(num) {
 }
 
 function showToast(message, type = 'info', duration = 3000) {
-    if (typeof window.showToast === 'function') {
+    if (window.showToast && window.showToast !== showToast) {
         window.showToast(message, type, duration);
     } else {
         console.log(`[Toast] ${type}: ${message}`);

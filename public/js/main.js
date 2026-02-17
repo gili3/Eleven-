@@ -10,7 +10,9 @@ async function initializeAppSafely() {
     // الانتظار حتى يتم تحميل وحدات Firebase
     if (!window.firebaseModules) {
         console.log('⏳ بانتظار تحميل وحدات Firebase...');
-        window.addEventListener('firebase-ready', () => initializeAppSafely(), { once: true });
+        // window.addEventListener('firebase-ready', () => initializeAppSafely(), { once: true });
+        // استخدام setTimeout لتجنب التكرار اللانهائي وتجاوز مكدس الاستدعاءات
+        setTimeout(() => initializeAppSafely(), 1000);
         return;
     }
 
@@ -290,9 +292,15 @@ function setupAppEventListeners() {
         'cartBtn': () => showSection('cart'),
         'favoritesBtn': () => showSection('favorites'),
         'profileBtn': () => showSection('profile'),
-        'logoutBtn': signOutUser,
-        'editProfileBtn': editProfile,
-        'saveProfileBtn': saveProfileChanges,
+        'logoutBtn': typeof signOutUser === 'function' ? signOutUser : () => console.warn('signOutUser not defined'),
+        'editProfileBtn': typeof editProfile === 'function' ? editProfile : () => {
+            if (window.editProfile) window.editProfile();
+            else console.error('editProfile is not defined');
+        },
+        'saveProfileBtn': typeof saveProfileChanges === 'function' ? saveProfileChanges : () => {
+            if (window.saveProfileChanges) window.saveProfileChanges();
+            else console.error('saveProfileChanges is not defined');
+        },
         'clearCartBtn': clearCart
     };
     
