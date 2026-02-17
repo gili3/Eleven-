@@ -8,7 +8,7 @@
     <!-- Firebase Modular SDK -->
     <script type="module" id="firebase-sdk-module">
         import { initializeApp } from "https://www.gstatic.com/firebasejs/10.7.1/firebase-app.js";
-        import { getAuth, onAuthStateChanged, signOut, setPersistence, browserSessionPersistence } from "https://www.gstatic.com/firebasejs/10.7.1/firebase-auth.js";
+        import { getAuth, onAuthStateChanged, signOut, setPersistence, browserLocalPersistence } from "https://www.gstatic.com/firebasejs/10.7.1/firebase-auth.js";
         import { getFirestore, doc, collection, getDoc, getDocs, setDoc, updateDoc, deleteDoc, query, where, orderBy, onSnapshot, serverTimestamp, addDoc, increment, limit, startAfter } from "https://www.gstatic.com/firebasejs/10.7.1/firebase-firestore.js";
         import { getStorage, ref, uploadBytes, getDownloadURL, uploadBytesResumable } from "https://www.gstatic.com/firebasejs/10.7.1/firebase-storage.js";
         window.firebaseModules = {
@@ -17,7 +17,7 @@
             onAuthStateChanged,
             signOut,
             setPersistence,
-            browserSessionPersistence,
+            browserLocalPersistence,
             getFirestore,
             doc,
             collection,
@@ -42,6 +42,17 @@
             uploadBytesResumable
         };
         console.log("✅ Firebase Modules Loaded");
+        
+        // تهيئة Firebase فوراً للمشرفين
+        if (window.firebaseConfig) {
+            const app = initializeApp(window.firebaseConfig);
+            window.auth = getAuth(app);
+            window.db = getFirestore(app);
+            window.storage = getStorage(app);
+            console.log("✅ Firebase Initialized for Admin");
+        }
+        
+        window.dispatchEvent(new CustomEvent('firebase-ready'));
     </script>
     
     <!-- Font Awesome -->
@@ -51,8 +62,8 @@
     <link href="https://fonts.googleapis.com/css2?family=Cairo:wght@300;400;500;600;700;800&display=swap" rel="stylesheet">
     
     <!-- CSS Files -->
-    <link rel="stylesheet" href="admin/css/admin-styles.css?v=101">
-    <link rel="stylesheet" href="shared/css/css-security.css?v=101">
+    <link rel="stylesheet" href="admin/css/admin-styles.css">
+    <link rel="stylesheet" href="shared/css/css-security.css">
     
     <style>
         /* تحسينات إضافية للواجهة الجديدة */
@@ -862,17 +873,17 @@
     </div>
 
     <!-- Scripts -->
-    <script src="admin/js/firebase-config.js?v=101"></script>
-    <script src="admin/js/admin-new-core.js?v=101"></script>
-    <script src="admin/js/admin-utils.js?v=101"></script>
-    <script src="admin/js/sections/stats.js?v=101"></script>
-    <script src="admin/js/sections/products.js?v=101"></script>
-    <script src="admin/js/sections/orders.js?v=101"></script>
-    <script src="admin/js/sections/users.js?v=101"></script>
-    <script src="admin/js/sections/coupons.js?v=101"></script>
-    <script src="admin/js/sections/messages.js?v=101"></script>
-    <script src="admin/js/sections/settings.js?v=101"></script>
-    
+    <script src="shared/js/firebase-config.js"></script>
+    <script src="admin/js/admin-utils.js"></script>
+    <script src="admin/js/sections/stats.js"></script>
+    <script src="admin/js/sections/products.js"></script>
+    <script src="admin/js/sections/orders.js"></script>
+    <script src="admin/js/sections/users.js"></script>
+    <script src="admin/js/sections/coupons.js"></script>
+    <script src="admin/js/sections/messages.js"></script>
+    <script src="admin/js/sections/settings.js"></script>
+    <script src="admin/js/admin-new-core.js"></script>
+
     <!-- حماية صفحة الأدمن -->
     <script>
         (function() {
