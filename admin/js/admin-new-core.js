@@ -17,16 +17,27 @@ document.addEventListener('DOMContentLoaded', async () => {
     console.log('🚀 بدء تشغيل لوحة التحكم المحدثة...');
     
     try {
-        const firebaseConfig = window.firebaseConfig;
-        if (!firebaseConfig) throw new Error('Firebase config not found');
+        // استخدام التهيئة الموحدة من admin.html
+        if (!window.auth || !window.db) {
+            const firebaseConfig = window.firebaseConfig;
+            if (!firebaseConfig) throw new Error('Firebase config not found');
 
-        const app = window.firebaseModules.initializeApp(firebaseConfig);
-        window.db = window.firebaseModules.getFirestore(app);
-        window.storage = window.firebaseModules.getStorage(app);
-        window.auth = window.firebaseModules.getAuth(app);
+            const app = window.firebaseModules.initializeApp(firebaseConfig);
+            window.db = window.firebaseModules.getFirestore(app);
+            window.storage = window.firebaseModules.getStorage(app);
+            window.auth = window.firebaseModules.getAuth(app);
+        }
+        
+        // ضبط استمرارية الجلسة لتكون دائمة (Local)
+        if (window.firebaseModules.setPersistence && window.firebaseModules.browserLocalPersistence) {
+            await window.firebaseModules.setPersistence(window.auth, window.firebaseModules.browserLocalPersistence)
+                .catch(err => console.error("Persistence Error:", err));
+        }
 
         // التحقق من حالة المصادقة
+        let authChecked = false;
         window.firebaseModules.onAuthStateChanged(window.auth, async (user) => {
+            authChecked = true;
             if (user) {
                 try {
                     const userDoc = await window.firebaseModules.getDoc(
@@ -57,7 +68,12 @@ document.addEventListener('DOMContentLoaded', async () => {
                     alert('❌ حدث خطأ في التحقق من الصلاحيات');
                 }
             } else {
-                window.location.href = 'login.html';
+                // ننتظر قليلاً للتأكد من أن Firebase لم يجد جلسة مخزنة محلياً
+                setTimeout(() => {
+                    if (!window.auth.currentUser) {
+                        window.location.href = 'login.html';
+                    }
+                }, 1500);
             }
         });
 
@@ -123,15 +139,33 @@ window.switchTab = async function(tabId) {
  */
 window.logoutAdmin = function() {
     if (confirm('هل أنت متأكد من تسجيل الخروج؟')) {
-        window.firebaseModules.signOut(window.auth)
-            .then(() => {
-                window.adminUtils.showToast('تم تسجيل الخروج بنجاح', 'success');
-                window.location.href = 'login.html';
-            })
-            .catch(error => {
-                console.error('❌ خطأ في تسجيل الخروج:', error);
-                window.adminUtils.showToast('فشل تسجيل الخروج', 'error');
+        // مسح بيانات المستخدم من التخزين المحلي قبل تسجيل الخروج
+        if (window.localStorage) {
+            localStorage.removeItem('_usr');
+            localStorage.removeItem('currentUser');
+            localStorage.removeItem('userPhone');
+            localStorage.removeItem('userAddress');
+            // مسح الكاش المرتبط بالمستخدم
+            Object.keys(localStorage).forEach(key => {
+                if (key.startsWith('cache_')) localStorage.removeItem(key);
             });
+        }
+        
+        if (window.firebaseModules && window.auth) {
+            window.firebaseModules.signOut(window.auth)
+                .then(() => {
+                    if (window.adminUtils && window.adminUtils.showToast) {
+                        window.adminUtils.showToast('تم تسجيل الخروج بنجاح', 'success');
+                    }
+                    setTimeout(() => { window.location.href = 'login.html'; }, 500);
+                })
+                .catch(error => {
+                    console.error('❌ خطأ في تسجيل الخروج:', error);
+                    window.location.href = 'login.html';
+                });
+        } else {
+            window.location.href = 'login.html';
+        }
     }
 };
 
