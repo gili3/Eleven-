@@ -157,6 +157,13 @@ function initializeFirebaseApp(appName = 'DefaultApp') {
         const config = getFirebaseConfig();
         const app = window.firebaseModules.initializeApp(config, appName);
         const auth = window.firebaseModules.getAuth(app);
+        
+        // ضبط استمرارية الجلسة لتكون دائمة (Local)
+        if (window.firebaseModules.setPersistence && window.firebaseModules.browserLocalPersistence) {
+            window.firebaseModules.setPersistence(auth, window.firebaseModules.browserLocalPersistence)
+                .catch(err => console.error("Persistence Error:", err));
+        }
+
         const db = window.firebaseModules.getFirestore(app);
         const storage = window.firebaseModules.getStorage(app);
 
