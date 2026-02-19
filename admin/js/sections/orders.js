@@ -232,28 +232,68 @@ async function editOrderStatus(orderId) {
         'cancelled': 'ملغي'
     };
 
-    let statusOptions = Object.entries(statuses).map(([key, val]) => `${key}: ${val}`).join('\n');
-    const newStatus = prompt(`أدخل الحالة الجديدة:\n${statusOptions}`, order.status);
-    
-    if (!newStatus || !statuses[newStatus] || newStatus === order.status) return;
+    // إنشاء Modal لاختيار الحالة
+    const modal = document.createElement('div');
+    modal.className = 'modal-overlay active';
+    modal.id = 'statusUpdateModal';
+    modal.innerHTML = `
+        <div class="modal-content" style="max-width: 400px;">
+            <div class="modal-header">
+                <h2>تحديث حالة الطلب</h2>
+                <button class="modal-close" onclick="window.adminUtils.closeModal('statusUpdateModal')">&times;</button>
+            </div>
+            <div style="padding: 20px;">
+                <div class="form-group">
+                    <label>اختر الحالة الجديدة:</label>
+                    <select id="newStatusSelect" style="width: 100%; padding: 10px; border-radius: 8px; border: 1px solid #ddd; font-family: 'Cairo';">
+                        ${Object.entries(statuses).map(([key, val]) => `
+                            <option value="${key}" ${order.status === key ? 'selected' : ''}>${val}</option>
+                        `).join('')}
+                    </select>
+                </div>
+                <div style="display: flex; gap: 10px; margin-top: 20px;">
+                    <button id="saveStatusBtn" class="btn btn-primary" style="flex: 1;">حفظ التغيير</button>
+                    <button class="btn btn-secondary" onclick="window.adminUtils.closeModal('statusUpdateModal')" style="flex: 1;">إلغاء</button>
+                </div>
+            </div>
+        </div>
+    `;
+    document.body.appendChild(modal);
 
-    try {
-        const { db, firebaseModules } = window;
-        await firebaseModules.updateDoc(firebaseModules.doc(db, 'orders', orderId), {
-            status: newStatus,
-            updatedAt: firebaseModules.serverTimestamp()
-        });
-        window.adminUtils.showToast('✅ تم تحديث حالة الطلب', 'success');
-        order.status = newStatus;
-        displayOrders();
-        if (document.getElementById('orderModal')) {
-            window.adminUtils.closeModal('orderModal');
-            viewOrder(orderId);
+    document.getElementById('saveStatusBtn').onclick = async () => {
+        const newStatus = document.getElementById('newStatusSelect').value;
+        if (newStatus === order.status) {
+            window.adminUtils.closeModal('statusUpdateModal');
+            return;
         }
-    } catch (error) {
-        console.error('❌ خطأ في تحديث الحالة:', error);
-        window.adminUtils.showToast('حدث خطأ في تحديث الحالة', 'error');
-    }
+
+        try {
+            const saveBtn = document.getElementById('saveStatusBtn');
+            saveBtn.disabled = true;
+            saveBtn.innerHTML = '<i class="fas fa-spinner fa-spin"></i> جاري الحفظ...';
+
+            const { db, firebaseModules } = window;
+            await firebaseModules.updateDoc(firebaseModules.doc(db, 'orders', orderId), {
+                status: newStatus,
+                updatedAt: firebaseModules.serverTimestamp()
+            });
+
+            window.adminUtils.showToast('✅ تم تحديث حالة الطلب بنجاح', 'success');
+            order.status = newStatus;
+            displayOrders();
+            
+            window.adminUtils.closeModal('statusUpdateModal');
+            
+            // تحديث نافذة التفاصيل إذا كانت مفتوحة
+            if (document.getElementById('orderModal')) {
+                window.adminUtils.closeModal('orderModal');
+                viewOrder(orderId);
+            }
+        } catch (error) {
+            console.error('❌ خطأ في تحديث الحالة:', error);
+            window.adminUtils.showToast('حدث خطأ أثناء تحديث الحالة', 'error');
+        }
+    };
 }
 
 function printInvoice(orderId) {
