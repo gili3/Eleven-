@@ -8,508 +8,180 @@
     <!-- Firebase Modular SDK -->
     <script type="module" id="firebase-sdk-module">
         import { initializeApp } from "https://www.gstatic.com/firebasejs/10.7.1/firebase-app.js";
-        import { getAuth, onAuthStateChanged, signOut, setPersistence, browserLocalPersistence } from "https://www.gstatic.com/firebasejs/10.7.1/firebase-auth.js";
-        import { getFirestore, doc, collection, getDoc, getDocs, setDoc, updateDoc, deleteDoc, query, where, orderBy, onSnapshot, serverTimestamp, addDoc, increment, limit, startAfter } from "https://www.gstatic.com/firebasejs/10.7.1/firebase-firestore.js";
+        import { getAuth, onAuthStateChanged, signOut, setPersistence, browserSessionPersistence } from "https://www.gstatic.com/firebasejs/10.7.1/firebase-auth.js";
+        import { getFirestore, doc, collection, getDoc, getDocs, setDoc, updateDoc, deleteDoc, query, where, orderBy, onSnapshot, serverTimestamp, addDoc, increment, limit, startAfter, getCountFromServer } from "https://www.gstatic.com/firebasejs/10.7.1/firebase-firestore.js";
         import { getStorage, ref, uploadBytes, getDownloadURL, uploadBytesResumable } from "https://www.gstatic.com/firebasejs/10.7.1/firebase-storage.js";
         window.firebaseModules = {
-            initializeApp,
-            getAuth,
-            onAuthStateChanged,
-            signOut,
-            setPersistence,
-            browserLocalPersistence,
-            getFirestore,
-            doc,
-            collection,
-            getDoc,
-            getDocs,
-            setDoc,
-            updateDoc,
-            deleteDoc,
-            addDoc,
-            query,
-            where,
-            orderBy,
-            onSnapshot,
-            serverTimestamp,
-            increment,
-            limit,
-            startAfter,
-            getStorage,
-            ref,
-            uploadBytes,
-            getDownloadURL,
-            uploadBytesResumable
+            initializeApp, getAuth, onAuthStateChanged, signOut, setPersistence, browserSessionPersistence,
+            getFirestore, doc, collection, getDoc, getDocs, setDoc, updateDoc, deleteDoc, addDoc,
+            query, where, orderBy, onSnapshot, serverTimestamp, increment, limit, startAfter, getCountFromServer,
+            getStorage, ref, uploadBytes, getDownloadURL, uploadBytesResumable
         };
         console.log("✅ Firebase Modules Loaded");
-        
-        // تهيئة Firebase فوراً للمشرفين
-        if (window.firebaseConfig) {
-            const app = initializeApp(window.firebaseConfig);
-            window.auth = getAuth(app);
-            window.db = getFirestore(app);
-            window.storage = getStorage(app);
-            console.log("✅ Firebase Initialized for Admin");
-        }
-        
         window.dispatchEvent(new CustomEvent('firebase-ready'));
     </script>
+    <script src="shared/js/firebase-init.js"></script>
+    <script>
+        // Middleware متطور للتحقق من الصلاحيات قبل تحميل المحتوى
+        (function() {
+            // إخفاء المحتوى مبدئياً لمنع الوميض قبل التحقق
+            document.write('<style>body { display: none !important; }</style>');
+
+            const verifyAdmin = async () => {
+                try {
+                    // الانتظار حتى تهيئة Firebase
+                    let attempts = 0;
+                    while (!window.firebaseInitialized && attempts < 50) {
+                        await new Promise(resolve => setTimeout(resolve, 100));
+                        attempts++;
+                    }
+
+                    if (!window.firebaseInitialized) {
+                        console.error("Firebase failed to initialize in time.");
+                        return;
+                    }
+
+                    // الاستماع لحالة المصادقة مرة واحدة فقط للتحقق الأولي
+                    const { getAuth, onAuthStateChanged } = window.firebaseModules;
+                    const auth = getAuth();
+
+                    onAuthStateChanged(auth, async (user) => {
+                        if (!user) {
+                            console.log("No user session found, redirecting to login...");
+                            window.location.href = 'login.html';
+                            return;
+                        }
+
+                        console.log("User detected, verifying admin status for:", user.email);
+                        
+                        // التحقق من صلاحيات الأدمن من Firestore مباشرة لضمان الدقة
+                        const { doc, getDoc } = window.firebaseModules;
+                        const userDoc = await getDoc(doc(window.db, "users", user.uid));
+                        
+                        if (userDoc.exists() && userDoc.data().isAdmin === true) {
+                            console.log("Admin verified. Access granted.");
+                            window.isAdmin = true;
+                            window.currentUser = user;
+                            window.userData = userDoc.data();
+                            
+                            // إظهار المحتوى الآن
+                            document.body.style.setProperty('display', 'block', 'important');
+                            
+                            // تشغيل دوال التهيئة الخاصة بلوحة التحكم إذا كانت موجودة
+                            if (typeof initAdminDashboard === 'function') initAdminDashboard();
+                            if (typeof loadStats === 'function') loadStats();
+                        } else {
+                            console.warn("User is not an admin. Redirecting...");
+                            alert('عذراً، ليس لديك صلاحيات دخول لوحة التحكم');
+                            window.location.href = 'index.html';
+                        }
+                    });
+                } catch (error) {
+                    console.error("Middleware Error:", error);
+                    window.location.href = 'login.html';
+                }
+            };
+
+            window.addEventListener('DOMContentLoaded', verifyAdmin);
+        })();
+    </script>
     
-    <!-- Font Awesome -->
     <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
-    
-    <!-- Google Fonts -->
     <link href="https://fonts.googleapis.com/css2?family=Cairo:wght@300;400;500;600;700;800&display=swap" rel="stylesheet">
-    
-    <!-- CSS Files -->
-    <link rel="stylesheet" href="admin/css/admin-styles.css">
-    <link rel="stylesheet" href="shared/css/css-security.css">
+    <link rel="stylesheet" href="admin/css/admin-styles.css?v=110">
+    <link rel="stylesheet" href="shared/css/css-security.css?v=110">
     
     <style>
-        /* تحسينات إضافية للواجهة الجديدة */
-        .admin-container {
-            max-width: 1400px;
-        }
-        .search-filter-bar {
-            display: flex;
-            gap: 10px;
-            margin-bottom: 20px;
-            flex-wrap: wrap;
-        }
-        .search-filter-bar input,
-        .search-filter-bar select {
-            padding: 10px 15px;
-            border: 1px solid var(--border-color);
-            border-radius: 8px;
-            font-family: 'Cairo', sans-serif;
-            font-size: 14px;
-        }
-        .search-filter-bar input {
-            flex: 1;
-            min-width: 200px;
-        }
-        .search-filter-bar select {
-            min-width: 150px;
-        }
-        .search-filter-bar input:focus,
-        .search-filter-bar select:focus {
-            outline: none;
-            border-color: var(--secondary-color);
-            box-shadow: 0 0 0 3px rgba(85, 85, 85, 0.1);
-        }
-        .action-buttons {
-            display: flex;
-            gap: 10px;
-            margin-bottom: 20px;
-            flex-wrap: wrap;
-        }
-        .action-buttons button {
-            padding: 10px 20px;
-            background: var(--primary-color);
-            color: white;
-            border: none;
-            border-radius: 8px;
-            cursor: pointer;
-            font-family: 'Cairo', sans-serif;
-            font-size: 14px;
-            transition: all 0.3s ease;
-            display: flex;
-            align-items: center;
-            gap: 8px;
-        }
-        .action-buttons button:hover {
-            background: var(--secondary-color);
-            transform: translateY(-2px);
-            box-shadow: var(--shadow);
-        }
-        .modal-overlay {
-            display: none;
-            position: fixed;
-            top: 0;
-            left: 0;
-            width: 100%;
-            height: 100%;
-            background: rgba(0, 0, 0, 0.5);
-            z-index: 2000;
-            align-items: center;
-            justify-content: center;
-            backdrop-filter: blur(3px);
-        }
-        .modal-overlay.active {
-            display: flex;
-        }
-        .modal-content {
-            background: white;
-            border-radius: 12px;
-            padding: 30px;
-            max-width: 600px;
-            width: 90%;
-            max-height: 90vh;
-            overflow-y: auto;
-            box-shadow: 0 10px 40px rgba(0, 0, 0, 0.2);
-        }
-        .modal-header {
-            display: flex;
-            justify-content: space-between;
-            align-items: center;
-            margin-bottom: 20px;
-            padding-bottom: 15px;
-            border-bottom: 1px solid var(--border-color);
-        }
-        .modal-header h2 {
-            font-size: 20px;
-            color: var(--primary-color);
-            margin: 0;
-        }
-        .modal-close {
-            background: none;
-            border: none;
-            font-size: 24px;
-            cursor: pointer;
-            color: var(--dark-color);
-        }
-        .form-group {
-            margin-bottom: 20px;
-        }
-        .form-group label {
-            display: block;
-            margin-bottom: 8px;
-            font-weight: 600;
-            color: var(--primary-color);
-            font-size: 14px;
-        }
-        .form-group input,
-        .form-group textarea,
-        .form-group select {
-            width: 100%;
-            padding: 10px 12px;
-            border: 1px solid var(--border-color);
-            border-radius: 8px;
-            font-family: 'Cairo', sans-serif;
-            font-size: 14px;
-            transition: all 0.3s ease;
-        }
-        .form-group input:focus,
-        .form-group textarea:focus,
-        .form-group select:focus {
-            outline: none;
-            border-color: var(--secondary-color);
-            box-shadow: 0 0 0 3px rgba(85, 85, 85, 0.1);
-        }
-        .badge {
-            display: inline-block;
-            padding: 4px 12px;
-            border-radius: 20px;
-            font-size: 12px;
-            font-weight: 600;
-        }
-        .badge-success {
-            background: #d4edda;
-            color: #155724;
-        }
-        .badge-danger {
-            background: #f8d7da;
-            color: #721c24;
-        }
-        .badge-warning {
-            background: #fff3cd;
-            color: #856404;
-        }
-        .badge-info {
-            background: #d1ecf1;
-            color: #0c5460;
-        }
-        .table-responsive {
-            overflow-x: auto;
-        }
-        table {
-            width: 100%;
-            border-collapse: collapse;
-            font-size: 14px;
-        }
-        table thead {
-            background: var(--light-color);
-            border-bottom: 2px solid var(--border-color);
-        }
-        table th {
-            padding: 15px;
-            text-align: right;
-            font-weight: 600;
-            color: var(--primary-color);
-        }
-        table td {
-            padding: 15px;
-            border-bottom: 1px solid var(--border-color);
-        }
-        table tbody tr:hover {
-            background: var(--light-color);
-        }
-        .btn-sm {
-            padding: 6px 12px;
-            font-size: 12px;
-            background: var(--secondary-color);
-            color: white;
-            border: none;
-            border-radius: 6px;
-            cursor: pointer;
-            transition: all 0.3s ease;
-            display: inline-flex;
-            align-items: center;
-            gap: 6px;
-        }
-        .btn-sm:hover {
-            background: var(--primary-color);
-            transform: translateY(-1px);
-        }
-        .btn-sm.danger {
-            background: var(--danger-color);
-        }
-        .btn-sm.danger:hover {
-            background: #c0392b;
-        }
-        .btn-sm.success {
-            background: var(--success-color);
-        }
-        .btn-sm.success:hover {
-            background: #27ae60;
-        }
-        .empty-state {
-            text-align: center;
-            padding: 60px 20px;
-            color: var(--dark-color);
-        }
-        .empty-state i {
-            font-size: 48px;
-            color: var(--border-color);
-            margin-bottom: 20px;
-            display: block;
-        }
-        .empty-state h3 {
-            margin-bottom: 10px;
-            color: var(--primary-color);
-        }
-        .grid-items {
-            display: grid;
-            grid-template-columns: repeat(auto-fill, minmax(250px, 1fr));
-            gap: 20px;
-        }
-        .grid-item {
-            background: white;
-            border-radius: 12px;
-            padding: 20px;
-            border: 1px solid var(--border-color);
-            transition: all 0.3s ease;
-        }
-        .grid-item:hover {
-            transform: translateY(-5px);
-            box-shadow: var(--shadow);
-        }
-        @media (max-width: 768px) {
-            .search-filter-bar {
-                flex-direction: column;
-            }
-            .search-filter-bar input,
-            .search-filter-bar select {
-                width: 100%;
-            }
-            .action-buttons {
-                flex-direction: column;
-            }
-            .action-buttons button {
-                width: 100%;
-                justify-content: center;
-            }
-            .modal-content {
-                width: 95%;
-                padding: 20px;
-            }
-            table {
-                font-size: 12px;
-            }
-            table th,
-            table td {
-                padding: 10px;
-            }
-        }
+        .admin-container { max-width: 1400px; }
+        .search-filter-bar { display: flex; gap: 10px; margin-bottom: 20px; flex-wrap: wrap; }
+        .search-filter-bar input, .search-filter-bar select { padding: 10px 15px; border: 1px solid var(--border-color); border-radius: 8px; font-family: 'Cairo'; font-size: 14px; }
+        .search-filter-bar input { flex: 1; min-width: 200px; }
+        .action-buttons { display: flex; gap: 10px; margin-bottom: 20px; flex-wrap: wrap; }
+        .action-buttons button { padding: 10px 20px; background: var(--primary-color); color: white; border: none; border-radius: 8px; cursor: pointer; font-family: 'Cairo'; display: flex; align-items: center; gap: 8px; transition: 0.3s; }
+        .action-buttons button:hover { background: var(--secondary-color); transform: translateY(-2px); }
+        .modal-overlay { display: none; position: fixed; top: 0; left: 0; width: 100%; height: 100%; background: rgba(0,0,0,0.5); z-index: 2000; align-items: center; justify-content: center; backdrop-filter: blur(3px); }
+        .modal-overlay.active { display: flex; }
+        .modal-content { background: white; border-radius: 12px; padding: 30px; max-width: 600px; width: 90%; max-height: 90vh; overflow-y: auto; box-shadow: 0 10px 40px rgba(0,0,0,0.2); }
+        .modal-header { display: flex; justify-content: space-between; align-items: center; margin-bottom: 20px; padding-bottom: 15px; border-bottom: 1px solid var(--border-color); }
+        .form-group { margin-bottom: 20px; }
+        .form-group label { display: block; margin-bottom: 8px; font-weight: 600; color: var(--primary-color); }
+        .badge { display: inline-block; padding: 4px 12px; border-radius: 20px; font-size: 12px; font-weight: 600; }
+        .badge-success { background: #d4edda; color: #155724; }
+        .badge-danger { background: #f8d7da; color: #721c24; }
+        @media (max-width: 768px) { .search-filter-bar, .action-buttons { flex-direction: column; } }
     </style>
 </head>
 <body>
-    <!-- Header -->
     <header class="admin-header">
         <div class="header-logo">
             <img src="https://i.ibb.co/fVn1SghC/file-00000000cf8071f498fc71b66e09f615.png" alt="Logo">
             <span>لوحة التحكم الشاملة</span>
         </div>
-        <div class="header-actions" style="display: flex; gap: 10px; align-items: center;">
-            <button class="admin-tab" onclick="window.location.href='index.html'" style="border: 1px solid var(--border-color); background: white; padding: 8px 15px;">
-                <i class="fas fa-external-link-alt"></i> عرض المتجر
-            </button>
-            <button onclick="logoutAdmin()" class="logout-admin-btn">
-                <i class="fas fa-sign-out-alt"></i> خروج
-            </button>
+        <div class="header-actions">
+            <button class="admin-tab" onclick="window.location.href='index.html'"><i class="fas fa-external-link-alt"></i> عرض المتجر</button>
+            <button onclick="logoutAdmin()" class="logout-admin-btn"><i class="fas fa-sign-out-alt"></i> خروج</button>
         </div>
     </header>
 
     <div class="admin-container">
-        <!-- التبويبات -->
         <div class="admin-tabs">
-            <button class="admin-tab active" data-tab="dashboard" onclick="switchTab('dashboard')">
-                <i class="fas fa-chart-line"></i> الإحصائيات
-            </button>
-            <button class="admin-tab" data-tab="products" onclick="switchTab('products')">
-                <i class="fas fa-box"></i> المنتجات
-            </button>
-            <button class="admin-tab" data-tab="categories" onclick="switchTab('categories')">
-                <i class="fas fa-list"></i> الفئات
-            </button>
-            <button class="admin-tab" data-tab="orders" onclick="switchTab('orders')">
-                <i class="fas fa-shopping-cart"></i> الطلبات
-            </button>
-            <button class="admin-tab" data-tab="users" onclick="switchTab('users')">
-                <i class="fas fa-users"></i> المستخدمين
-            </button>
-            <button class="admin-tab" data-tab="reviews" onclick="switchTab('reviews')">
-                <i class="fas fa-star"></i> التقييمات
-            </button>
-            <button class="admin-tab" data-tab="coupons" onclick="switchTab('coupons')">
-                <i class="fas fa-ticket-alt"></i> الكوبونات
-            </button>
-            <button class="admin-tab" data-tab="messages" onclick="switchTab('messages')">
-                <i class="fas fa-envelope"></i> الرسائل
-            </button>
-            <button class="admin-tab" data-tab="settings" onclick="switchTab('settings')">
-                <i class="fas fa-cog"></i> الإعدادات
-            </button>
+            <button class="admin-tab active" data-tab="dashboard" onclick="switchTab('dashboard')"><i class="fas fa-chart-line"></i> الإحصائيات</button>
+            <button class="admin-tab" data-tab="products" onclick="switchTab('products')"><i class="fas fa-box"></i> المنتجات</button>
+            <button class="admin-tab" data-tab="categories" onclick="switchTab('categories')"><i class="fas fa-list"></i> الفئات</button>
+            <button class="admin-tab" data-tab="orders" onclick="switchTab('orders')"><i class="fas fa-shopping-cart"></i> الطلبات</button>
+            <button class="admin-tab" data-tab="users" onclick="switchTab('users')"><i class="fas fa-users"></i> المستخدمين</button>
+            <button class="admin-tab" data-tab="messages" onclick="switchTab('messages')"><i class="fas fa-envelope"></i> الرسائل</button>
+            <button class="admin-tab" data-tab="settings" onclick="switchTab('settings')"><i class="fas fa-cog"></i> الإعدادات</button>
         </div>
 
-        <!-- Dashboard Tab -->
+        <!-- Dashboard -->
         <div id="dashboard" class="admin-tab-content active">
-            <h2 class="section-title"><i class="fas fa-chart-line"></i> الإحصائيات والتقارير</h2>
-            
+            <h2 class="section-title"><i class="fas fa-chart-line"></i> الإحصائيات</h2>
             <div class="admin-stats">
-                <div class="admin-stat-card">
-                    <div class="stat-icon users">
-                        <i class="fas fa-users"></i>
-                    </div>
-                    <div class="stat-details">
-                        <h3 id="totalUsers">0</h3>
-                        <p>إجمالي المستخدمين</p>
-                    </div>
-                </div>
-
-                <div class="admin-stat-card">
-                    <div class="stat-icon products">
-                        <i class="fas fa-box"></i>
-                    </div>
-                    <div class="stat-details">
-                        <h3 id="totalProducts">0</h3>
-                        <p>إجمالي المنتجات</p>
-                    </div>
-                </div>
-
-                <div class="admin-stat-card">
-                    <div class="stat-icon orders">
-                        <i class="fas fa-shopping-cart"></i>
-                    </div>
-                    <div class="stat-details">
-                        <h3 id="totalOrders">0</h3>
-                        <p>إجمالي الطلبات</p>
-                    </div>
-                </div>
-
-                <div class="admin-stat-card">
-                    <div class="stat-icon sales">
-                        <i class="fas fa-dollar-sign"></i>
-                    </div>
-                    <div class="stat-details">
-                        <h3 id="totalRevenue">0 SDG</h3>
-                        <p>إجمالي الإيرادات</p>
-                    </div>
-                </div>
+                <div class="admin-stat-card"><div class="stat-icon users"><i class="fas fa-users"></i></div><div class="stat-details"><h3 id="totalUsers">0</h3><p>المستخدمين</p></div></div>
+                <div class="admin-stat-card"><div class="stat-icon products"><i class="fas fa-box"></i></div><div class="stat-details"><h3 id="totalProducts">0</h3><p>المنتجات</p></div></div>
+                <div class="admin-stat-card"><div class="stat-icon orders"><i class="fas fa-shopping-cart"></i></div><div class="stat-details"><h3 id="totalOrders">0</h3><p>الطلبات</p></div></div>
+                <div class="admin-stat-card"><div class="stat-icon sales"><i class="fas fa-dollar-sign"></i></div><div class="stat-details"><h3 id="totalRevenue">0 SDG</h3><p>الإيرادات</p></div></div>
             </div>
         </div>
 
-        <!-- Products Tab -->
+        <!-- Products -->
         <div id="products" class="admin-tab-content">
             <h2 class="section-title"><i class="fas fa-box"></i> إدارة المنتجات</h2>
-            
             <div class="action-buttons">
-                <button onclick="openProductModal()">
-                    <i class="fas fa-plus"></i> منتج جديد
-                </button>
-                <button onclick="resetProductsFilter()" style="background: var(--secondary-color);">
-                    <i class="fas fa-redo"></i> إعادة تعيين
-                </button>
+                <button onclick="openProductModal()"><i class="fas fa-plus"></i> منتج جديد</button>
+                <button onclick="resetProductsFilter()" style="background: var(--secondary-color);"><i class="fas fa-redo"></i> إعادة تعيين</button>
             </div>
-
-            <!-- شريط البحث والفلترة -->
             <div class="search-filter-bar">
-                <input type="text" id="productsSearchInput" placeholder="ابحث عن منتج بالاسم..." onkeyup="if(event.key === 'Enter') applyProductsFilter()">
-                <select id="productsCategoryFilter" onchange="applyProductsFilter()">
-                    <option value="">جميع الفئات</option>
-                </select>
-                <select id="productsStatusFilter" onchange="applyProductsFilter()">
-                    <option value="">جميع الحالات</option>
-                    <option value="active">نشط</option>
-                    <option value="inactive">معطل</option>
-                </select>
-                <button onclick="applyProductsFilter()" style="background: var(--primary-color); color: white; border: none; padding: 10px 20px; border-radius: 8px; cursor: pointer;">
-                    <i class="fas fa-search"></i>
-                </button>
+                <input type="text" id="productsSearchInput" placeholder="ابحث عن منتج..." onkeyup="if(event.key === 'Enter') applyProductsFilter()">
+                <select id="productsCategoryFilter" onchange="applyProductsFilter()"><option value="">جميع الفئات</option></select>
+                <select id="productsStatusFilter" onchange="applyProductsFilter()"><option value="">الحالة</option><option value="active">نشط</option><option value="inactive">معطل</option></select>
+                <button onclick="applyProductsFilter()"><i class="fas fa-search"></i></button>
             </div>
-
             <div class="admin-card">
                 <div class="table-responsive">
                     <table id="productsTable">
-                        <thead>
-                            <tr>
-                                <th><input type="checkbox" id="selectAllProducts" class="custom-checkbox"></th>
-                                <th>الصورة</th>
-                                <th>الاسم</th>
-                                <th>الفئة</th>
-                                <th>السعر</th>
-                                <th>المخزون</th>
-                                <th>الحالة</th>
-                                <th>الإجراءات</th>
-                            </tr>
-                        </thead>
-                        <tbody id="productsBody">
-                            <tr><td colspan="8" style="text-align: center; padding: 40px;">جاري التحميل...</td></tr>
-                        </tbody>
+                        <thead><tr><th>الصورة</th><th>الاسم</th><th>الفئة</th><th>السعر</th><th>المخزون</th><th>الحالة</th><th>الإجراءات</th></tr></thead>
+                        <tbody id="productsBody"><tr><td colspan="7" style="text-align:center;padding:40px;">جاري التحميل...</td></tr></tbody>
                     </table>
-                    <div id="productsScrollSentinel" style="height: 20px; margin: 10px 0;"></div>
+                    <div id="productsScrollSentinel" style="height:20px;"></div>
                 </div>
             </div>
         </div>
 
-        <!-- Categories Tab -->
+        <!-- Categories -->
         <div id="categories" class="admin-tab-content">
             <h2 class="section-title"><i class="fas fa-list"></i> إدارة الفئات</h2>
-            
-            <div class="action-buttons">
-                <button onclick="openCategoryModal()">
-                    <i class="fas fa-plus"></i> فئة جديدة
-                </button>
-            </div>
-
-            <div class="grid-items" id="categoriesGrid">
-                <div style="text-align: center; padding: 40px; grid-column: 1/-1;">جاري التحميل...</div>
-            </div>
+            <div class="action-buttons"><button onclick="openCategoryModal()"><i class="fas fa-plus"></i> فئة جديدة</button></div>
+            <div class="grid-items" id="categoriesGrid"></div>
         </div>
 
-        <!-- Orders Tab -->
+        <!-- Orders -->
         <div id="orders" class="admin-tab-content">
             <h2 class="section-title"><i class="fas fa-shopping-cart"></i> إدارة الطلبات</h2>
-            
-            <div class="action-buttons">
-                <button onclick="resetOrdersFilter()" style="background: var(--secondary-color);">
-                    <i class="fas fa-redo"></i> إعادة تعيين
-                </button>
-            </div>
-
-            <!-- شريط البحث والفلترة -->
+            <div class="action-buttons"><button onclick="resetOrdersFilter()" style="background: var(--secondary-color);"><i class="fas fa-redo"></i> إعادة تعيين</button></div>
             <div class="search-filter-bar">
-                <input type="text" id="ordersSearchInput" placeholder="ابحث برقم الطلب أو الهاتف..." onkeyup="if(event.key === 'Enter') applyOrdersFilter()">
+                <input type="text" id="ordersSearchInput" placeholder="رقم الطلب أو الهاتف..." onkeyup="if(event.key === 'Enter') applyOrdersFilter()">
                 <select id="ordersStatusFilter" onchange="applyOrdersFilter()">
                     <option value="">جميع الحالات</option>
                     <option value="pending">قيد الانتظار</option>
@@ -518,385 +190,98 @@
                     <option value="delivered">تم التوصيل</option>
                     <option value="cancelled">ملغي</option>
                 </select>
-                <button onclick="applyOrdersFilter()" style="background: var(--primary-color); color: white; border: none; padding: 10px 20px; border-radius: 8px; cursor: pointer;">
-                    <i class="fas fa-search"></i>
-                </button>
+                <button onclick="applyOrdersFilter()"><i class="fas fa-search"></i></button>
             </div>
-
             <div class="admin-card">
                 <div class="table-responsive">
                     <table id="ordersTable">
-                        <thead>
-                            <tr>
-                                <th>رقم الطلب</th>
-                                <th>العميل</th>
-                                <th>الهاتف</th>
-                                <th>الإجمالي</th>
-                                <th>الحالة</th>
-                                <th>التاريخ</th>
-                                <th>الإجراءات</th>
-                            </tr>
-                        </thead>
-                        <tbody id="ordersBody">
-                            <tr><td colspan="7" style="text-align: center; padding: 40px;">جاري التحميل...</td></tr>
-                        </tbody>
+                        <thead><tr><th>رقم الطلب</th><th>العميل</th><th>الهاتف</th><th>الإجمالي</th><th>الحالة</th><th>التاريخ</th><th>الإجراءات</th></tr></thead>
+                        <tbody id="ordersBody"><tr><td colspan="7" style="text-align:center;padding:40px;">جاري التحميل...</td></tr></tbody>
                     </table>
-                    <div id="ordersScrollSentinel" style="height: 20px; margin: 10px 0;"></div>
+                    <div id="ordersScrollSentinel" style="height:20px;"></div>
                 </div>
             </div>
         </div>
 
-        <!-- Users Tab -->
+        <!-- Users -->
         <div id="users" class="admin-tab-content">
             <h2 class="section-title"><i class="fas fa-users"></i> إدارة المستخدمين</h2>
-            
-            <div class="action-buttons">
-                <button onclick="resetUsersFilter()" style="background: var(--secondary-color);">
-                    <i class="fas fa-redo"></i> إعادة تعيين
-                </button>
-            </div>
-
-            <!-- شريط البحث والفلترة -->
+            <div class="action-buttons"><button onclick="resetUsersFilter()" style="background: var(--secondary-color);"><i class="fas fa-redo"></i> إعادة تعيين</button></div>
             <div class="search-filter-bar">
-                <input type="text" id="usersSearchInput" placeholder="ابحث عن مستخدم بالاسم أو البريد..." onkeyup="if(event.key === 'Enter') applyUsersFilter()">
-                <select id="usersStatusFilter" onchange="applyUsersFilter()">
-                    <option value="">جميع الحالات</option>
-                    <option value="active">نشط</option>
-                    <option value="inactive">معطل</option>
-                </select>
-                <button onclick="applyUsersFilter()" style="background: var(--primary-color); color: white; border: none; padding: 10px 20px; border-radius: 8px; cursor: pointer;">
-                    <i class="fas fa-search"></i>
-                </button>
+                <input type="text" id="usersSearchInput" placeholder="الاسم أو البريد..." onkeyup="if(event.key === 'Enter') applyUsersFilter()">
+                <select id="usersStatusFilter" onchange="applyUsersFilter()"><option value="">الحالة</option><option value="active">نشط</option><option value="inactive">معطل</option></select>
+                <button onclick="applyUsersFilter()"><i class="fas fa-search"></i></button>
             </div>
-
             <div class="admin-card">
                 <div class="table-responsive">
                     <table id="usersTable">
-                        <thead>
-                            <tr>
-                                <th>الاسم</th>
-                                <th>البريد</th>
-                                <th>الهاتف</th>
-                                <th>الطلبات</th>
-                                <th>الإنفاق</th>
-                                <th>الحالة</th>
-                                <th>التاريخ</th>
-                                <th>الإجراءات</th>
-                            </tr>
-                        </thead>
-                        <tbody id="usersBody">
-                            <tr><td colspan="8" style="text-align: center; padding: 40px;">جاري التحميل...</td></tr>
-                        </tbody>
+                        <thead><tr><th>الاسم</th><th>البريد</th><th>الهاتف</th><th>الطلبات</th><th>الإنفاق</th><th>الحالة</th><th>التاريخ</th><th>الإجراءات</th></tr></thead>
+                        <tbody id="usersBody"><tr><td colspan="8" style="text-align:center;padding:40px;">جاري التحميل...</td></tr></tbody>
                     </table>
-                    <div id="usersScrollSentinel" style="height: 20px; margin: 10px 0;"></div>
+                    <div id="usersScrollSentinel" style="height:20px;"></div>
                 </div>
             </div>
         </div>
 
-        <!-- Reviews Tab -->
-        <div id="reviews" class="admin-tab-content">
-            <h2 class="section-title"><i class="fas fa-star"></i> إدارة التقييمات</h2>
-            <div class="admin-card">
-                <div class="table-responsive">
-                    <table id="reviewsTable">
-                        <thead>
-                            <tr>
-                                <th>المنتج</th>
-                                <th>المستخدم</th>
-                                <th>التقييم</th>
-                                <th>التعليق</th>
-                                <th>التاريخ</th>
-                                <th>الإجراءات</th>
-                            </tr>
-                        </thead>
-                        <tbody id="reviewsBody">
-                            <tr><td colspan="6" style="text-align: center; padding: 40px;">جاري التحميل...</td></tr>
-                        </tbody>
-                    </table>
-                    <div id="reviewsScrollSentinel" style="height: 20px; margin: 10px 0;"></div>
-                </div>
-            </div>
-        </div>
-
-        <!-- Coupons Tab -->
-        <div id="coupons" class="admin-tab-content">
-            <h2 class="section-title"><i class="fas fa-ticket-alt"></i> إدارة الكوبونات</h2>
-            
-            <div class="action-buttons">
-                <button onclick="openCouponModal()">
-                    <i class="fas fa-plus"></i> كوبون جديد
-                </button>
-            </div>
-
-            <div class="admin-card">
-                <div class="table-responsive">
-                    <table id="couponsTable">
-                        <thead>
-                            <tr>
-                                <th>الكود</th>
-                                <th>الخصم</th>
-                                <th>النوع</th>
-                                <th>الحد الأدنى</th>
-                                <th>تاريخ الانتهاء</th>
-                                <th>الحالة</th>
-                                <th>الإجراءات</th>
-                            </tr>
-                        </thead>
-                        <tbody id="couponsBody">
-                            <tr><td colspan="7" style="text-align: center; padding: 40px;">جاري التحميل...</td></tr>
-                        </tbody>
-                    </table>
-                    <div id="couponsScrollSentinel" style="height: 20px; margin: 10px 0;"></div>
-                </div>
-            </div>
-        </div>
-
-        <!-- Messages Tab -->
+        <!-- Messages -->
         <div id="messages" class="admin-tab-content">
             <h2 class="section-title"><i class="fas fa-envelope"></i> رسائل العملاء</h2>
-            
             <div class="admin-card">
                 <div class="table-responsive">
                     <table id="messagesTable">
-                        <thead>
-                            <tr>
-                                <th>الاسم</th>
-                                <th>البريد</th>
-                                <th>الموضوع</th>
-                                <th>الحالة</th>
-                                <th>التاريخ</th>
-                                <th>الإجراءات</th>
-                            </tr>
-                        </thead>
-                        <tbody id="messagesBody">
-                            <tr><td colspan="6" style="text-align: center; padding: 40px;">جاري التحميل...</td></tr>
-                        </tbody>
+                        <thead><tr><th>الاسم</th><th>البريد</th><th>الموضوع</th><th>الحالة</th><th>التاريخ</th><th>الإجراءات</th></tr></thead>
+                        <tbody id="messagesBody"><tr><td colspan="6" style="text-align:center;padding:40px;">جاري التحميل...</td></tr></tbody>
                     </table>
-                    <div id="messagesScrollSentinel" style="height: 20px; margin: 10px 0;"></div>
+                    <div id="messagesScrollSentinel" style="height:20px;"></div>
                 </div>
             </div>
         </div>
 
-        <!-- Settings Tab -->
+        <!-- Settings -->
         <div id="settings" class="admin-tab-content">
             <h2 class="section-title"><i class="fas fa-cog"></i> إعدادات المتجر</h2>
-            
             <div class="admin-card">
                 <form id="settingsForm" onsubmit="saveSettings(event)">
                     <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 20px;">
-                        <div class="form-group">
-                            <label>اسم المتجر *</label>
-                            <input type="text" id="storeName" required>
-                        </div>
-                        <div class="form-group">
-                            <label>البريد الإلكتروني *</label>
-                            <input type="email" id="storeEmail" required>
-                        </div>
-                        <div class="form-group">
-                            <label>رقم الهاتف *</label>
-                            <input type="tel" id="storePhone" required>
-                        </div>
-                        <div class="form-group">
-                            <label>العملة</label>
-                            <input type="text" id="storeCurrency" placeholder="SDG">
-                        </div>
-                        <div class="form-group" style="grid-column: span 2;">
-                            <label>وصف المتجر</label>
-                            <textarea id="storeDescription" rows="2"></textarea>
-                        </div>
-                        <div class="form-group" style="grid-column: span 2;">
-                            <label>الكلمات المفتاحية (SEO)</label>
-                            <input type="text" id="storeKeywords" placeholder="متجر، منتجات، تسوق...">
-                        </div>
+                        <div class="form-group"><label>اسم المتجر *</label><input type="text" id="storeName" required></div>
+                        <div class="form-group"><label>البريد الإلكتروني *</label><input type="email" id="storeEmail" required></div>
+                        <div class="form-group"><label>رقم الهاتف *</label><input type="tel" id="storePhone" required></div>
+                        <div class="form-group"><label>العملة</label><input type="text" id="storeCurrency" placeholder="SDG"></div>
+                        <div class="form-group" style="grid-column: span 2;"><label>وصف المتجر</label><textarea id="storeDescription" rows="2"></textarea></div>
                     </div>
 
                     <h3 style="margin: 30px 0 20px; padding-bottom: 10px; border-bottom: 2px solid #eee;"><i class="fas fa-truck"></i> إعدادات الشحن والدفع</h3>
                     <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 20px;">
-                        <div class="form-group">
-                            <label>تكلفة الشحن (SDG)</label>
-                            <input type="number" id="shippingCost" min="0" step="0.01">
-                        </div>
-                        <div class="form-group">
-                            <label>حد الشحن المجاني (SDG)</label>
-                            <input type="number" id="freeShippingLimit" min="0" step="0.01">
-                        </div>
-                        <div class="form-group">
-                            <label>مدة التوصيل المتوقعة</label>
-                            <input type="text" id="shippingEstimatedDays" placeholder="3-5 أيام">
-                        </div>
-                        <div class="form-group">
-                            <label>اسم البنك</label>
-                            <input type="text" id="bankName">
-                        </div>
-                        <div class="form-group">
-                            <label>رقم الحساب البنكي</label>
-                            <input type="text" id="bankAccount">
-                        </div>
-                        <div class="form-group">
-                            <label>اسم صاحب الحساب</label>
-                            <input type="text" id="bankAccountName">
-                        </div>
-                        <div class="form-group">
-                            <label><input type="checkbox" id="enableCashOnDelivery" style="width: auto; margin-left: 10px;"> تفعيل الدفع عند الاستلام</label>
-                        </div>
-                        <div class="form-group">
-                            <label><input type="checkbox" id="enableBankTransfer" style="width: auto; margin-left: 10px;"> تفعيل التحويل البنكي</label>
-                        </div>
+                        <div class="form-group"><label>تكلفة الشحن (SDG)</label><input type="number" id="shippingCost"></div>
+                        <div class="form-group"><label>حد الشحن المجاني (SDG)</label><input type="number" id="freeShippingLimit"></div>
+                        <div class="form-group"><label>اسم البنك</label><input type="text" id="bankName"></div>
+                        <div class="form-group"><label>رقم الحساب</label><input type="text" id="bankAccount"></div>
                     </div>
 
-                    <div class="form-group">
-                        <label>عن المتجر</label>
-                        <textarea id="aboutUs" rows="5"></textarea>
-                    </div>
-
-                    <h3 style="margin: 30px 0 20px; padding-bottom: 10px; border-bottom: 2px solid #eee;"><i class="fas fa-map-marker-alt"></i> معلومات الاتصال</h3>
+                    <h3 style="margin: 30px 0 20px; padding-bottom: 10px; border-bottom: 2px solid #eee;"><i class="fas fa-share-alt"></i> التواصل والألوان</h3>
                     <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 20px;">
-                        <div class="form-group">
-                            <label>العنوان</label>
-                            <input type="text" id="address" placeholder="عنوان المتجر الكامل">
-                        </div>
-                        <div class="form-group">
-                            <label>ساعات العمل</label>
-                            <input type="text" id="workingHours" placeholder="مثال: 9 صباحاً - 10 مساءً">
-                        </div>
+                        <div class="form-group"><label>فيسبوك</label><input type="url" id="facebook"></div>
+                        <div class="form-group"><label>إنستغرام</label><input type="url" id="instagram"></div>
+                        <div class="form-group"><label>واتساب</label><input type="tel" id="whatsapp"></div>
+                        <div class="form-group"><label>اللون الأساسي</label><input type="color" id="primaryColor" style="height:45px;"></div>
                     </div>
 
-                    <h3 style="margin: 30px 0 20px; padding-bottom: 10px; border-bottom: 2px solid #eee;"><i class="fas fa-share-alt"></i> روابط التواصل الاجتماعي</h3>
-                    <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 20px;">
-                        <div class="form-group">
-                            <label><i class="fab fa-facebook"></i> فيسبوك</label>
-                            <input type="url" id="facebook">
-                        </div>
-                        <div class="form-group">
-                            <label><i class="fab fa-instagram"></i> إنستغرام</label>
-                            <input type="url" id="instagram">
-                        </div>
-                        <div class="form-group">
-                            <label><i class="fab fa-twitter"></i> تويتر (X)</label>
-                            <input type="url" id="twitter">
-                        </div>
-                        <div class="form-group">
-                            <label><i class="fab fa-whatsapp"></i> واتساب</label>
-                            <input type="tel" id="whatsapp">
-                        </div>
-                        <div class="form-group">
-                            <label><i class="fab fa-tiktok"></i> تيك توك</label>
-                            <input type="url" id="tiktok">
-                        </div>
-                        <div class="form-group">
-                            <label><i class="fab fa-youtube"></i> يوتيوب</label>
-                            <input type="url" id="youtube">
-                        </div>
-                    </div>
-
-                    <h3 style="margin: 30px 0 20px; padding-bottom: 10px; border-bottom: 2px solid #eee;"><i class="fas fa-palette"></i> ألوان المتجر</h3>
-                    <div style="display: grid; grid-template-columns: 1fr 1fr 1fr; gap: 15px;">
-                        <div class="form-group">
-                            <label>اللون الأساسي</label>
-                            <input type="color" id="primaryColor" style="height: 45px;">
-                        </div>
-                        <div class="form-group">
-                            <label>اللون الثانوي</label>
-                            <input type="color" id="secondaryColor" style="height: 45px;">
-                        </div>
-                        <div class="form-group">
-                            <label>لون الخلفية</label>
-                            <input type="color" id="backgroundColor" value="#ffffff" style="height: 45px;">
-                        </div>
-                    </div>
-
-                    <h3 style="margin: 30px 0 20px; padding-bottom: 10px; border-bottom: 2px solid #eee;"><i class="fas fa-search"></i> تحسين محركات البحث (SEO)</h3>
-                    <div class="form-group">
-                        <label>عنوان المتجر (Meta Title)</label>
-                        <input type="text" id="seoTitle">
-                    </div>
-                    <div class="form-group">
-                        <label>وصف المتجر (Meta Description)</label>
-                        <textarea id="seoDescription" rows="2"></textarea>
-                    </div>
-
-                    <h3 style="margin: 30px 0 20px; padding-bottom: 10px; border-bottom: 2px solid #eee;"><i class="fas fa-image"></i> شعار المتجر</h3>
-                    <div class="form-group">
-                        <label>رفع الشعار</label>
-                        <input type="file" id="logoFile" accept="image/*" onchange="previewLogo(event)">
-                        <div style="margin-top: 15px; text-align: center;">
-                            <div class="image-placeholder" style="display: inline-block; width: 150px; height: 150px; border: 2px dashed #ddd; border-radius: 8px; display: flex; align-items: center; justify-content: center; color: #999;">
-                                <i class="fas fa-image" style="font-size: 40px;"></i>
-                            </div>
-                            <img id="logoPreview" style="display: none; max-width: 150px; max-height: 150px; border-radius: 8px; border: 2px solid #ddd;">
-                        </div>
-                    </div>
-
-                    <h3 style="margin: 30px 0 20px; padding-bottom: 10px; border-bottom: 2px solid #eee;"><i class="fas fa-cogs"></i> إعدادات متقدمة</h3>
-                    <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 20px;">
-                        <div class="form-group">
-                            <label>نسبة الضريبة (%)</label>
-                            <input type="number" id="taxRate" min="0" max="100" step="0.01" placeholder="0">
-                        </div>
-                        <div class="form-group">
-                            <label>الحد الأدنى للطلب</label>
-                            <input type="number" id="minOrderAmount" min="0" step="0.01" placeholder="0">
-                        </div>
-                        <div class="form-group">
-                            <label>
-                                <input type="checkbox" id="enableNotifications" style="width: auto; margin-left: 10px;">
-                                تفعيل الإشعارات
-                            </label>
-                        </div>
-                        <div class="form-group">
-                            <label>
-                                <input type="checkbox" id="maintenanceMode" style="width: auto; margin-left: 10px;">
-                                وضع الصيانة
-                            </label>
-                        </div>
-                    </div>
-
-                    <div class="form-group">
-                        <label>رسالة الصيانة</label>
-                        <textarea id="maintenanceMessage" rows="3" placeholder="نعتذر، الموقع تحت الصيانة حالياً"></textarea>
-                    </div>
-
-                    <div style="display: flex; gap: 10px; margin-top: 30px; flex-wrap: wrap;">
-                        <button type="submit" class="btn btn-primary" style="padding: 12px 30px;">
-                            <i class="fas fa-save"></i> حفظ الإعدادات
-                        </button>
-                        <button type="button" class="btn btn-secondary" onclick="exportSettings()" style="padding: 12px 30px;">
-                            <i class="fas fa-download"></i> تصدير الإعدادات
-                        </button>
-                        <button type="button" class="btn btn-info" onclick="importSettings()" style="padding: 12px 30px;">
-                            <i class="fas fa-upload"></i> استيراد الإعدادات
-                        </button>
-                    </div>
+                    <button type="submit" class="btn btn-primary" style="margin-top:20px; padding:12px 30px;"><i class="fas fa-save"></i> حفظ الإعدادات</button>
                 </form>
             </div>
         </div>
     </div>
 
     <!-- Scripts -->
-    <script src="shared/js/firebase-config.js"></script>
-    <script src="admin/js/admin-utils.js"></script>
-    <script src="admin/js/sections/stats.js"></script>
-    <script src="admin/js/sections/products.js"></script>
-    <script src="admin/js/sections/orders.js"></script>
-    <script src="admin/js/sections/users.js"></script>
-    <script src="admin/js/sections/coupons.js"></script>
-    <script src="admin/js/sections/messages.js"></script>
-    <script src="admin/js/sections/settings.js"></script>
-    <script src="admin/js/admin-new-core.js"></script>
-
-    <!-- حماية صفحة الأدمن -->
-    <script>
-        (function() {
-            document.addEventListener('contextmenu', function(e) { e.preventDefault(); });
-            document.onkeydown = function(e) {
-                if (e.keyCode == 123 || 
-                    (e.ctrlKey && e.shiftKey && (e.keyCode == 73 || e.keyCode == 74 || e.keyCode == 67)) || 
-                    (e.ctrlKey && e.keyCode == 85)) {
-                    return false;
-                }
-            };
-            document.addEventListener('dragstart', function(e) { if (e.target.nodeName === 'IMG') e.preventDefault(); });
-        })();
-    </script>
+    <script src="admin/js/firebase-config.js?v=110"></script>
+    <script src="admin/js/admin-utils.js?v=110"></script>
+    <script src="admin/js/sections/stats.js?v=110"></script>
+    <script src="admin/js/sections/products.js?v=110"></script>
+    <script src="admin/js/sections/orders.js?v=110"></script>
+    <script src="admin/js/sections/users.js?v=110"></script>
+    <script src="admin/js/sections/coupons.js?v=110"></script>
+    <script src="admin/js/sections/messages.js?v=110"></script>
+    <script src="admin/js/sections/settings.js?v=110"></script>
+    <script src="admin/js/admin-new-core.js?v=110"></script>
 </body>
 </html>
