@@ -768,54 +768,40 @@ async function signOutUser() {
     console.log('🚪 تسجيل الخروج...');
     
     try {
-        if (typeof isGuest !== 'undefined' && isGuest) {
+        if (isGuest) {
             if (!confirm('سيتم فقدان سلة التسوق والطلبات. هل تريد المتابعة؟')) {
                 return;
             }
         }
         
-        // مسح بيانات التخزين المحلي أولاً
-        if (typeof AuthSecurity !== 'undefined' && AuthSecurity.clearUserData) {
-            AuthSecurity.clearUserData();
+        if (!isGuest && auth) {
+            await window.firebaseModules.signOut(auth);
         }
         
-        if (window.localStorage) {
-            localStorage.removeItem('userPhone');
-            localStorage.removeItem('userAddress');
-            localStorage.removeItem('_usr');
-            localStorage.removeItem('currentUser');
-        }
+        currentUser = null;
+        isGuest = false;
+        isAdmin = false;
+        cartItems = [];
+        favorites = [];
         
-        // تسجيل الخروج من Firebase
-        if (typeof auth !== 'undefined' && auth && window.firebaseModules && window.firebaseModules.signOut) {
-            try {
-                await window.firebaseModules.signOut(auth);
-            } catch (e) {
-                console.error('Firebase signOut error:', e);
-            }
-        }
+        // حذف بيانات المستخدم المشفرة والقديمة
+        AuthSecurity.clearUserData();
         
-        // تصفير المتغيرات العامة
-        if (typeof currentUser !== 'undefined') currentUser = null;
-        if (typeof isGuest !== 'undefined') isGuest = false;
-        if (typeof isAdmin !== 'undefined') isAdmin = false;
-        if (typeof cartItems !== 'undefined') cartItems = [];
-        if (typeof favorites !== 'undefined') favorites = [];
+        localStorage.removeItem('userPhone');
+        localStorage.removeItem('userAddress');
         
         if (window.authUnsubscribe) {
-            try { window.authUnsubscribe(); } catch(e) {}
+            window.authUnsubscribe();
         }
         
         // تصفير جميع حقول الإدخال في التطبيق
         const allInputs = document.querySelectorAll('input, textarea, select');
         allInputs.forEach(input => {
-            try {
-                if (input.type === 'checkbox' || input.type === 'radio') {
-                    input.checked = false;
-                } else {
-                    input.value = '';
-                }
-            } catch(e) {}
+            if (input.type === 'checkbox' || input.type === 'radio') {
+                input.checked = false;
+            } else {
+                input.value = '';
+            }
         });
 
         // تصفير بيانات الملف الشخصي في الواجهة
@@ -838,23 +824,16 @@ async function signOutUser() {
         
         if (typeof updateAdminButton === 'function') updateAdminButton();
         if (typeof updateCartCount === 'function') updateCartCount();
-        
-        // التوجيه لصفحة تسجيل الدخول
-        if (window.location.pathname.includes('login.html')) {
-            window.location.reload();
-        } else {
-            window.location.href = 'login.html';
-        }
+        showAuthScreen();
         
         // إعادة تحميل المنتجات لضمان عدم وجود بيانات معلقة
-        if (typeof allProducts !== 'undefined') allProducts = [];
+        allProducts = [];
         if (typeof displayProducts === 'function') displayProducts();
         
         if (typeof showToast === 'function') showToast('تم تسجيل الخروج بنجاح', 'success');
     } catch (error) {
         console.error('❌ خطأ في تسجيل الخروج:', error);
-        // في حال حدوث أي خطأ، نوجه المستخدم لصفحة تسجيل الدخول كحل أخير
-        window.location.href = 'login.html';
+        if (typeof showToast === 'function') showToast('حدث خطأ أثناء تسجيل الخروج', 'error');
     }
 }
 

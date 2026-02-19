@@ -408,37 +408,33 @@ async function submitCheckoutOrder() {
 // دالة رفع الإيصال المصححة
 async function uploadCheckoutReceipt(file) {
     try {
-        if (!currentUser) throw new Error('يجب تسجيل الدخول لرفع الإيصال');
-        if (!storage) {
-            // إذا لم يكن storage مهيأ، نعيد تهيئته
-            const firebaseInstance = initializeFirebaseApp();
-            if (firebaseInstance) {
-                storage = firebaseInstance.storage;
-            } else {
-                throw new Error('Firebase Storage غير مهيأ');
-            }
-        }
+        if (!window.auth?.currentUser) throw new Error('يجب تسجيل الدخول لرفع الإيصال');
+        const storage = window.storage;
+        if (!storage) throw new Error('Firebase Storage غير مهيأ');
         
         if (!file) throw new Error('لم يتم تحديد ملف');
         
-        console.log('📤 بدء رفع الإيصال:', file.name);
+        // 1. معالجة وضغط الصورة قبل الرفع
+        let processedFile = file;
+        if (window.adminUtils?.processImage) {
+            console.log('🔄 جاري معالجة وضغط الصورة...');
+            processedFile = await window.adminUtils.processImage(file, { maxSizeMB: 5, quality: 0.7 });
+        }
         
-        const fileName = 'receipts/' + currentUser.uid + '/' + Date.now() + '_' + file.name;
+        console.log('📤 بدء رفع الإيصال:', processedFile.name);
+        const fileName = 'receipts/' + window.auth.currentUser.uid + '/' + Date.now() + '_' + processedFile.name;
         const storageRef = window.firebaseModules.ref(storage, fileName);
         
-        // استخدام uploadBytes بدلاً من uploadBytesResumable لتبسيط العملية
-        const uploadResult = await window.firebaseModules.uploadBytes(storageRef, file);
+        const uploadResult = await window.firebaseModules.uploadBytes(storageRef, processedFile);
         console.log('✅ تم رفع الملف بنجاح');
         
         const downloadUrl = await window.firebaseModules.getDownloadURL(storageRef);
-        console.log('✅ تم الحصول على رابط الإيصال:', downloadUrl);
-        
         if (!downloadUrl) throw new Error('فشل الحصول على رابط التحميل');
         
         return downloadUrl;
     } catch (error) {
         console.error('❌ خطأ في رفع الإيصال:', error);
-        if (typeof showToast === 'function') showToast('فشل رفع صورة الإيصال: ' + error.message, 'error');
+        if (window.showToast) window.showToast('فشل رفع صورة الإيصال: ' + error.message, 'error');
         throw error;
     }
 }

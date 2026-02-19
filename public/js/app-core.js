@@ -2,8 +2,7 @@
 // ======================== دوال UTILS المدمجة في البداية ========================
 
 function formatNumber(num) {
-    // التحقق من وجود الدالة في window لتجنب التكرار اللانهائي
-    if (window.formatNumber && window.formatNumber !== formatNumber) {
+    if (typeof window.formatNumber === 'function') {
         return window.formatNumber(num);
     }
     if (num === null || num === undefined) return "0";
@@ -11,7 +10,7 @@ function formatNumber(num) {
 }
 
 function showToast(message, type = 'info', duration = 3000) {
-    if (window.showToast && window.showToast !== showToast) {
+    if (typeof window.showToast === 'function') {
         window.showToast(message, type, duration);
     } else {
         console.log(`[Toast] ${type}: ${message}`);
@@ -158,13 +157,6 @@ function initializeFirebaseApp(appName = 'DefaultApp') {
         const config = getFirebaseConfig();
         const app = window.firebaseModules.initializeApp(config, appName);
         const auth = window.firebaseModules.getAuth(app);
-        
-        // ضبط استمرارية الجلسة لتكون دائمة (Local)
-        if (window.firebaseModules.setPersistence && window.firebaseModules.browserLocalPersistence) {
-            window.firebaseModules.setPersistence(auth, window.firebaseModules.browserLocalPersistence)
-                .catch(err => console.error("Persistence Error:", err));
-        }
-
         const db = window.firebaseModules.getFirestore(app);
         const storage = window.firebaseModules.getStorage(app);
 
