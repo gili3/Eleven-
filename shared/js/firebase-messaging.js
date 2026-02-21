@@ -34,7 +34,19 @@ async function initializeFirebaseMessaging() {
                 'https://www.gstatic.com/firebasejs/10.7.1/firebase-messaging.js'
             );
 
-            const app = window.firebaseApp || (window.getFirebaseInstance ? window.getFirebaseInstance().app : window.firebaseModules.getApp());
+            // استخدام Firebase الموحد
+            let app;
+            if (window.firebaseInstance) {
+                app = window.firebaseInstance.app;
+            } else if (window.getFirebaseInstance) {
+                app = window.getFirebaseInstance().app;
+            } else if (typeof window.initializeFirebaseUnified === 'function') {
+                const instance = await window.initializeFirebaseUnified();
+                app = instance.app;
+            } else {
+                app = window.firebaseModules.getApp();
+            }
+            
             messaging = getMessaging(app);
 
             console.log('✅ Firebase Messaging مهيأ');
@@ -161,12 +173,12 @@ async function getFCMToken() {
  */
 async function saveFCMTokenToDatabase(token) {
     try {
-        if (!(window.getFirebaseInstance ? window.getFirebaseInstance().db : null) || !window.currentUser) {
+        if (!window.db || !window.currentUser) {
             console.warn('⚠️ قاعدة البيانات أو المستخدم غير متاح');
             return;
         }
 
-        const userRef = window.firebaseModules.doc((window.getFirebaseInstance ? window.getFirebaseInstance().db : null), 'users', window.currentUser.uid);
+        const userRef = window.firebaseModules.doc(window.db, 'users', window.currentUser.uid);
         
         await window.firebaseModules.updateDoc(userRef, {
             fcmToken: token,
