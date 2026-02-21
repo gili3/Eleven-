@@ -14,21 +14,45 @@
     <!-- Firebase Modular SDK -->
     <script type="module">
         import { initializeApp } from "https://www.gstatic.com/firebasejs/10.7.1/firebase-app.js";
-        import { getAuth, onAuthStateChanged, GoogleAuthProvider, signInWithPopup, signInWithEmailAndPassword, createUserWithEmailAndPassword, signOut, updateProfile } from "https://www.gstatic.com/firebasejs/10.7.1/firebase-auth.js";
+        import { getAuth, onAuthStateChanged, GoogleAuthProvider, signInWithPopup, signInWithEmailAndPassword, createUserWithEmailAndPassword, signOut, updateProfile, setPersistence, browserLocalPersistence } from "https://www.gstatic.com/firebasejs/10.7.1/firebase-auth.js";
         import { getFirestore, doc, collection, getDoc, getDocs, setDoc, updateDoc, query, where, orderBy, serverTimestamp, deleteDoc, addDoc, increment } from "https://www.gstatic.com/firebasejs/10.7.1/firebase-firestore.js";
         import { getStorage, ref, uploadBytes, getDownloadURL, uploadBytesResumable } from "https://www.gstatic.com/firebasejs/10.7.1/firebase-storage.js";
 
         window.firebaseModules = { 
-            initializeApp, getAuth, onAuthStateChanged, GoogleAuthProvider, signInWithPopup, 
-            signInWithEmailAndPassword, createUserWithEmailAndPassword, signOut, updateProfile,
-            getFirestore, doc, collection, getDoc, getDocs, setDoc, updateDoc, deleteDoc, addDoc,
-            query, where, orderBy, serverTimestamp, increment, getStorage, ref, uploadBytes, 
-            getDownloadURL, uploadBytesResumable
+            initializeApp, 
+            getAuth, 
+            onAuthStateChanged, 
+            GoogleAuthProvider, 
+            signInWithPopup, 
+            signInWithEmailAndPassword, 
+            createUserWithEmailAndPassword, 
+            signOut,
+            updateProfile,
+            setPersistence,
+            browserLocalPersistence,
+            getFirestore,
+            doc,
+            collection,
+            getDoc,
+            getDocs,
+            setDoc,
+            updateDoc,
+            deleteDoc,
+            addDoc,
+            query,
+            where,
+            orderBy,
+            serverTimestamp,
+            increment,
+            getStorage,
+            ref,
+            uploadBytes,
+            getDownloadURL,
+            uploadBytesResumable
         };
         console.log("✅ Firebase Modules Loaded");
         window.dispatchEvent(new CustomEvent('firebase-ready'));
     </script>
-    <script src="shared/js/firebase-init.js"></script>
     
     <!-- Font Awesome -->
     <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
@@ -210,6 +234,7 @@
 
     <!-- Scripts -->
     <script src="shared/js/firebase-config.js"></script>
+    <script src="shared/js/firebase-unified.js"></script>
     <script src="public/js/app-core.js"></script>
     <script src="shared/js/security-core.js"></script>
     <script src="public/js/utils.js"></script>
@@ -219,8 +244,32 @@
     <script>
         // تخصيص لصفحة تسجيل الدخول المستقلة
         window.addEventListener('firebase-ready', () => {
-            if (typeof initializeAppSafely === 'function') initializeAppSafely();
-            // تعديل دالة showMainApp لتوجه المستخدم للرئيسية بدلاً من إظهار الحاوية
+            // تهيئة Firebase عبر app-core.js لضمان توحيد الإعدادات والجلسات
+            if (typeof initializeFirebaseApp === 'function') {
+                const instance = initializeFirebaseApp();
+                if (instance) {
+                    window.auth = instance.auth;
+                    window.db = instance.db;
+                    window.storage = instance.storage;
+                }
+            }
+
+            // مراقبة حالة المصادقة بشكل غير متزامن
+            if (window.firebaseModules && window.auth) {
+                window.firebaseModules.onAuthStateChanged(window.auth, (user) => {
+                    if (user) {
+                        console.log("User is logged in, redirecting to index.html");
+                        window.location.href = 'index.html';
+                    } else {
+                        console.log("No user session found on login page");
+                        forceHideInitialLoader();
+                    }
+                });
+            } else {
+                forceHideInitialLoader();
+            }
+            
+            // تعديل دالة showMainApp لتوجه المستخدم للرئيسية
             window.showMainApp = () => {
                 window.location.href = 'index.html';
             };
@@ -232,18 +281,20 @@
                     if (typeof handleLogin === 'function') handleLogin();
                 });
             }
-
-            // إخفاء اللودر بعد التحميل
-            setTimeout(() => {
-                const loader = document.getElementById('initialLoader');
-                if (loader) loader.style.opacity = '0';
-                setTimeout(() => loader.style.display = 'none', 500);
-            }, 1000);
         });
+
+        function forceHideInitialLoader() {
+            const loader = document.getElementById('initialLoader');
+            if (loader) {
+                loader.style.opacity = '0';
+                setTimeout(() => loader.style.display = 'none', 500);
+            }
+        }
 
         // التأكد من بقاء المستخدم في هذه الصفحة إذا لم يسجل دخول
         window.showAuthScreen = () => {
             console.log("User is on login page");
+            forceHideInitialLoader();
         };
     </script>
 </body>

@@ -14,21 +14,59 @@
     <!-- Firebase Modular SDK -->
     <script type="module">
         import { initializeApp } from "https://www.gstatic.com/firebasejs/10.7.1/firebase-app.js";
-        import { getAuth, onAuthStateChanged, GoogleAuthProvider, signInWithPopup, signInWithEmailAndPassword, createUserWithEmailAndPassword, signOut, updateProfile } from "https://www.gstatic.com/firebasejs/10.7.1/firebase-auth.js";
+        import { getAuth, onAuthStateChanged, GoogleAuthProvider, signInWithPopup, signInWithEmailAndPassword, createUserWithEmailAndPassword, signOut, updateProfile, setPersistence, browserLocalPersistence } from "https://www.gstatic.com/firebasejs/10.7.1/firebase-auth.js";
         import { getFirestore, doc, collection, getDoc, getDocs, setDoc, updateDoc, query, where, orderBy, serverTimestamp, deleteDoc, addDoc, increment, limit, startAfter, onSnapshot } from "https://www.gstatic.com/firebasejs/10.7.1/firebase-firestore.js";
         import { getStorage, ref, uploadBytes, getDownloadURL, uploadBytesResumable } from "https://www.gstatic.com/firebasejs/10.7.1/firebase-storage.js";
 
         window.firebaseModules = { 
-            initializeApp, getAuth, onAuthStateChanged, GoogleAuthProvider, signInWithPopup, 
-            signInWithEmailAndPassword, createUserWithEmailAndPassword, signOut, updateProfile,
-            getFirestore, doc, collection, getDoc, getDocs, setDoc, updateDoc, deleteDoc, addDoc,
-            query, where, orderBy, serverTimestamp, increment, limit, startAfter, onSnapshot,
-            getStorage, ref, uploadBytes, getDownloadURL, uploadBytesResumable
+            initializeApp, 
+            getAuth, 
+            onAuthStateChanged, 
+            GoogleAuthProvider, 
+            signInWithPopup, 
+            signInWithEmailAndPassword, 
+            createUserWithEmailAndPassword, 
+            signOut,
+            updateProfile,
+            setPersistence,
+            browserLocalPersistence,
+            getFirestore,
+            doc,
+            collection,
+            getDoc,
+            getDocs,
+            setDoc,
+            updateDoc,
+            deleteDoc,
+            addDoc,
+            query,
+            where,
+            orderBy,
+            serverTimestamp,
+            increment,
+            limit,
+            startAfter,
+            onSnapshot,
+            getStorage,
+            ref,
+            uploadBytes,
+            getDownloadURL,
+            uploadBytesResumable
         };
         console.log("✅ Firebase Modules Loaded");
+        
+        // تهيئة Firebase فوراً عند تحميل الوحدات لضمان عدم تأخر الجلسة
+        if (typeof window.initializeFirebaseApp === 'function') {
+            const instance = window.initializeFirebaseApp();
+            if (instance) {
+                window.auth = instance.auth;
+                window.db = instance.db;
+                window.storage = instance.storage;
+            }
+        }
+        
         window.dispatchEvent(new CustomEvent('firebase-ready'));
     </script>
-    <script src="shared/js/firebase-init.js"></script>
     
     <!-- Font Awesome -->
     <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
@@ -37,8 +75,8 @@
     <link href="https://fonts.googleapis.com/css2?family=Cairo:wght@300;400;500;600;700;800&display=swap" rel="stylesheet">
     
     <!-- CSS -->
-    <link rel="stylesheet" href="public/css/style.css?v=110">
-    <link rel="stylesheet" href="shared/css/css-security.css?v=110">
+    <link rel="stylesheet" href="public/css/style.css?v=100">
+    <link rel="stylesheet" href="shared/css/css-security.css?v=100">
     
     <style>
         /* شاشة التحميل الأولية */
@@ -1354,21 +1392,22 @@
     <div id="toastContainer"></div>
     
     <!-- JavaScript Files -->
-    <script src="shared/js/security-core.js?v=110"></script>
-    <script src="shared/js/firebase-config.js?v=110"></script>
-    <script src="shared/js/firebase-messaging.js?v=110"></script>
-    <script src="public/js/notifications-system.js?v=110"></script>
-    <script src="public/js/app-core.js?v=110"></script>
-    <script src="public/js/auth-system.js?v=110"></script>
-    <script src="public/js/products-system.js?v=110"></script>
-    <script src="public/js/image-viewer.js?v=110"></script>
-    <script src="public/js/categories-system.js?v=110"></script>
-    <script src="public/js/cart-system.js?v=110"></script>
-    <script src="public/js/orders-system.js?v=110"></script>
-    <script src="public/js/checkout-system.js?v=110"></script>
-    <script src="public/js/profile-system.js?v=110"></script>
-    <script src="public/js/utils.js?v=110"></script>
-    <script src="public/js/main.js?v=110"></script>
+    <script src="shared/js/security-core.js?v=100"></script>
+    <script src="shared/js/firebase-config.js?v=100"></script>
+    <script src="shared/js/firebase-unified.js?v=100"></script>
+    <script src="shared/js/firebase-messaging.js?v=100"></script>
+    <script src="public/js/notifications-system.js?v=100"></script>
+    <script src="public/js/app-core.js?v=100"></script>
+    <script src="public/js/auth-system.js?v=100"></script>
+    <script src="public/js/products-system.js?v=100"></script>
+    <script src="public/js/image-viewer.js?v=100"></script>
+    <script src="public/js/categories-system.js?v=100"></script>
+    <script src="public/js/cart-system.js?v=100"></script>
+    <script src="public/js/orders-system.js?v=100"></script>
+    <script src="public/js/checkout-system.js?v=100"></script>
+    <script src="public/js/profile-system.js?v=100"></script>
+    <script src="public/js/utils.js?v=100"></script>
+    <script src="public/js/main.js?v=100"></script>
     
     <!-- تهيئة تحسينات الأداء بعد تحميل الصفحة -->
     <script>
