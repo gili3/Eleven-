@@ -424,9 +424,20 @@ async function saveSettings(event) {
 }
 
 /**
- * رفع ملف إلى Firebase Storage
+ * رفع ملف إلى Firebase Storage مع التحقق من الصورة
  */
 async function uploadFile(file, path) {
+    // التحقق من الصورة باستخدام نظام التحقق المحسّن
+    if (window.uploadImageWithValidation) {
+        try {
+            return await window.uploadImageWithValidation(file, path);
+        } catch (error) {
+            console.error('❌ خطأ في التحقق من الصورة:', error);
+            throw error;
+        }
+    }
+    
+    // الطريقة القديمة كبديل
     const { storage, firebaseModules } = window;
     const fileName = `${path}_${Date.now()}_${file.name.replace(/[^a-zA-Z0-9.]/g, '_')}`;
     const storageRef = firebaseModules.ref(storage, fileName);
@@ -453,21 +464,33 @@ function getChecked(id) {
 }
 
 /**
- * معاينة الصورة قبل الرفع
+ * معاينة الصورة قبل الرفع مع التحقق الصارم
  */
 function previewImage(event, previewId) {
-    const file = event.target.files[0];
-    if (file) {
-        const reader = new FileReader();
-        reader.onload = (e) => {
-            const preview = document.getElementById(previewId);
-            if (preview) {
-                preview.src = e.target.result;
-                preview.style.display = 'block';
-            }
-        };
-        reader.readAsDataURL(file);
+    if (window.previewImageWithValidation) {
+        window.previewImageWithValidation(event, previewId);
+    } else {
+        const file = event.target.files[0];
+        if (file) {
+            const reader = new FileReader();
+            reader.onload = (e) => {
+                const preview = document.getElementById(previewId);
+                if (preview) {
+                    preview.src = e.target.result;
+                    preview.style.display = 'block';
+                }
+            };
+            reader.readAsDataURL(file);
+        }
     }
+}
+
+function previewLogo(event) {
+    previewImage(event, 'logoPreview');
+}
+
+function previewFavicon(event) {
+    previewImage(event, 'faviconPreview');
 }
 
 /**

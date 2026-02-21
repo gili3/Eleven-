@@ -1,5 +1,5 @@
 /**
- * messages.js - قسم الرسائل والتقييمات والفئات (نسخة محسنة مع التحميل بالتمرير والبطاقات المصغرة)
+ * messages.js - قسم الرسائل والتقييمات والفئات (نسخة محسنة أمنياً)
  */
 
 let allMessages = [];
@@ -95,6 +95,20 @@ function setupMessagesInfiniteScroll() {
     messagesObserver.observe(sentinel);
 }
 
+/**
+ * دالة آمنة لتنقية النصوص قبل العرض
+ */
+function escapeHTML(text) {
+    const map = {
+        '&': '&amp;',
+        '<': '&lt;',
+        '>': '&gt;',
+        '"': '&quot;',
+        "'": '&#039;'
+    };
+    return text.replace(/[&<>"']/g, m => map[m]);
+}
+
 function displayMessages(append = false) {
     const tbody = document.getElementById('messagesBody');
     if (!tbody) return;
@@ -104,11 +118,18 @@ function displayMessages(append = false) {
         return;
     }
     
-    tbody.innerHTML = allMessages.map(msg => `
+    tbody.innerHTML = allMessages.map(msg => {
+        // تنقية جميع البيانات قبل العرض
+        const safeName = escapeHTML(msg.name || '---');
+        const safeEmail = escapeHTML(msg.email || '---');
+        const safeSubject = escapeHTML(msg.subject || '---');
+        const safeId = escapeHTML(msg.id);
+        
+        return `
         <tr class="compact-row">
-            <td data-label="الاسم">${msg.name || '---'}</td>
-            <td data-label="البريد">${msg.email || '---'}</td>
-            <td data-label="الموضوع">${msg.subject || '---'}</td>
+            <td data-label="الاسم">${safeName}</td>
+            <td data-label="البريد">${safeEmail}</td>
+            <td data-label="الموضوع">${safeSubject}</td>
             <td data-label="الحالة">
                 <span class="badge badge-${window.adminUtils.getStatusColor(msg.status || 'unread')}" style="padding: 2px 8px; font-size: 10px;">
                     ${window.adminUtils.getStatusText(msg.status || 'unread')}
@@ -117,19 +138,20 @@ function displayMessages(append = false) {
             <td data-label="التاريخ">${window.adminUtils.formatDate(msg.createdAt)}</td>
             <td data-label="الإجراءات">
                 <div class="action-buttons-compact">
-                    <button class="btn btn-sm btn-info" onclick="viewMessage('${msg.id}')" title="عرض">
+                    <button class="btn btn-sm btn-info" onclick="viewMessage('${safeId}')" title="عرض">
                         <i class="fas fa-eye"></i>
                     </button>
-                    <button class="btn btn-sm btn-primary" onclick="replyMessage('${msg.id}')" title="رد">
+                    <button class="btn btn-sm btn-primary" onclick="replyMessage('${safeId}')" title="رد">
                         <i class="fas fa-reply"></i>
                     </button>
-                    <button class="btn btn-sm btn-danger" onclick="deleteMessage('${msg.id}')" title="حذف">
+                    <button class="btn btn-sm btn-danger" onclick="deleteMessage('${safeId}')" title="حذف">
                         <i class="fas fa-trash"></i>
                     </button>
                 </div>
             </td>
         </tr>
-    `).join('');
+        `;
+    }).join('');
 }
 
 // --- إدارة التقييمات ---
@@ -218,7 +240,12 @@ function displayReviews(append = false) {
         return;
     }
     
-    tbody.innerHTML = allReviews.map(rev => `
+    tbody.innerHTML = allReviews.map(rev => {
+        // تنقية البيانات قبل العرض
+        const safeComment = escapeHTML(rev.comment || '---');
+        const safeId = escapeHTML(rev.id);
+        
+        return `
         <tr class="compact-row">
             <td data-label="المنتج">${window.getProductName(rev.productId)}</td>
             <td data-label="المستخدم">${window.getUserName(rev.userId)}</td>
@@ -227,7 +254,7 @@ function displayReviews(append = false) {
                     ${'<i class="fas fa-star"></i>'.repeat(rev.rating)}${'<i class="far fa-star"></i>'.repeat(5 - rev.rating)}
                 </div>
             </td>
-            <td data-label="التعليق" style="max-width: 200px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap;">${rev.comment || '---'}</td>
+            <td data-label="التعليق" style="max-width: 200px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap;">${safeComment}</td>
             <td data-label="الحالة">
                 <span class="badge badge-${rev.status === 'approved' ? 'success' : (rev.status === 'rejected' ? 'danger' : 'warning')}" style="padding: 2px 8px; font-size: 10px;">
                     ${rev.status === 'approved' ? 'مقبول' : (rev.status === 'rejected' ? 'مرفوض' : 'معلق')}
@@ -236,13 +263,14 @@ function displayReviews(append = false) {
             <td data-label="التاريخ">${window.adminUtils.formatDate(rev.createdAt)}</td>
             <td data-label="الإجراءات">
                 <div class="action-buttons-compact">
-                    <button class="btn btn-sm btn-success" onclick="updateReviewStatus('${rev.id}', 'approved')" title="قبول"><i class="fas fa-check"></i></button>
-                    <button class="btn btn-sm btn-danger" onclick="updateReviewStatus('${rev.id}', 'rejected')" title="رفض"><i class="fas fa-times"></i></button>
-                    <button class="btn btn-sm btn-danger" onclick="deleteReview('${rev.id}')" title="حذف"><i class="fas fa-trash"></i></button>
+                    <button class="btn btn-sm btn-success" onclick="updateReviewStatus('${safeId}', 'approved')" title="قبول"><i class="fas fa-check"></i></button>
+                    <button class="btn btn-sm btn-danger" onclick="updateReviewStatus('${safeId}', 'rejected')" title="رفض"><i class="fas fa-times"></i></button>
+                    <button class="btn btn-sm btn-danger" onclick="deleteReview('${safeId}')" title="حذف"><i class="fas fa-trash"></i></button>
                 </div>
             </td>
         </tr>
-    `).join('');
+        `;
+    }).join('');
 }
 
 // --- إدارة الفئات ---
@@ -277,86 +305,26 @@ function displayCategories() {
         return;
     }
     
-    tbody.innerHTML = allCategories.map(cat => `
+    tbody.innerHTML = allCategories.map(cat => {
+        // تنقية البيانات قبل العرض
+        const safeName = escapeHTML(cat.name || '');
+        const safeSlug = escapeHTML(cat.slug || '---');
+        const safeId = escapeHTML(cat.id);
+        const safeImage = escapeHTML(cat.image || 'https://via.placeholder.com/30');
+        
+        return `
         <tr class="compact-row">
-            <td data-label="الصورة"><img src="${cat.image || 'https://via.placeholder.com/30'}" style="width: 30px; height: 30px; border-radius: 4px; object-fit: cover;"></td>
-            <td data-label="الاسم">${cat.name}</td>
-            <td data-label="الاسم البرمجي">${cat.slug || '---'}</td>
+            <td data-label="الصورة"><img src="${safeImage}" style="width: 30px; height: 30px; border-radius: 4px; object-fit: cover;" onerror="this.src='https://via.placeholder.com/30'"></td>
+            <td data-label="الاسم">${safeName}</td>
+            <td data-label="الاسم البرمجي">${safeSlug}</td>
             <td data-label="الترتيب">${cat.order || 0}</td>
             <td data-label="الإجراءات">
                 <div class="action-buttons-compact">
-                    <button class="btn btn-sm btn-primary" onclick="editCategory('${cat.id}')" title="تعديل"><i class="fas fa-edit"></i></button>
-                    <button class="btn btn-sm btn-danger" onclick="deleteCategory('${cat.id}')" title="حذف"><i class="fas fa-trash"></i></button>
+                    <button class="btn btn-sm btn-primary" onclick="editCategory('${safeId}')" title="تعديل"><i class="fas fa-edit"></i></button>
+                    <button class="btn btn-sm btn-danger" onclick="deleteCategory('${safeId}')" title="حذف"><i class="fas fa-trash"></i></button>
                 </div>
             </td>
         </tr>
-    `).join('');
+        `;
+    }).join('');
 }
-
-// الدوال المساعدة (viewMessage, replyMessage, sendReply, deleteMessage, updateReviewStatus, deleteReview, editCategory, deleteCategory) تبقى كما هي مع تحسينات طفيفة في الواجهة
-// سأكتفي بتصدير الدوال الأساسية
-
-window.loadMessages = loadMessages;
-window.loadReviews = loadReviews;
-window.loadCategories = loadCategories;
-window.displayMessages = displayMessages;
-window.displayReviews = displayReviews;
-window.displayCategories = displayCategories;
-
-// إضافة الدوال المفقودة من الملف الأصلي لضمان عمل الأزرار
-window.viewMessage = function(id) {
-    const msg = allMessages.find(m => m.id === id);
-    if (!msg) return;
-    
-    const modal = document.createElement('div');
-    modal.className = 'modal-overlay active';
-    modal.id = 'messageModal';
-    modal.innerHTML = `
-        <div class="modal-content" style="max-width: 500px;">
-            <div class="modal-header">
-                <h2>رسالة من ${msg.name}</h2>
-                <button class="modal-close" onclick="window.adminUtils.closeModal('messageModal')">&times;</button>
-            </div>
-            <div style="padding: 20px;">
-                <p><strong>البريد:</strong> ${msg.email || '---'}</p>
-                <p><strong>الموضوع:</strong> ${msg.subject || '---'}</p>
-                <div style="background: #f8f9fa; padding: 15px; border-radius: 8px; margin: 10px 0; white-space: pre-wrap; font-size: 14px;">${msg.message || ''}</div>
-                <p><strong>التاريخ:</strong> ${window.adminUtils.formatDate(msg.createdAt)}</p>
-            </div>
-            <div class="modal-footer" style="display: flex; justify-content: center; gap: 10px; padding: 15px;">
-                <button class="btn btn-primary" onclick="window.adminUtils.closeModal('messageModal'); replyMessage('${msg.id}')">رد</button>
-                <button class="btn btn-secondary" onclick="window.adminUtils.closeModal('messageModal')">إغلاق</button>
-            </div>
-        </div>
-    `;
-    document.body.appendChild(modal);
-};
-
-window.deleteMessage = async function(id) {
-    if (!confirm('هل أنت متأكد من حذف هذه الرسالة؟')) return;
-    try {
-        const { db, firebaseModules } = window;
-        await firebaseModules.deleteDoc(firebaseModules.doc(db, 'messages', id));
-        window.adminUtils.showToast('✅ تم حذف الرسالة', 'success');
-        loadMessages();
-    } catch (error) { console.error(error); }
-};
-
-window.updateReviewStatus = async function(id, status) {
-    try {
-        const { db, firebaseModules } = window;
-        await firebaseModules.updateDoc(firebaseModules.doc(db, 'reviews', id), { status });
-        window.adminUtils.showToast('✅ تم تحديث حالة التقييم', 'success');
-        loadReviews();
-    } catch (error) { console.error(error); }
-};
-
-window.deleteReview = async function(id) {
-    if (!confirm('هل أنت متأكد من حذف هذا التقييم؟')) return;
-    try {
-        const { db, firebaseModules } = window;
-        await firebaseModules.deleteDoc(firebaseModules.doc(db, 'reviews', id));
-        window.adminUtils.showToast('✅ تم حذف التقييم', 'success');
-        loadReviews();
-    } catch (error) { console.error(error); }
-};
