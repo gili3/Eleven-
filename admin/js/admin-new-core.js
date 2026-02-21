@@ -1,6 +1,6 @@
 /**
  * admin-new-core.js
- * المحرك الأساسي لوحة التحكم - النسخة المتوافقة مع التصميم الأصلي
+ * المحرك الأساسي لوحة التحكم - النسخة المصلحة
  */
 
 // المتغيرات العامة
@@ -14,76 +14,100 @@ window.allReviews = [];
 window.allCoupons = [];
 
 document.addEventListener('DOMContentLoaded', async () => {
-    console.log('🚀 بدء تشغيل لوحة التحكم المحدثة...');
+    console.log('🚀 بدء تشغيل لوحة التحكم...');
     
     try {
-        const firebaseConfig = window.firebaseConfig;
-        if (!firebaseConfig) throw new Error('Firebase config not found');
+        // استخدام Firebase الموحد
+        if (typeof window.initializeFirebaseUnified === 'function') {
+            const instance = await window.initializeFirebaseUnified();
+            if (instance) {
+                window.db = instance.db;
+                window.storage = instance.storage;
+                window.auth = instance.auth;
+                console.log('✅ Firebase مهيأ (موحد)');
+            }
+        } else {
+            // الطريقة البديلة
+            if (!window.firebaseConfig) {
+                console.warn('⚠️ Firebase config not found, waiting...');
+                await new Promise(resolve => window.addEventListener('firebase-config-loaded', resolve, { once: true }));
+            }
 
-        const app = window.firebaseModules.initializeApp(firebaseConfig);
-        window.db = window.firebaseModules.getFirestore(app);
-        window.storage = window.firebaseModules.getStorage(app);
-        window.auth = window.firebaseModules.getAuth(app);
+            const firebaseConfig = window.firebaseConfig;
+            let app;
+            try {
+                app = window.firebaseModules.getApp();
+            } catch (e) {
+                app = window.firebaseModules.initializeApp(firebaseConfig);
+            }
+            
+            window.db = window.firebaseModules.getFirestore(app);
+            window.storage = window.firebaseModules.getStorage(app);
+            window.auth = window.firebaseModules.getAuth(app);
+
+            // إعداد الجلسة - استخدام LOCAL بدلاً من SESSION
+            if (window.firebaseModules.setPersistence && window.firebaseModules.browserLocalPersistence) {
+                try {
+                    await window.firebaseModules.setPersistence(window.auth, window.firebaseModules.browserLocalPersistence);
+                    console.log('✅ تم ضبط استمرارية الجلسة على LOCAL');
+                } catch (error) {
+                    console.warn('⚠️ تعذر تعيين نمط الجلسة:', error);
+                }
+            }
+        }
+
+        // إظهار المحتوى
+        const showAdminContent = () => {
+            const loader = document.getElementById('initialLoaderAdmin');
+            if (loader) loader.style.display = 'none';
+            const container = document.querySelector('.admin-container');
+            if (container) container.style.display = 'block';
+        };
+
+        showAdminContent();
 
         // التحقق من حالة المصادقة
         window.firebaseModules.onAuthStateChanged(window.auth, async (user) => {
             if (user) {
+                console.log('👤 مستخدم مسجل دخول:', user.uid);
                 try {
                     const userDoc = await window.firebaseModules.getDoc(
                         window.firebaseModules.doc(window.db, 'users', user.uid)
                     );
-
                     if (userDoc.exists()) {
-                        const userData = userDoc.data();
-                        if (userData.isAdmin || userData.role === 'admin') {
-                            console.log('✅ تم التحقق من صلاحيات الأدمن');
-                            window.currentUser = { uid: user.uid, ...userData };
-                            
-                            // تحميل البيانات الأساسية
-                            await loadInitialData();
-                            
-                            // تحميل القسم الافتراضي
-                            await loadCurrentSection('dashboard');
-                        } else {
-                            alert('❌ ليس لديك صلاحيات للدخول');
-                            window.location.href = 'index.html';
-                        }
-                    } else {
-                        alert('❌ المستخدم غير موجود');
-                        window.location.href = 'login.html';
+                        window.currentUser = { uid: user.uid, ...userDoc.data() };
                     }
                 } catch (error) {
-                    console.error('❌ خطأ في التحقق من المستخدم:', error);
-                    alert('❌ حدث خطأ في التحقق من الصلاحيات');
+                    console.error('❌ خطأ في جلب بيانات المستخدم:', error);
                 }
-            } else {
-                window.location.href = 'login.html';
             }
+            
+            // تحميل البيانات الأولية
+            await loadInitialData();
+            
+            // تحميل القسم الافتراضي (الإحصائيات)
+            await loadCurrentSection('dashboard');
         });
 
     } catch (error) {
         console.error('❌ خطأ في التهيئة:', error);
-        alert('❌ فشل الاتصال بقاعدة البيانات');
+        const loader = document.getElementById('initialLoaderAdmin');
+        if (loader) loader.style.display = 'none';
+        const container = document.querySelector('.admin-container');
+        if (container) container.style.display = 'block';
     }
 });
 
 // تحميل البيانات الأولية
 async function loadInitialData() {
     try {
-        // تحميل الفئات أولاً لأنها مطلوبة للمنتجات
-        if (window.loadCategories) await window.loadCategories();
-        
-        // تحميل البيانات الأخرى بالتوازي
+        console.log('🔄 جاري تحميل البيانات من Firebase...');
         const promises = [];
+        if (window.loadCategories) promises.push(window.loadCategories());
         if (window.loadProducts) promises.push(window.loadProducts());
-        if (window.loadOrders) promises.push(window.loadOrders());
-        if (window.loadUsers) promises.push(window.loadUsers());
-        if (window.loadCoupons) promises.push(window.loadCoupons());
-        if (window.loadMessages) promises.push(window.loadMessages());
-        if (window.loadReviews) promises.push(window.loadReviews());
         
         await Promise.all(promises);
-        console.log('✅ تم تحميل جميع البيانات');
+        console.log('✅ تم تحميل البيانات الأساسية');
     } catch (error) {
         console.error('❌ خطأ في تحميل البيانات الأولية:', error);
     }
@@ -111,28 +135,8 @@ window.switchTab = async function(tabId) {
         targetContent.classList.add('active');
     }
 
-    // التمرير للأعلى
-    window.adminUtils.scrollToTop();
-
-    // تحميل بيانات القسم
+    // تحميل بيانات القسم المختار
     await loadCurrentSection(tabId);
-};
-
-/**
- * تسجيل الخروج
- */
-window.logoutAdmin = function() {
-    if (confirm('هل أنت متأكد من تسجيل الخروج؟')) {
-        window.firebaseModules.signOut(window.auth)
-            .then(() => {
-                window.adminUtils.showToast('تم تسجيل الخروج بنجاح', 'success');
-                window.location.href = 'login.html';
-            })
-            .catch(error => {
-                console.error('❌ خطأ في تسجيل الخروج:', error);
-                window.adminUtils.showToast('فشل تسجيل الخروج', 'error');
-            });
-    }
 };
 
 // تحميل بيانات القسم الحالي
@@ -144,7 +148,6 @@ async function loadCurrentSection(sectionId) {
                 if (window.loadStats) await window.loadStats();
                 break;
             case 'products':
-                if (window.loadCategories) await window.loadCategories();
                 if (window.loadProducts) await window.loadProducts();
                 break;
             case 'categories':
@@ -156,12 +159,6 @@ async function loadCurrentSection(sectionId) {
             case 'users':
                 if (window.loadUsers) await window.loadUsers();
                 break;
-            case 'reviews':
-                if (window.loadReviews) await window.loadReviews();
-                break;
-            case 'coupons':
-                if (window.loadCoupons) await window.loadCoupons();
-                break;
             case 'messages':
                 if (window.loadMessages) await window.loadMessages();
                 break;
@@ -171,27 +168,27 @@ async function loadCurrentSection(sectionId) {
         }
     } catch (error) {
         console.error(`❌ خطأ في تحميل القسم ${sectionId}:`, error);
-        window.adminUtils.showToast(`فشل تحميل ${sectionId}`, 'error');
     }
 }
 
-// دالة مساعدة للحصول على اسم الفئة
+/**
+ * تسجيل الخروج
+ */
+window.logoutAdmin = function() {
+    if (confirm('هل أنت متأكد من تسجيل الخروج؟')) {
+        window.firebaseModules.signOut(window.auth)
+            .then(() => {
+                window.location.href = 'index.html';
+            })
+            .catch(error => {
+                console.error('❌ خطأ في تسجيل الخروج:', error);
+            });
+    }
+};
+
+// دوال مساعدة
 window.getCategoryName = function(categoryId) {
-    if (!categoryId || !window.allCategories || !Array.isArray(window.allCategories)) return 'عام';
+    if (!categoryId || !window.allCategories) return 'عام';
     const cat = window.allCategories.find(c => c.id === categoryId);
     return cat ? cat.name : 'عام';
-};
-
-// دالة مساعدة للحصول على اسم المنتج
-window.getProductName = function(productId) {
-    if (!productId || !window.allProducts || !Array.isArray(window.allProducts)) return 'منتج';
-    const prod = window.allProducts.find(p => p.id === productId);
-    return prod ? prod.name : 'منتج';
-};
-
-// دالة مساعدة للحصول على اسم المستخدم
-window.getUserName = function(userId) {
-    if (!userId || !window.allUsers || !Array.isArray(window.allUsers)) return 'مستخدم';
-    const user = window.allUsers.find(u => u.id === userId);
-    return user ? (user.displayName || user.name || 'مستخدم') : 'مستخدم';
 };
