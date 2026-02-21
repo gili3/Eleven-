@@ -1,13 +1,59 @@
 // auth-system.js - نظام المصادقة والمستخدمين (نسخة محسنة أمنياً)
 // ======================== معالجة حالة المصادقة ========================
 
-// دوال مساعدة للتشفير وفك التشفير
+// دوال مساعدة للتشفير وفك التشفير (استخدام Web Crypto API)
 const AuthSecurity = {
-    // تشفير البيانات قبل التخزين
-    encryptData: function(data) {
+    _key: null,
+
+    // جلب أو توليد مفتاح التشفير
+    async getKey() {
+        if (this._key) return this._key;
         try {
-            const jsonStr = JSON.stringify(data);
-            return btoa(encodeURIComponent(jsonStr));
+            let keyData = sessionStorage.getItem('auth_encryption_key');
+            if (keyData) {
+                const jwk = JSON.parse(keyData);
+                this._key = await window.crypto.subtle.importKey(
+                    'jwk',
+                    jwk,
+                    { name: 'AES-GCM' },
+                    true,
+                    ['encrypt', 'decrypt']
+                );
+            } else {
+                this._key = await window.crypto.subtle.generateKey(
+                    { name: 'AES-GCM', length: 256 },
+                    true,
+                    ['encrypt', 'decrypt']
+                );
+                const jwk = await window.crypto.subtle.exportKey('jwk', this._key);
+                sessionStorage.setItem('auth_encryption_key', JSON.stringify(jwk));
+            }
+            return this._key;
+        } catch (error) {
+            console.error('❌ خطأ في إدارة مفتاح التشفير:', error);
+            throw error;
+        }
+    },
+
+    // تشفير البيانات قبل التخزين
+    async encryptData(data) {
+        try {
+            const key = await this.getKey();
+            const text = JSON.stringify(data);
+            const encoded = new TextEncoder().encode(text);
+            const iv = window.crypto.getRandomValues(new Uint8Array(12));
+            
+            const ciphertext = await window.crypto.subtle.encrypt(
+                { name: 'AES-GCM', iv: iv },
+                key,
+                encoded
+            );
+            
+            const combined = new Uint8Array(iv.length + ciphertext.byteLength);
+            combined.set(iv, 0);
+            combined.set(new Uint8Array(ciphertext), iv.length);
+            
+            return btoa(String.fromCharCode.apply(null, combined));
         } catch (e) {
             console.error('❌ خطأ في تشفير البيانات:', e);
             return null;
@@ -15,10 +61,21 @@ const AuthSecurity = {
     },
     
     // فك تشفير البيانات بعد الاسترجاع
-    decryptData: function(encryptedData) {
+    async decryptData(encryptedData) {
         try {
-            const jsonStr = decodeURIComponent(atob(encryptedData));
-            return JSON.parse(jsonStr);
+            const key = await this.getKey();
+            const combined = new Uint8Array(atob(encryptedData).split('').map(c => c.charCodeAt(0)));
+            const iv = combined.slice(0, 12);
+            const ciphertext = combined.slice(12);
+
+            const decrypted = await window.crypto.subtle.decrypt(
+                { name: 'AES-GCM', iv: iv },
+                key,
+                ciphertext
+            );
+
+            const decoded = new TextDecoder().decode(decrypted);
+            return JSON.parse(decoded);
         } catch (e) {
             console.error('❌ خطأ في فك تشفير البيانات:', e);
             return null;
@@ -49,20 +106,30 @@ const AuthSecurity = {
         return cleaned;
     },
     
-    // حفظ بيانات المستخدم بشكل آمن
-    saveUserData: function(userData, useSession = false) {
+    // حفظ بيانات المستخدم بشكل آمن (يتم حفظها في Firebase بدلاً من localStorage فقط)
+    async saveUserData(userData, useSession = false) {
         const sanitized = this.sanitizeUserData(userData);
         if (!sanitized) return false;
         
-        const encrypted = this.encryptData(sanitized);
-        if (!encrypted) return false;
+         const encrypted = await this.encryptData(sanitized);
+            if (!encrypted) return false;;
         
         try {
+            // حفظ في sessionStorage بدلاً من localStorage (أكثر أماناً)
             if (useSession) {
                 sessionStorage.setItem('_usr', encrypted);
             } else {
-                localStorage.setItem('_usr', encrypted);
+                // استخدام sessionStorage بشكل افتراضي لأنه ينتهي عند إغلاق المتصفح
+                sessionStorage.setItem('_usr', encrypted);
             }
+            
+            // حفظ في Firebase أيضاً للتزامن عبر الأجهزة
+            if (window.currentUser && !window.currentUser.isGuest && window.db) {
+                this.syncUserDataToFirebase(sanitized).catch(e => {
+                    console.warn('⚠️ تعذر مزامنة البيانات مع Firebase:', e);
+                });
+            }
+            
             return true;
         } catch (e) {
             console.error('❌ خطأ في حفظ البيانات:', e);
@@ -71,12 +138,13 @@ const AuthSecurity = {
     },
     
     // استرجاع بيانات المستخدم بشكل آمن
-    loadUserData: function() {
+    async loadUserData() {
         try {
-            const encrypted = localStorage.getItem('_usr') || sessionStorage.getItem('_usr');
+            // البحث في sessionStorage فقط (أكثر أماناً)
+            const encrypted = sessionStorage.getItem('_usr');
             if (!encrypted) return null;
             
-            const decrypted = this.decryptData(encrypted);
+            const decrypted = await this.decryptData(encrypted);
             if (!decrypted) return null;
             
             return this.sanitizeUserData(decrypted);
@@ -90,9 +158,37 @@ const AuthSecurity = {
     clearUserData: function() {
         localStorage.removeItem('_usr');
         sessionStorage.removeItem('_usr');
+        sessionStorage.removeItem('auth_encryption_key');
         // حذف البيانات القديمة غير المشفرة
         localStorage.removeItem('currentUser');
         sessionStorage.removeItem('currentUser');
+        this._key = null;
+    },
+    
+    // مزامنة بيانات المستخدم مع Firebase
+    syncUserDataToFirebase: async function(userData) {
+        try {
+            if (!window.currentUser || !window.currentUser.uid || window.currentUser.isGuest) {
+                return false;
+            }
+            
+            if (!window.firebaseModules || !window.db) {
+                console.warn('⚠️ Firebase غير متاح للمزامنة');
+                return false;
+            }
+            
+            const userRef = window.firebaseModules.doc(window.db, 'users', window.currentUser.uid);
+            await window.firebaseModules.setDoc(userRef, {
+                ...userData,
+                lastSyncedAt: window.firebaseModules.serverTimestamp()
+            }, { merge: true });
+            
+            console.log('✅ تم مزامنة بيانات المستخدم مع Firebase');
+            return true;
+        } catch (e) {
+            console.error('❌ خطأ في مزامنة البيانات مع Firebase:', e);
+            return false;
+        }
     }
 };
 
@@ -145,7 +241,7 @@ async function handleAuthStateChange(user) {
             if (typeof showToast === 'function') showToast(`مرحباً بعودتك ${currentUser.displayName || 'مستخدم'}!`, 'success');
         } else {
             // محاولة تحميل البيانات المشفرة أولاً
-            let userData = AuthSecurity.loadUserData();
+            let userData = await AuthSecurity.loadUserData();
             
             // إذا لم توجد بيانات مشفرة، نحاول البيانات القديمة ونشفرها
             if (!userData) {
@@ -156,7 +252,7 @@ async function handleAuthStateChange(user) {
                         // تنظيف وتشفير البيانات القديمة
                         userData = AuthSecurity.sanitizeUserData(userData);
                         if (userData) {
-                            AuthSecurity.saveUserData(userData);
+                            await AuthSecurity.saveUserData(userData);
                             // حذف البيانات القديمة
                             localStorage.removeItem('currentUser');
                             sessionStorage.removeItem('currentUser');
@@ -768,40 +864,54 @@ async function signOutUser() {
     console.log('🚪 تسجيل الخروج...');
     
     try {
-        if (isGuest) {
+        if (typeof isGuest !== 'undefined' && isGuest) {
             if (!confirm('سيتم فقدان سلة التسوق والطلبات. هل تريد المتابعة؟')) {
                 return;
             }
         }
         
-        if (!isGuest && auth) {
-            await window.firebaseModules.signOut(auth);
+        // مسح بيانات التخزين المحلي أولاً
+        if (typeof AuthSecurity !== 'undefined' && AuthSecurity.clearUserData) {
+            AuthSecurity.clearUserData();
         }
         
-        currentUser = null;
-        isGuest = false;
-        isAdmin = false;
-        cartItems = [];
-        favorites = [];
+        if (window.localStorage) {
+            localStorage.removeItem('userPhone');
+            localStorage.removeItem('userAddress');
+            localStorage.removeItem('_usr');
+            localStorage.removeItem('currentUser');
+        }
         
-        // حذف بيانات المستخدم المشفرة والقديمة
-        AuthSecurity.clearUserData();
+        // تسجيل الخروج من Firebase
+        if (typeof auth !== 'undefined' && auth && window.firebaseModules && window.firebaseModules.signOut) {
+            try {
+                await window.firebaseModules.signOut(auth);
+            } catch (e) {
+                console.error('Firebase signOut error:', e);
+            }
+        }
         
-        localStorage.removeItem('userPhone');
-        localStorage.removeItem('userAddress');
+        // تصفير المتغيرات العامة
+        if (typeof currentUser !== 'undefined') currentUser = null;
+        if (typeof isGuest !== 'undefined') isGuest = false;
+        if (typeof isAdmin !== 'undefined') isAdmin = false;
+        if (typeof cartItems !== 'undefined') cartItems = [];
+        if (typeof favorites !== 'undefined') favorites = [];
         
         if (window.authUnsubscribe) {
-            window.authUnsubscribe();
+            try { window.authUnsubscribe(); } catch(e) {}
         }
         
         // تصفير جميع حقول الإدخال في التطبيق
         const allInputs = document.querySelectorAll('input, textarea, select');
         allInputs.forEach(input => {
-            if (input.type === 'checkbox' || input.type === 'radio') {
-                input.checked = false;
-            } else {
-                input.value = '';
-            }
+            try {
+                if (input.type === 'checkbox' || input.type === 'radio') {
+                    input.checked = false;
+                } else {
+                    input.value = '';
+                }
+            } catch(e) {}
         });
 
         // تصفير بيانات الملف الشخصي في الواجهة
@@ -824,16 +934,23 @@ async function signOutUser() {
         
         if (typeof updateAdminButton === 'function') updateAdminButton();
         if (typeof updateCartCount === 'function') updateCartCount();
-        showAuthScreen();
+        
+        // التوجيه لصفحة تسجيل الدخول
+        if (window.location.pathname.includes('login.html')) {
+            window.location.reload();
+        } else {
+            window.location.href = 'login.html';
+        }
         
         // إعادة تحميل المنتجات لضمان عدم وجود بيانات معلقة
-        allProducts = [];
+        if (typeof allProducts !== 'undefined') allProducts = [];
         if (typeof displayProducts === 'function') displayProducts();
         
         if (typeof showToast === 'function') showToast('تم تسجيل الخروج بنجاح', 'success');
     } catch (error) {
         console.error('❌ خطأ في تسجيل الخروج:', error);
-        if (typeof showToast === 'function') showToast('حدث خطأ أثناء تسجيل الخروج', 'error');
+        // في حال حدوث أي خطأ، نوجه المستخدم لصفحة تسجيل الدخول كحل أخير
+        window.location.href = 'login.html';
     }
 }
 

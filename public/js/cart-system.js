@@ -467,6 +467,8 @@ function buyNowDirect(productId, quantity = 1) {
  * دالة مساعدة للحصول على مرجع Firebase
  */
 function getFirebaseReference() {
+    // استخدام Firebase الموحد أولاً
+    if (window.firebaseInstance && window.firebaseInstance.db) return window.firebaseInstance.db;
     if (window.firebaseDb) return window.firebaseDb;
     if (typeof getFirebaseInstance === 'function') {
         const instance = getFirebaseInstance();

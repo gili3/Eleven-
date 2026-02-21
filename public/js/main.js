@@ -36,12 +36,18 @@ async function initializeAppSafely() {
         return;
     }
     
-    if (!initializeFirebase()) {
+    // تهيئة Firebase بشكل غير متزامن
+    const firebaseReady = await initializeFirebaseApp();
+    if (!firebaseReady) {
         forceHideLoader();
         showAuthScreen();
         if (typeof showToast === 'function') showToast('حدث خطأ في الاتصال. يمكنك الدخول كضيف.', 'warning');
         return;
     }
+    
+    // تعيين مراجع Firebase العامة
+    auth = firebaseReady.auth;
+    db = firebaseReady.db;
     
     try {
         // تحميل البيانات الأساسية مع التخزين المؤقت

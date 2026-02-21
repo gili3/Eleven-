@@ -142,21 +142,58 @@ function getFirebaseConfig() {
     return Object.freeze(config);
 }
 
+// استخدام Firebase الموحد بدلاً من التهيئة المتعددة
 let firebaseApp = null, firebaseAuth = null, firebaseDb = null, firebaseStorage = null;
 
-function initializeFirebaseApp(appName = 'DefaultApp') {
+async function initializeFirebaseApp(appName = 'DefaultApp') {
     if (firebaseApp && appName === 'DefaultApp') {
         return { app: firebaseApp, auth: firebaseAuth, db: firebaseDb, storage: firebaseStorage };
     }
 
     try {
+        // استخدام Firebase الموحد
+        if (typeof window.initializeFirebaseUnified === 'function') {
+            const instance = await window.initializeFirebaseUnified();
+            if (instance) {
+                firebaseApp = instance.app;
+                firebaseAuth = instance.auth;
+                firebaseDb = instance.db;
+                firebaseStorage = instance.storage;
+                
+                window.firebaseDb = firebaseDb;
+                window.firebaseAuth = firebaseAuth;
+                
+                console.log(`✅ Firebase مهيأ (${appName}) - موحد`);
+                return { app: firebaseApp, auth: firebaseAuth, db: firebaseDb, storage: firebaseStorage };
+            }
+        }
+        
+        // الطريقة البديلة إذا لم يتم تحميل ملف Firebase الموحد
         if (!window.firebaseModules) {
-            console.warn('⚠️ Firebase SDK لم يتم تحميله بعد، سيتم المحاولة مرة أخرى...');
+            console.warn('⚠️ Firebase SDK لم يتم تحميله بعد');
             return null;
         }
+        
         const config = getFirebaseConfig();
-        const app = window.firebaseModules.initializeApp(config, appName);
+        let app;
+        try {
+            app = window.firebaseModules.getApp(appName);
+        } catch (e) {
+            app = window.firebaseModules.initializeApp(config, appName);
+        }
+        
         const auth = window.firebaseModules.getAuth(app);
+        
+        // ضبط استمرارية الجلسة لتكون دائمة (Local)
+        if (window.firebaseModules.setPersistence && window.firebaseModules.browserLocalPersistence) {
+            try {
+                await window.firebaseModules.setPersistence(auth, window.firebaseModules.browserLocalPersistence);
+                console.log('✅ تم ضبط استمرارية الجلسة على LOCAL');
+            } catch (err) {
+                console.warn('⚠️ Persistence Error:', err);
+            }
+        }
+
         const db = window.firebaseModules.getFirestore(app);
         const storage = window.firebaseModules.getStorage(app);
 
@@ -165,8 +202,8 @@ function initializeFirebaseApp(appName = 'DefaultApp') {
             firebaseAuth = auth; 
             firebaseDb = db; 
             firebaseStorage = storage;
-            window.firebaseDb = db; // ✅ تعيين المتغير العام
-            window.firebaseAuth = auth; // ✅ للاستخدام العام
+            window.firebaseDb = db;
+            window.firebaseAuth = auth;
         }
 
         console.log(`✅ Firebase مهيأ (${appName})`);
