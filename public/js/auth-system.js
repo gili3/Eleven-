@@ -88,7 +88,12 @@ const AuthSecurity = {
         
         // استخدام SecurityCore إذا كان متاحاً
         if (window.SecurityCore && typeof window.SecurityCore.sanitizeObject === 'function') {
-            return window.SecurityCore.sanitizeObject(userData);
+            try {
+                return window.SecurityCore.sanitizeObject(userData);
+            } catch (error) {
+                console.error('خطأ في تنظيف بيانات المستخدم:', error);
+                // المتابعة بالتنظيف الأساسي
+            }
         }
         
         // تنظيف أساسي إذا لم يكن SecurityCore متاحاً

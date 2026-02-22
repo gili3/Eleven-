@@ -297,15 +297,17 @@ function setupAppEventListeners() {
         'favoritesBtn': () => showSection('favorites'),
         'profileBtn': () => showSection('profile'),
         'logoutBtn': signOutUser,
-        'editProfileBtn': editProfile,
-        'saveProfileBtn': saveProfileChanges,
-        'clearCartBtn': clearCart
+        'editProfileBtn': (typeof editProfile === 'function') ? editProfile : null,
+        'saveProfileBtn': (typeof saveProfileChanges === 'function') ? saveProfileChanges : null,
+        'clearCartBtn': (typeof clearCart === 'function') ? clearCart : null
     };
     
     for (const [btnId, action] of Object.entries(buttons)) {
         const btn = document.getElementById(btnId);
-        if (btn) {
+        if (btn && action && typeof action === 'function') {
             btn.addEventListener('click', action);
+        } else if (btn && !action) {
+            console.warn(`تحذير: الدالة المرتبطة بـ ${btnId} غير معرفة بعد`);
         }
     }
     
