@@ -68,6 +68,12 @@ window.SecurityCore = {
             }
         };
 
+        // التحقق من أن doc.body موجود قبل الوصول إليه
+        if (!doc.body) {
+            console.warn('⚠️ تحذير: لم يتمكن DOMParser من إنشاء body صحيح');
+            return '';
+        }
+        
         walk(doc.body);
         return doc.body.innerHTML;
     },
@@ -80,7 +86,11 @@ window.SecurityCore = {
         if (obj === null || obj === undefined) return obj;
         
         if (typeof obj === 'string') {
-            return this.sanitizeHTML(obj);
+            // التحقق من أن sanitizeHTML موجودة ومعرفة
+            if (typeof this.sanitizeHTML === 'function') {
+                return this.sanitizeHTML(obj);
+            }
+            return obj; // إذا لم تكن موجودة، ارجع النص كما هو
         }
         
         if (typeof obj === 'number' || typeof obj === 'boolean') {
@@ -95,7 +105,7 @@ window.SecurityCore = {
             const cleanObj = {};
             for (const key in obj) {
                 if (Object.prototype.hasOwnProperty.call(obj, key)) {
-                    const cleanKey = this.sanitizeHTML(key);
+                    const cleanKey = (typeof this.sanitizeHTML === 'function') ? this.sanitizeHTML(key) : key;
                     cleanObj[cleanKey] = this.sanitizeObject(obj[key], depth + 1);
                 }
             }
