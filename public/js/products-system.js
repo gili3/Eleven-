@@ -447,7 +447,10 @@ async function loadHomeProducts(isNextPage = false) {
     try {
         const db = getFirebaseReference();
         if (!db || !window.firebaseModules) {
-            throw new Error('Firebase غير مهيأ');
+            console.warn('⚠️ تحذير: Firebase غير مهيأ بعد. سيتم إعادة المحاولة...');
+            // إعادة محاولة بعد وقت
+            setTimeout(() => loadHomeProducts(isNextPage), 500);
+            return;
         }
 
         const productsRef = window.firebaseModules.collection(db, "products");
@@ -862,20 +865,34 @@ function confirmBuyNow() {
     closeQuantityModal();
 }
 
-// ======================== تهيئة الصفحة الرئيسية (مُحسّن) ========================
+// ======================== تهيئة الصفحة الرئيسية (مُحسِّن) ========================
 
 function initializeHomePage() {
     console.log('🏠 تهيئة الصفحة الرئيسية...');
     
-    const homeGrid = document.getElementById('homeProductsGrid');
-    if (homeGrid && homeGrid.children.length === 0) {
-        loadHomeProducts(false);
+    try {
+        // التحقق من أن Firebase مهيأ قبل تحميل المنتجات
+        const db = getFirebaseReference();
+        if (!db || !window.firebaseModules) {
+            console.warn('⚠️ تحذير: Firebase غير مهيأ بعد. سيتم إعادة المحاولة...');
+            // إعادة محاولة بعد وقت قصير
+            setTimeout(() => initializeHomePage(), 500);
+            return;
+        }
+        
+        const homeGrid = document.getElementById('homeProductsGrid');
+        if (homeGrid && homeGrid.children.length === 0) {
+            loadHomeProducts(false);
+        }
+        
+        // إعداد مراقب الصفحة الرئيسية
+        setupHomeInfiniteScroll();
+    } catch (error) {
+        console.error('❌ خطأ في تهيئة الصفحة الرئيسية:', error);
+        // إعادة محاولة بعد وقت
+        setTimeout(() => initializeHomePage(), 1000);
     }
-    
-    // إعداد مراقب الصفحة الرئيسية
-    setupHomeInfiniteScroll();
 }
-
 // ======================== مراقبة تغيير الأقسام (مُحسّن) ========================
 
 /**

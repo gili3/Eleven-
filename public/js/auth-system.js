@@ -83,13 +83,15 @@ const AuthSecurity = {
     },
     
     // تنظيف وتحقق من بيانات المستخدم
+    // تم الإصلاح: معالجة آمنة للبيانات الفارغة والقيم الخاصة
     sanitizeUserData: function(userData) {
         if (!userData || typeof userData !== 'object') return null;
         
         // استخدام SecurityCore إذا كان متاحاً
         if (window.SecurityCore && typeof window.SecurityCore.sanitizeObject === 'function') {
             try {
-                return window.SecurityCore.sanitizeObject(userData);
+                const sanitized = window.SecurityCore.sanitizeObject(userData);
+                return sanitized && typeof sanitized === 'object' ? sanitized : null;
             } catch (error) {
                 console.error('خطأ في تنظيف بيانات المستخدم:', error);
                 // المتابعة بالتنظيف الأساسي
@@ -97,27 +99,33 @@ const AuthSecurity = {
         }
         
         // تنظيف أساسي إذا لم يكن SecurityCore متاحاً
-        const cleaned = {};
-        for (const key in userData) {
-            if (Object.prototype.hasOwnProperty.call(userData, key)) {
-                const value = userData[key];
-                if (typeof value === 'string') {
-                    cleaned[key] = value.replace(/<script[^>]*>.*?<\/script>/gi, '').replace(/<[^>]+>/g, '');
-                } else {
-                    cleaned[key] = value;
+        try {
+            const cleaned = {};
+            for (const key in userData) {
+                if (Object.prototype.hasOwnProperty.call(userData, key)) {
+                    const value = userData[key];
+                    if (typeof value === 'string') {
+                        cleaned[key] = value.replace(/<script[^>]*>.*?<\/script>/gi, '').replace(/<[^>]+>/g, '');
+                    } else if (value !== null && value !== undefined) {
+                        cleaned[key] = value;
+                    }
                 }
             }
+            return Object.keys(cleaned).length > 0 ? cleaned : null;
+        } catch (error) {
+            console.error('خطأ في التنظيف الأساسي:', error);
+            return null;
         }
-        return cleaned;
     },
     
     // حفظ بيانات المستخدم بشكل آمن (يتم حفظها في Firebase بدلاً من localStorage فقط)
     async saveUserData(userData, useSession = false) {
-        const sanitized = this.sanitizeUserData(userData);
-        if (!sanitized) return false;
-        
-         const encrypted = await this.encryptData(sanitized);
-            if (!encrypted) return false;;
+        try {
+            const sanitized = this.sanitizeUserData(userData);
+            if (!sanitized) return false;
+            
+            const encrypted = await this.encryptData(sanitized);
+            if (!encrypted) return false;
         
         try {
             // حفظ في sessionStorage بدلاً من localStorage (أكثر أماناً)
@@ -127,6 +135,10 @@ const AuthSecurity = {
                 // استخدام sessionStorage بشكل افتراضي لأنه ينتهي عند إغلاق المتصفح
                 sessionStorage.setItem('_usr', encrypted);
             }
+        } catch (error) {
+            console.error('❌ خطأ في حفظ بيانات المستخدم:', error);
+            return false;
+        }
             
             // حفظ في Firebase أيضاً للتزامن عبر الأجهزة
             if (window.currentUser && !window.currentUser.isGuest && window.db) {

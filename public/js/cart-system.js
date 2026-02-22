@@ -7,14 +7,29 @@ if (typeof window.directPurchaseItem === 'undefined') window.directPurchaseItem 
 
 /**
  * تحديث عداد السلة
+ * تم الإصلاح: معالجة آمنة للبيانات الفارغة
  */
 function updateCartCount() {
     let totalItems = 0;
     
-    if (window.directPurchaseItem) {
-        totalItems = window.directPurchaseItem.quantity || 1;
-    } else {
-        totalItems = (window.cartItems || []).reduce((total, item) => total + (parseInt(item.quantity) || 0), 0);
+    try {
+        if (window.directPurchaseItem && typeof window.directPurchaseItem === 'object') {
+            totalItems = window.directPurchaseItem.quantity || 1;
+        } else {
+            // التحقق من أن cartItems هو مصفوفة قبل استخدام reduce
+            const items = window.cartItems || [];
+            if (Array.isArray(items)) {
+                totalItems = items.reduce((total, item) => {
+                    if (item && typeof item === 'object') {
+                        return total + (parseInt(item.quantity) || 0);
+                    }
+                    return total;
+                }, 0);
+            }
+        }
+    } catch (error) {
+        console.error('❌ خطأ في تحديث عداد السلة:', error);
+        totalItems = 0;
     }
     
     const cartCountElements = document.querySelectorAll('.cart-count');

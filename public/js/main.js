@@ -67,12 +67,19 @@ async function initializeAppSafely() {
         // مراقبة حالة المصادقة
         const unsubscribe = window.firebaseModules.onAuthStateChanged(auth, 
             async (user) => {
-                console.log('🔄 تغيرت حالة المصادقة:', user ? 'مستخدم مسجل' : 'لا يوجد مستخدم');
-                await handleAuthStateChange(user);
+                try {
+                    console.log('🔄 تغيرت حالة المصادقة:', user ? 'مستخدم مسجل' : 'لا يوجد مستخدم');
+                    if (typeof handleAuthStateChange === 'function') {
+                        await handleAuthStateChange(user);
+                    }
+                } catch (error) {
+                    console.error('❌ خطأ في معالجة تغير حالة المصادقة:', error);
+                    handleAuthError();
+                }
             },
             (error) => {
                 console.error('❌ خطأ في مراقبة حالة المصادقة:', error);
-                handleAuthError();
+                if (typeof handleAuthError === 'function') handleAuthError();
             }
         );
         
@@ -80,8 +87,12 @@ async function initializeAppSafely() {
         
         // تهيئة الصفحة الرئيسية بعد تحميل كل شيء
         setTimeout(() => {
-            if (typeof initializeHomePage === 'function') {
-                initializeHomePage();
+            try {
+                if (typeof initializeHomePage === 'function') {
+                    initializeHomePage();
+                }
+            } catch (error) {
+                console.error('❌ خطأ في تهيئة الصفحة الرئيسية:', error);
             }
         }, 300);
         
