@@ -8,7 +8,7 @@ class AdminAuthGuard {
         this.isAuthorized = false;
         this.currentUser = null;
         this.authCheckTimeout = 5000; // 5 ثواني
-        this.sessionToken = null;
+        
         this.lastVerificationTime = 0;
         this.verificationInterval = 60000; // إعادة التحقق كل دقيقة
     }
@@ -126,8 +126,7 @@ class AdminAuthGuard {
                         }
 
                         // توليد رمز جلسة فريد
-                        this.sessionToken = this.generateSessionToken();
-                        sessionStorage.setItem('admin_session_token', this.sessionToken);
+                        // لا يتم استخدام رمز جلسة من جانب العميل بعد الآن. يتم الاعتماد على Firebase Auth token.
                         
                         // تسجيل محاولة الوصول
                         this.logAdminAccess(user.uid, 'success');
@@ -223,14 +222,7 @@ class AdminAuthGuard {
         }
     }
 
-    /**
-     * توليد رمز جلسة فريد
-     */
-    generateSessionToken() {
-        const array = new Uint8Array(32);
-        window.crypto.getRandomValues(array);
-        return Array.from(array, byte => byte.toString(16).padStart(2, '0')).join('');
-    }
+    
 
     /**
      * الحصول على instance Firebase
@@ -324,7 +316,7 @@ class AdminAuthGuard {
                     status: status,
                     timestamp: window.firebaseModules.serverTimestamp(),
                     userAgent: navigator.userAgent,
-                    sessionToken: this.sessionToken,
+                    
                     ipInfo: 'server-side-only' // يجب الحصول على IP من الخادم
                 }
             );
@@ -349,7 +341,7 @@ class AdminAuthGuard {
     async logout() {
         try {
             const { auth } = this.getFirebaseInstance();
-            sessionStorage.removeItem('admin_session_token');
+            
             await window.firebaseModules.signOut(auth);
             window.location.href = 'index.html';
         } catch (error) {
