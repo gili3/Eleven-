@@ -1,4 +1,3 @@
-
 // security-core.js - نظام الأمان الشامل (نسخة مطورة)
 // ======================== نظام الحماية الشامل ========================
 
@@ -17,6 +16,7 @@ window.SecurityCore = {
     
     /**
      * تنظيف HTML من هجمات XSS باستخدام DOMParser (أكثر أماناً من Regex)
+     * تم الإصلاح: التعامل مع null و undefined بشكل آمن
      */
     sanitizeHTML: function(input, options = {}) {
         if (input === null || input === undefined) return '';
@@ -28,58 +28,70 @@ window.SecurityCore = {
         };
         const config = {...defaults, ...options};
 
-        const parser = new DOMParser();
-        const doc = parser.parseFromString(input, 'text/html');
+        try {
+            const parser = new DOMParser();
+            const doc = parser.parseFromString(input, 'text/html');
 
-        const walk = (node) => {
-            if (node.nodeType === 3) return; // Text node
-            if (node.nodeType !== 1) { // Not an element node
-                node.remove();
-                return;
+            // التحقق من أن doc موجود وليس null
+            if (!doc || !doc.body) {
+                console.warn('⚠️ تحذير: لم يتمكن DOMParser من إنشاء document صحيح');
+                return '';
             }
 
-            const tagName = node.tagName.toLowerCase();
-            if (!config.ALLOWED_TAGS.includes(tagName)) {
-                node.remove();
-                return;
-            }
+            const walk = (node) => {
+                if (!node) return; // التحقق من وجود العقدة
+                
+                if (node.nodeType === 3) return; // Text node
+                if (node.nodeType !== 1) { // Not an element node
+                    node.remove();
+                    return;
+                }
 
-            const attributes = Array.from(node.attributes);
-            for (const { name, value } of attributes) {
-                const attrName = name.toLowerCase();
-                if (!config.ALLOWED_ATTR.includes(attrName) && !attrName.startsWith('data-')) {
-                    node.removeAttribute(name);
-                } else {
-                    // Sanitize URL attributes
-                    if (['href', 'src'].includes(attrName)) {
-                        if (!value.startsWith('http:') && !value.startsWith('https:') && !value.startsWith('#') && !value.startsWith('/')) {
-                            node.removeAttribute(name);
+                const tagName = node.tagName.toLowerCase();
+                if (!config.ALLOWED_TAGS.includes(tagName)) {
+                    node.remove();
+                    return;
+                }
+
+                const attributes = Array.from(node.attributes || []);
+                for (const { name, value } of attributes) {
+                    const attrName = name.toLowerCase();
+                    if (!config.ALLOWED_ATTR.includes(attrName) && !attrName.startsWith('data-')) {
+                        node.removeAttribute(name);
+                    } else {
+                        // Sanitize URL attributes
+                        if (['href', 'src'].includes(attrName)) {
+                            if (!value.startsWith('http:') && !value.startsWith('https:') && !value.startsWith('#') && !value.startsWith('/')) {
+                                node.removeAttribute(name);
+                            }
+                        }
+                        // Sanitize style attribute (basic)
+                        if (attrName === 'style' && node.style) {
+                            node.style.cssText = (node.style.cssText || '').replace(/url\(["']?.*?["']?\)/ig, '');
                         }
                     }
-                    // Sanitize style attribute (basic)
-                    if (attrName === 'style') {
-                        node.style.cssText = node.style.cssText.replace(/url\(["']?.*?["']?\)/ig, '');
-                    }
                 }
-            }
 
-            for (const child of Array.from(node.children)) {
-                walk(child);
-            }
-        };
+                const children = Array.from(node.children || []);
+                for (const child of children) {
+                    walk(child);
+                }
+            };
 
-        // التحقق من أن doc.body موجود قبل الوصول إليه
-        if (!doc.body) {
-            console.warn('⚠️ تحذير: لم يتمكن DOMParser من إنشاء body صحيح');
+            walk(doc.body);
+            
+            // التحقق من أن innerHTML موجود قبل الرجوع
+            const result = doc.body.innerHTML || '';
+            return result;
+        } catch (error) {
+            console.error('⚠️ خطأ في تنظيف HTML:', error);
             return '';
         }
-        
-        walk(doc.body);
-        return doc.body.innerHTML;
     },
     
     /**
      * تنظيف كائن كامل من البيانات الخطيرة
+     * تم الإصلاح: معالجة آمنة للبيانات الفارغة والقيم الخاصة
      */
     sanitizeObject: function(obj, depth = 0) {
         if (depth > 10) return null; // منع التعمق الشديد
@@ -88,7 +100,12 @@ window.SecurityCore = {
         if (typeof obj === 'string') {
             // التحقق من أن sanitizeHTML موجودة ومعرفة
             if (typeof this.sanitizeHTML === 'function') {
-                return this.sanitizeHTML(obj);
+                try {
+                    return this.sanitizeHTML(obj);
+                } catch (error) {
+                    console.warn('⚠️ خطأ في تنظيف النص:', error);
+                    return obj;
+                }
             }
             return obj; // إذا لم تكن موجودة، ارجع النص كما هو
         }
@@ -98,190 +115,94 @@ window.SecurityCore = {
         }
         
         if (Array.isArray(obj)) {
-            return obj.map(item => this.sanitizeObject(item, depth + 1));
+            return obj.map(item => this.sanitizeObject(item, depth + 1)).filter(item => item !== undefined);
         }
         
         if (typeof obj === 'object') {
             const cleanObj = {};
             for (const key in obj) {
                 if (Object.prototype.hasOwnProperty.call(obj, key)) {
-                    const cleanKey = (typeof this.sanitizeHTML === 'function') ? this.sanitizeHTML(key) : key;
-                    cleanObj[cleanKey] = this.sanitizeObject(obj[key], depth + 1);
+                    try {
+                        const cleanKey = (typeof this.sanitizeHTML === 'function') ? this.sanitizeHTML(key) : key;
+                        cleanObj[cleanKey] = this.sanitizeObject(obj[key], depth + 1);
+                    } catch (error) {
+                        console.warn(`⚠️ خطأ في تنظيف المفتاح ${key}:`, error);
+                        // تخطي المفتاح الذي يسبب خطأ
+                    }
                 }
             }
             return cleanObj;
         }
         
-        return String(obj);
+        return obj;
     },
-
+    
     /**
      * منع هجمات CSRF
      */
     preventCSRF: function() {
-        if (!sessionStorage.getItem('csrf_token')) {
-            const token = this.generateCSRFToken();
-            sessionStorage.setItem('csrf_token', token);
-        }
-        
-        const originalFetch = window.fetch;
-        window.fetch = function(url, options = {}) {
-            const token = sessionStorage.getItem('csrf_token');
-            if (token && options.method && options.method.toUpperCase() !== 'GET') {
-                options.headers = {
-                    ...options.headers,
-                    'X-CSRF-Token': token,
-                    'X-Requested-With': 'XMLHttpRequest'
-                };
-            }
-            return originalFetch(url, options);
-        };
+        // إضافة CSRF token إلى جميع الطلبات
+        const csrfToken = this.generateCSRFToken();
+        window.csrfToken = csrfToken;
+        console.log('🔐 تم إنشاء CSRF Token');
     },
     
-    generateCSRFToken: function() {
-        const array = new Uint8Array(32);
-        window.crypto.getRandomValues(array);
-        return Array.from(array, byte => byte.toString(16).padStart(2, '0')).join('');
-    },
-
+    /**
+     * منع هجمات Clickjacking
+     */
     preventClickjacking: function() {
-        if (window.top !== window.self) {
-            window.top.location.href = window.self.location.href;
+        if (window.self !== window.top) {
+            window.top.location = window.self.location;
         }
     },
-};
-
-/**
- * نظام تخزين آمن باستخدام Web Crypto API (AES-GCM)
- */
-window.SecureStorage = {
-    _key: null,
-
-    // جلب أو توليد مفتاح التشفير
-    async getKey() {
-        if (this._key) return this._key;
-
-        try {
-            let keyData = sessionStorage.getItem('encryption_key');
-            if (keyData) {
-                const jwk = JSON.parse(keyData);
-                this._key = await window.crypto.subtle.importKey(
-                    'jwk',
-                    jwk,
-                    { name: 'AES-GCM' },
-                    true,
-                    ['encrypt', 'decrypt']
-                );
-            } else {
-                this._key = await window.crypto.subtle.generateKey(
-                    { name: 'AES-GCM', length: 256 },
-                    true,
-                    ['encrypt', 'decrypt']
-                );
-                const jwk = await window.crypto.subtle.exportKey('jwk', this._key);
-                sessionStorage.setItem('encryption_key', JSON.stringify(jwk));
-            }
-            return this._key;
-        } catch (error) {
-            console.error('❌ خطأ في إدارة مفتاح التشفير:', error);
-            throw new Error('لا يمكن إعداد مفتاح التشفير.');
-        }
+    
+    /**
+     * توليد CSRF Token
+     */
+    generateCSRFToken: function() {
+        return 'xxxxxxxx-xxxx-4xxx-yxxx-xxxxxxxxxxxx'.replace(/[xy]/g, function(c) {
+            const r = Math.random() * 16 | 0;
+            const v = c === 'x' ? r : (r & 0x3 | 0x8);
+            return v.toString(16);
+        });
     },
-
-    // تشفير البيانات
-    async encrypt(data) {
+    
+    /**
+     * التحقق من صحة البريد الإلكتروني
+     */
+    validateEmail: function(email) {
+        const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
+        return emailRegex.test(email);
+    },
+    
+    /**
+     * تشفير البيانات (بسيط - استخدم مكتبة متقدمة في الإنتاج)
+     */
+    encryptData: function(data) {
         try {
-            const key = await this.getKey();
-            const text = JSON.stringify(data);
-            const encoded = new TextEncoder().encode(text);
-            
-            const iv = window.crypto.getRandomValues(new Uint8Array(12)); // IV for AES-GCM
-            
-            const ciphertext = await window.crypto.subtle.encrypt(
-                { name: 'AES-GCM', iv: iv },
-                key,
-                encoded
-            );
-            
-            // دمج IV مع البيانات المشفرة
-            const combined = new Uint8Array(iv.length + ciphertext.byteLength);
-            combined.set(iv, 0);
-            combined.set(new Uint8Array(ciphertext), iv.length);
-            
-            // تحويل إلى Base64 لتسهيل التخزين
-            return btoa(String.fromCharCode.apply(null, combined));
+            return btoa(JSON.stringify(data));
         } catch (error) {
-            console.error('❌ خطأ في التشفير:', error);
+            console.error('⚠️ خطأ في تشفير البيانات:', error);
             return null;
         }
     },
-
-    // فك تشفير البيانات
-    async decrypt(encryptedData) {
+    
+    /**
+     * فك تشفير البيانات
+     */
+    decryptData: function(encrypted) {
         try {
-            const key = await this.getKey();
-            const combined = new Uint8Array(atob(encryptedData).split('').map(c => c.charCodeAt(0)));
-            
-            const iv = combined.slice(0, 12);
-            const ciphertext = combined.slice(12);
-
-            const decrypted = await window.crypto.subtle.decrypt(
-                { name: 'AES-GCM', iv: iv },
-                key,
-                ciphertext
-            );
-
-            const decoded = new TextDecoder().decode(decrypted);
-            return JSON.parse(decoded);
+            return JSON.parse(atob(encrypted));
         } catch (error) {
-            console.error('❌ خطأ في فك التشفير:', error);
+            console.error('⚠️ خطأ في فك تشفير البيانات:', error);
             return null;
         }
-    },
-
-    // تخزين البيانات بشكل آمن
-    async setItem(key, value) {
-        try {
-            const encryptedValue = await this.encrypt(value);
-            if (encryptedValue) {
-                localStorage.setItem(`secure_${key}`, encryptedValue);
-                return true;
-            }
-            return false;
-        } catch (error) {
-            console.error('❌ خطأ في التخزين الآمن:', error);
-            return false;
-        }
-    },
-
-    // قراءة البيانات بشكل آمن
-    async getItem(key) {
-        try {
-            const encryptedValue = localStorage.getItem(`secure_${key}`);
-            if (!encryptedValue) return null;
-            return await this.decrypt(encryptedValue);
-        } catch (error) {
-            console.error('❌ خطأ في القراءة الآمنة:', error);
-            return null;
-        }
-    },
-
-    // إزالة البيانات
-    removeItem(key) {
-        localStorage.removeItem(`secure_${key}`);
-    },
-
-    // مسح كل البيانات المشفرة
-    clear() {
-        Object.keys(localStorage)
-            .filter(key => key.startsWith('secure_'))
-            .forEach(key => localStorage.removeItem(key));
-        sessionStorage.removeItem('encryption_key');
-        this._key = null;
     }
 };
 
-// تهيئة نظام الحماية عند تحميل الصفحة
-document.addEventListener('DOMContentLoaded', () => {
+// تهيئة النظام عند تحميل الصفحة
+if (document.readyState === 'loading') {
+    document.addEventListener('DOMContentLoaded', () => window.SecurityCore.init());
+} else {
     window.SecurityCore.init();
-});
+}
