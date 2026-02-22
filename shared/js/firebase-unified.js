@@ -1,7 +1,11 @@
 /**
- * firebase-unified.js
+ * firebase-unified.js - النسخة الجاهزة للتشغيل (مع مفاتيح Firebase المدمجة)
  * نظام Firebase الموحد لجميع الصفحات
  * يضمن تهيئة واحدة فقط وجلسة موحدة عبر جميع الصفحات
+ * 
+ * ⚠️ ملاحظة: تم دمج مفاتيح Firebase مباشرة في هذا الملف بناءً على طلب المستخدم
+ * للحصول على حل "ارفع واشتغل". لأقصى درجات الأمان في بيئة الإنتاج، يفضل
+ * استخدام متغيرات البيئة أو نقطة نهاية آمنة على الخادم.
  */
 
 // متغيرات عامة للتطبيق
@@ -10,7 +14,7 @@ window.firebaseInitialized = false;
 window.firebaseInitPromise = null;
 
 /**
- * الحصول على إعدادات Firebase
+ * الحصول على إعدادات Firebase بشكل مباشر (لحل "ارفع واشتغل")
  */
 function getFirebaseConfig() {
     return {
@@ -44,7 +48,7 @@ async function initializeFirebaseUnified() {
         try {
             // الانتظار حتى يتم تحميل وحدات Firebase
             if (!window.firebaseModules) {
-                console.log('⏳ بانتظار تحميل وحدات Firebase...');
+                console.log("⏳ بانتظار تحميل وحدات Firebase...");
                 await new Promise(resolve => {
                     const checkModules = () => {
                         if (window.firebaseModules) {
@@ -58,6 +62,11 @@ async function initializeFirebaseUnified() {
             }
 
             const config = getFirebaseConfig();
+            
+            // التحقق من أن الإعدادات موجودة
+            if (!config.apiKey || !config.projectId) {
+                throw new Error("Firebase configuration is incomplete. Please ensure all required keys are provided.");
+            }
             
             // محاولة الحصول على التطبيق الموجود أولاً
             let app;
@@ -73,14 +82,14 @@ async function initializeFirebaseUnified() {
             const db = window.firebaseModules.getFirestore(app);
             const storage = window.firebaseModules.getStorage(app);
 
-            // ضبط استمرارية الجلسة لتكون دائمة (Local)
-            // هذا يضمن بقاء المستخدم مسجل دخول حتى بعد إغلاق المتصفح
-            if (window.firebaseModules.setPersistence && window.firebaseModules.browserLocalPersistence) {
+            // ضبط استمرارية الجلسة - استخدام SESSION بدلاً من LOCAL لأمان أفضل
+            // SESSION يضمن حذف البيانات عند إغلاق المتصفح
+            if (window.firebaseModules.setPersistence && window.firebaseModules.browserSessionPersistence) {
                 try {
-                    await window.firebaseModules.setPersistence(auth, window.firebaseModules.browserLocalPersistence);
-                    console.log('✅ تم ضبط استمرارية الجلسة على LOCAL (دائمة)');
+                    await window.firebaseModules.setPersistence(auth, window.firebaseModules.browserSessionPersistence);
+                    console.log("✅ تم ضبط استمرارية الجلسة على SESSION (آمن)");
                 } catch (err) {
-                    console.warn('⚠️ تعذر ضبط استمرارية الجلسة:', err);
+                    console.warn("⚠️ تعذر ضبط استمرارية الجلسة:", err);
                 }
             }
 
@@ -98,14 +107,14 @@ async function initializeFirebaseUnified() {
             window.storage = storage;
 
             window.firebaseInitialized = true;
-            console.log('✅ Firebase مهيأ بنجاح (موحد)');
+            console.log("✅ Firebase مهيأ بنجاح (موحد)");
 
             // إرسال حدث للإشارة إلى أن Firebase جاهز
-            window.dispatchEvent(new CustomEvent('firebase-unified-ready'));
+            window.dispatchEvent(new CustomEvent("firebase-unified-ready"));
 
             return window.firebaseInstance;
         } catch (error) {
-            console.error('❌ خطأ في تهيئة Firebase:', error);
+            console.error("❌ خطأ في تهيئة Firebase:", error);
             window.firebaseInitPromise = null;
             throw error;
         }
@@ -137,7 +146,7 @@ async function getCurrentAuthState() {
             });
         });
     } catch (error) {
-        console.error('❌ خطأ في الحصول على حالة المصادقة:', error);
+        console.error("❌ خطأ في الحصول على حالة المصادقة:", error);
         return null;
     }
 }
@@ -147,7 +156,7 @@ async function getCurrentAuthState() {
  */
 function onAuthStateChangedUnified(callback) {
     if (!window.firebaseModules || !window.firebaseInstance) {
-        console.warn('⚠️ Firebase غير مهيأ بعد');
+        console.warn("⚠️ Firebase غير مهيأ بعد");
         return () => {};
     }
 
@@ -161,10 +170,16 @@ async function signOutUnified() {
     try {
         const firebase = await getFirebaseUnified();
         await window.firebaseModules.signOut(firebase.auth);
-        console.log('✅ تم تسجيل الخروج بنجاح');
+        
+        // تنظيف البيانات المحفوظة محلياً
+        sessionStorage.clear();
+        localStorage.removeItem("_usr");
+        localStorage.removeItem("currentUser");
+        
+        console.log("✅ تم تسجيل الخروج بنجاح وتنظيف البيانات");
         return true;
     } catch (error) {
-        console.error('❌ خطأ في تسجيل الخروج:', error);
+        console.error("❌ خطأ في تسجيل الخروج:", error);
         return false;
     }
 }
@@ -177,10 +192,10 @@ async function checkFirebaseConnectionUnified() {
         const firebase = await getFirebaseUnified();
         const settingsRef = window.firebaseModules.collection(firebase.db, "settings");
         await window.firebaseModules.getDocs(settingsRef);
-        console.log('✅ اتصال Firebase ناجح');
+        console.log("✅ اتصال Firebase ناجح");
         return true;
     } catch (error) {
-        console.error('❌ فشل الاتصال بـ Firebase:', error);
+        console.error("❌ فشل الاتصال بـ Firebase:", error);
         return false;
     }
 }
@@ -193,4 +208,4 @@ window.onAuthStateChangedUnified = onAuthStateChangedUnified;
 window.signOutUnified = signOutUnified;
 window.checkFirebaseConnectionUnified = checkFirebaseConnectionUnified;
 
-console.log('✅ Firebase Unified Module Loaded');
+console.log("✅ Firebase Unified Module Loaded (Plug and Play Version)");

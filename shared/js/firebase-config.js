@@ -1,39 +1,50 @@
-// Eleven Store - Firebase Configuration
-// تم تحسين الملف ليكون أكثر مرونة وأماناً
-
-const firebaseConfig = {
-    apiKey: "AIzaSyB1vNmCapPK0MI4H_Q0ilO7OnOgZa02jx0",
-    authDomain: "queen-beauty-b811b.firebaseapp.com",
-    projectId: "queen-beauty-b811b",
-    storageBucket: "queen-beauty-b811b.firebasestorage.app",
-    messagingSenderId: "418964206430",
-    appId: "1:418964206430:web:8c9451fc56ca7f956bd5cf",
-    measurementId: "G-XXXXXXXXXX"
-};
+// firebase-config-secure.js - إعدادات Firebase الآمنة
+// ⚠️ تحذير: يجب نقل بيانات Firebase الحساسة إلى متغيرات البيئة على الخادم
 
 /**
- * دالة آمنة للحصول على الإعدادات
- * تتيح إمكانية التبديل لمتغيرات البيئة مستقبلاً دون كسر المتجر
+ * إعدادات Firebase - يجب تحميلها من خادم آمن وليس من الكود الأمامي
+ * استخدم Cloud Functions أو خادم backend لتوفير هذه البيانات
  */
-function getFirebaseConfig() {
-    // التحقق مما إذا كانت هناك إعدادات في متغيرات البيئة (للمطورين)
-    if (typeof process !== 'undefined' && process.env && process.env.REACT_APP_FIREBASE_API_KEY) {
-        return {
-            apiKey: process.env.REACT_APP_FIREBASE_API_KEY,
-            authDomain: process.env.REACT_APP_FIREBASE_AUTH_DOMAIN,
-            projectId: process.env.REACT_APP_FIREBASE_PROJECT_ID,
-            storageBucket: process.env.REACT_APP_FIREBASE_STORAGE_BUCKET,
-            messagingSenderId: process.env.REACT_APP_FIREBASE_MESSAGING_SENDER_ID,
-            appId: process.env.REACT_APP_FIREBASE_APP_ID,
-            measurementId: process.env.REACT_APP_FIREBASE_MEASUREMENT_ID
+
+// دالة آمنة لتحميل إعدادات Firebase من خادم آمن
+async function loadFirebaseConfigSecurely() {
+    try {
+        // بدلاً من تخزين المفاتيح هنا، احصل عليها من نقطة نهاية آمنة
+        // مثال:
+        // const response = await fetch('/api/firebase-config', {
+        //     headers: { 'Authorization': `Bearer ${sessionToken}` }
+        // });
+        // const config = await response.json();
+        
+        // للآن، استخدم متغيرات البيئة إن أمكن
+        const firebaseConfig = {
+            // ⚠️ لا تضع المفاتيح الفعلية هنا - استخدم متغيرات البيئة
+            apiKey: process.env.REACT_APP_FIREBASE_API_KEY || "REPLACE_WITH_ENV_VAR",
+            authDomain: process.env.REACT_APP_FIREBASE_AUTH_DOMAIN || "REPLACE_WITH_ENV_VAR",
+            projectId: process.env.REACT_APP_FIREBASE_PROJECT_ID || "REPLACE_WITH_ENV_VAR",
+            storageBucket: process.env.REACT_APP_FIREBASE_STORAGE_BUCKET || "REPLACE_WITH_ENV_VAR",
+            messagingSenderId: process.env.REACT_APP_FIREBASE_MESSAGING_SENDER_ID || "REPLACE_WITH_ENV_VAR",
+            appId: process.env.REACT_APP_FIREBASE_APP_ID || "REPLACE_WITH_ENV_VAR",
+            measurementId: process.env.REACT_APP_FIREBASE_MEASUREMENT_ID || "REPLACE_WITH_ENV_VAR"
         };
+        
+        // تحقق من أن جميع المفاتيح موجودة
+        const requiredKeys = ['apiKey', 'authDomain', 'projectId', 'storageBucket', 'messagingSenderId', 'appId'];
+        const missingKeys = requiredKeys.filter(key => !firebaseConfig[key] || firebaseConfig[key].includes('REPLACE_WITH_ENV_VAR'));
+        
+        if (missingKeys.length > 0) {
+            console.error('❌ خطأ: المفاتيح التالية غير محددة في متغيرات البيئة:', missingKeys);
+            throw new Error('Firebase configuration is incomplete. Please set environment variables.');
+        }
+        
+        window.firebaseConfig = firebaseConfig;
+        console.log("🔐 تم تحميل إعدادات Firebase بأمان");
+        return firebaseConfig;
+    } catch (error) {
+        console.error('❌ خطأ في تحميل إعدادات Firebase:', error);
+        throw error;
     }
-    return firebaseConfig;
 }
 
-// تصدير الإعدادات للاستخدام في الملفات الأخرى
-window.firebaseConfig = getFirebaseConfig();
-
-// إعلام النظام بجاهزية الإعدادات
-console.log("🔐 Firebase Configuration Loaded Successfully");
-window.dispatchEvent(new CustomEvent('firebase-config-loaded'));
+// تصدير الدالة
+window.loadFirebaseConfigSecurely = loadFirebaseConfigSecurely;

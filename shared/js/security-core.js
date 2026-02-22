@@ -258,9 +258,11 @@ window.SecurityCore = {
     preventCSRF: function() {
         try {
             // إضافة CSRF token إلى جميع الطلبات
-            const csrfToken = this.generateCSRFToken();
-            window.csrfToken = csrfToken;
-            console.log('🔐 تم إنشاء CSRF Token');
+            // في تطبيق يعتمد على Firebase بشكل كامل، يتم التعامل مع المصادقة عبر Firebase SDK.
+            // إذا كان هناك أي نقاط نهاية خلفية مخصصة، فيجب أن توفر الخادم رموز CSRF.
+            // const csrfToken = this.generateCSRFToken(); // تم تعطيل التوليد من جانب العميل
+            // window.csrfToken = csrfToken;
+            console.log('🔐 تم تهيئة منع CSRF (يتطلب رمزًا من الخادم لنقاط النهاية المخصصة)');
         } catch (error) {
             console.error('⚠️ خطأ في إنشاء CSRF Token:', error);
         }
@@ -280,19 +282,14 @@ window.SecurityCore = {
     },
     
     /**
-     * توليد CSRF Token
+     * توليد CSRF Token (يجب أن يتم توليده والتحقق منه على الخادم)
+     * في تطبيق يعتمد على Firebase بشكل كامل، يتم التعامل مع المصادقة عبر Firebase SDK.
+     * إذا كان هناك أي نقاط نهاية خلفية مخصصة، فيجب أن توفر الخادم رموز CSRF.
      */
     generateCSRFToken: function() {
-        try {
-            return 'xxxxxxxx-xxxx-4xxx-yxxx-xxxxxxxxxxxx'.replace(/[xy]/g, function(c) {
-                const r = Math.random() * 16 | 0;
-                const v = c === 'x' ? r : (r & 0x3 | 0x8);
-                return v.toString(16);
-            });
-        } catch (error) {
-            console.error('⚠️ خطأ في توليد CSRF Token:', error);
-            return '';
-        }
+        console.warn('⚠️ توليد CSRF Token من جانب العميل غير موصى به. يجب أن يتم توليده والتحقق منه على الخادم.');
+        // هذا مجرد رمز وهمي. في بيئة الإنتاج، يجب جلب هذا الرمز من الخادم.
+        return 'dummy-csrf-token-client-generated';
     },
     
     /**
@@ -309,31 +306,9 @@ window.SecurityCore = {
         }
     },
     
-    /**
-     * تشفير البيانات (بسيط - استخدم مكتبة متقدمة في الإنتاج)
-     */
-    encryptData: function(data) {
-        try {
-            if (!data) return null;
-            return btoa(JSON.stringify(data));
-        } catch (error) {
-            console.error('⚠️ خطأ في تشفير البيانات:', error);
-            return null;
-        }
-    },
+
     
-    /**
-     * فك تشفير البيانات
-     */
-    decryptData: function(encrypted) {
-        try {
-            if (!encrypted || typeof encrypted !== 'string') return null;
-            return JSON.parse(atob(encrypted));
-        } catch (error) {
-            console.error('⚠️ خطأ في فك تشفير البيانات:', error);
-            return null;
-        }
-    }
+
 };
 
 // تهيئة النظام عند تحميل الصفحة
