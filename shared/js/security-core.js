@@ -16,11 +16,22 @@ window.SecurityCore = {
     
     /**
      * تنظيف HTML من هجمات XSS باستخدام DOMParser (أكثر أماناً من Regex)
-     * تم الإصلاح: التعامل مع null و undefined بشكل آمن
+     * تم الإصلاح: التعامل الآمن مع null و undefined و doc.body الفارغة
      */
     sanitizeHTML: function(input, options = {}) {
+        // معالجة الحالات الفارغة والقيم الخاصة
         if (input === null || input === undefined) return '';
-        if (typeof input !== 'string') return String(input);
+        if (typeof input !== 'string') {
+            try {
+                return String(input);
+            } catch (error) {
+                console.warn('⚠️ خطأ في تحويل المدخل إلى نص:', error);
+                return '';
+            }
+        }
+
+        // التحقق من أن المدخل ليس فارغاً
+        if (input.trim() === '') return '';
 
         const defaults = {
             ALLOWED_TAGS: ['b', 'strong', 'i', 'em', 'u', 'br', 'p', 'div', 'span', 'ul', 'ol', 'li', 'h1', 'h2', 'h3', 'h4', 'h5', 'h6', 'a', 'img'],
@@ -29,74 +40,151 @@ window.SecurityCore = {
         const config = {...defaults, ...options};
 
         try {
+            // التحقق من توفر DOMParser
+            if (typeof DOMParser === 'undefined') {
+                console.warn('⚠️ تحذير: DOMParser غير متاح، سيتم إرجاع النص كما هو');
+                return input;
+            }
+
             const parser = new DOMParser();
             const doc = parser.parseFromString(input, 'text/html');
 
             // التحقق من أن doc موجود وليس null
-            if (!doc || !doc.body) {
-                console.warn('⚠️ تحذير: لم يتمكن DOMParser من إنشاء document صحيح');
-                return '';
+            if (!doc) {
+                console.warn('⚠️ تحذير: لم يتمكن DOMParser من إنشاء document');
+                return input;
+            }
+
+            // التحقق من أن doc.body موجود وليس null - هذا هو الفحص الحاسم
+            if (!doc.body) {
+                console.warn('⚠️ تحذير: لم يتمكن DOMParser من إنشاء body صحيح');
+                // محاولة الحصول على محتوى من documentElement كبديل
+                if (doc.documentElement && doc.documentElement.innerHTML) {
+                    return doc.documentElement.innerHTML || '';
+                }
+                return input;
             }
 
             const walk = (node) => {
                 if (!node) return; // التحقق من وجود العقدة
+
+                // التحقق من نوع العقدة
+                if (!node.nodeType) return;
                 
                 if (node.nodeType === 3) return; // Text node
                 if (node.nodeType !== 1) { // Not an element node
-                    node.remove();
+                    try {
+                        node.remove();
+                    } catch (e) {
+                        // تجاهل الأخطاء عند محاولة حذف العقدة
+                    }
                     return;
                 }
+
+                // التحقق من وجود tagName قبل استخدامه
+                if (!node.tagName) return;
 
                 const tagName = node.tagName.toLowerCase();
                 if (!config.ALLOWED_TAGS.includes(tagName)) {
-                    node.remove();
+                    try {
+                        node.remove();
+                    } catch (e) {
+                        // تجاهل الأخطاء عند محاولة حذف العقدة
+                    }
                     return;
                 }
 
-                const attributes = Array.from(node.attributes || []);
-                for (const { name, value } of attributes) {
-                    const attrName = name.toLowerCase();
-                    if (!config.ALLOWED_ATTR.includes(attrName) && !attrName.startsWith('data-')) {
-                        node.removeAttribute(name);
-                    } else {
-                        // Sanitize URL attributes
-                        if (['href', 'src'].includes(attrName)) {
-                            if (!value.startsWith('http:') && !value.startsWith('https:') && !value.startsWith('#') && !value.startsWith('/')) {
+                // معالجة الخصائص بشكل آمن
+                try {
+                    const attributes = Array.from(node.attributes || []);
+                    for (const { name, value } of attributes) {
+                        if (!name) continue; // تجاهل الخصائص بدون اسم
+                        
+                        const attrName = name.toLowerCase();
+                        if (!config.ALLOWED_ATTR.includes(attrName) && !attrName.startsWith('data-')) {
+                            try {
                                 node.removeAttribute(name);
+                            } catch (e) {
+                                // تجاهل الأخطاء عند محاولة حذف الخاصية
+                            }
+                        } else {
+                            // Sanitize URL attributes
+                            if (['href', 'src'].includes(attrName) && value) {
+                                if (!value.startsWith('http:') && !value.startsWith('https:') && !value.startsWith('#') && !value.startsWith('/')) {
+                                    try {
+                                        node.removeAttribute(name);
+                                    } catch (e) {
+                                        // تجاهل الأخطاء
+                                    }
+                                }
+                            }
+                            // Sanitize style attribute (basic)
+                            if (attrName === 'style' && node.style) {
+                                try {
+                                    node.style.cssText = (node.style.cssText || '').replace(/url\(["']?.*?["']?\)/ig, '');
+                                } catch (e) {
+                                    // تجاهل الأخطاء في معالجة الأنماط
+                                }
                             }
                         }
-                        // Sanitize style attribute (basic)
-                        if (attrName === 'style' && node.style) {
-                            node.style.cssText = (node.style.cssText || '').replace(/url\(["']?.*?["']?\)/ig, '');
-                        }
                     }
+                } catch (error) {
+                    console.warn('⚠️ خطأ في معالجة خصائص العقدة:', error);
                 }
 
-                const children = Array.from(node.children || []);
-                for (const child of children) {
-                    walk(child);
+                // معالجة الأطفال بشكل آمن
+                try {
+                    const children = Array.from(node.children || []);
+                    for (const child of children) {
+                        walk(child);
+                    }
+                } catch (error) {
+                    console.warn('⚠️ خطأ في معالجة أطفال العقدة:', error);
                 }
             };
 
-            walk(doc.body);
+            // تنفيذ المشي عبر الشجرة بشكل آمن
+            try {
+                walk(doc.body);
+            } catch (error) {
+                console.warn('⚠️ خطأ أثناء المشي عبر الشجرة:', error);
+            }
             
             // التحقق من أن innerHTML موجود قبل الرجوع
-            const result = doc.body.innerHTML || '';
-            return result;
+            if (doc.body && doc.body.innerHTML) {
+                return doc.body.innerHTML;
+            } else if (doc.documentElement && doc.documentElement.innerHTML) {
+                return doc.documentElement.innerHTML;
+            } else {
+                console.warn('⚠️ تحذير: لم يتمكن من الحصول على innerHTML من document');
+                return '';
+            }
         } catch (error) {
             console.error('⚠️ خطأ في تنظيف HTML:', error);
-            return '';
+            // في حالة الفشل الكامل، ارجع النص الأصلي بعد إزالة الـ script tags
+            try {
+                return input.replace(/<script[^>]*>.*?<\/script>/gi, '').replace(/<iframe[^>]*>.*?<\/iframe>/gi, '');
+            } catch (e) {
+                return '';
+            }
         }
     },
     
     /**
      * تنظيف كائن كامل من البيانات الخطيرة
-     * تم الإصلاح: معالجة آمنة للبيانات الفارغة والقيم الخاصة
+     * تم الإصلاح: معالجة آمنة للبيانات الفارغة والقيم الخاصة والحالات الحدية
      */
     sanitizeObject: function(obj, depth = 0) {
-        if (depth > 10) return null; // منع التعمق الشديد
+        // منع التعمق الشديد (حماية من الحلقات اللانهائية)
+        if (depth > 10) {
+            console.warn('⚠️ تحذير: تم تجاوز حد العمق الأقصى للتنظيف');
+            return null;
+        }
+
+        // معالجة القيم الفارغة
         if (obj === null || obj === undefined) return obj;
         
+        // معالجة النصوص
         if (typeof obj === 'string') {
             // التحقق من أن sanitizeHTML موجودة ومعرفة
             if (typeof this.sanitizeHTML === 'function') {
@@ -110,30 +198,57 @@ window.SecurityCore = {
             return obj; // إذا لم تكن موجودة، ارجع النص كما هو
         }
         
+        // معالجة الأرقام والقيم المنطقية
         if (typeof obj === 'number' || typeof obj === 'boolean') {
             return obj;
         }
         
+        // معالجة المصفوفات
         if (Array.isArray(obj)) {
-            return obj.map(item => this.sanitizeObject(item, depth + 1)).filter(item => item !== undefined);
+            try {
+                return obj
+                    .map(item => this.sanitizeObject(item, depth + 1))
+                    .filter(item => item !== undefined);
+            } catch (error) {
+                console.warn('⚠️ خطأ في تنظيف المصفوفة:', error);
+                return [];
+            }
         }
         
+        // معالجة الكائنات
         if (typeof obj === 'object') {
-            const cleanObj = {};
-            for (const key in obj) {
-                if (Object.prototype.hasOwnProperty.call(obj, key)) {
-                    try {
-                        const cleanKey = (typeof this.sanitizeHTML === 'function') ? this.sanitizeHTML(key) : key;
-                        cleanObj[cleanKey] = this.sanitizeObject(obj[key], depth + 1);
-                    } catch (error) {
-                        console.warn(`⚠️ خطأ في تنظيف المفتاح ${key}:`, error);
-                        // تخطي المفتاح الذي يسبب خطأ
+            try {
+                const cleanObj = {};
+                for (const key in obj) {
+                    if (Object.prototype.hasOwnProperty.call(obj, key)) {
+                        try {
+                            // التحقق من أن المفتاح ليس فارغاً
+                            if (!key || typeof key !== 'string') {
+                                continue;
+                            }
+
+                            const cleanKey = (typeof this.sanitizeHTML === 'function') 
+                                ? this.sanitizeHTML(key) 
+                                : key;
+
+                            // تجاهل المفاتيح الفارغة بعد التنظيف
+                            if (!cleanKey) continue;
+
+                            cleanObj[cleanKey] = this.sanitizeObject(obj[key], depth + 1);
+                        } catch (error) {
+                            console.warn(`⚠️ خطأ في تنظيف المفتاح ${key}:`, error);
+                            // تخطي المفتاح الذي يسبب خطأ
+                        }
                     }
                 }
+                return cleanObj;
+            } catch (error) {
+                console.warn('⚠️ خطأ في تنظيف الكائن:', error);
+                return {};
             }
-            return cleanObj;
         }
         
+        // في حالة نوع بيانات غير متوقع
         return obj;
     },
     
@@ -141,18 +256,26 @@ window.SecurityCore = {
      * منع هجمات CSRF
      */
     preventCSRF: function() {
-        // إضافة CSRF token إلى جميع الطلبات
-        const csrfToken = this.generateCSRFToken();
-        window.csrfToken = csrfToken;
-        console.log('🔐 تم إنشاء CSRF Token');
+        try {
+            // إضافة CSRF token إلى جميع الطلبات
+            const csrfToken = this.generateCSRFToken();
+            window.csrfToken = csrfToken;
+            console.log('🔐 تم إنشاء CSRF Token');
+        } catch (error) {
+            console.error('⚠️ خطأ في إنشاء CSRF Token:', error);
+        }
     },
     
     /**
      * منع هجمات Clickjacking
      */
     preventClickjacking: function() {
-        if (window.self !== window.top) {
-            window.top.location = window.self.location;
+        try {
+            if (window.self !== window.top) {
+                window.top.location = window.self.location;
+            }
+        } catch (error) {
+            console.error('⚠️ خطأ في منع Clickjacking:', error);
         }
     },
     
@@ -160,19 +283,30 @@ window.SecurityCore = {
      * توليد CSRF Token
      */
     generateCSRFToken: function() {
-        return 'xxxxxxxx-xxxx-4xxx-yxxx-xxxxxxxxxxxx'.replace(/[xy]/g, function(c) {
-            const r = Math.random() * 16 | 0;
-            const v = c === 'x' ? r : (r & 0x3 | 0x8);
-            return v.toString(16);
-        });
+        try {
+            return 'xxxxxxxx-xxxx-4xxx-yxxx-xxxxxxxxxxxx'.replace(/[xy]/g, function(c) {
+                const r = Math.random() * 16 | 0;
+                const v = c === 'x' ? r : (r & 0x3 | 0x8);
+                return v.toString(16);
+            });
+        } catch (error) {
+            console.error('⚠️ خطأ في توليد CSRF Token:', error);
+            return '';
+        }
     },
     
     /**
      * التحقق من صحة البريد الإلكتروني
      */
     validateEmail: function(email) {
-        const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
-        return emailRegex.test(email);
+        try {
+            if (!email || typeof email !== 'string') return false;
+            const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
+            return emailRegex.test(email);
+        } catch (error) {
+            console.error('⚠️ خطأ في التحقق من البريد الإلكتروني:', error);
+            return false;
+        }
     },
     
     /**
@@ -180,6 +314,7 @@ window.SecurityCore = {
      */
     encryptData: function(data) {
         try {
+            if (!data) return null;
             return btoa(JSON.stringify(data));
         } catch (error) {
             console.error('⚠️ خطأ في تشفير البيانات:', error);
@@ -192,6 +327,7 @@ window.SecurityCore = {
      */
     decryptData: function(encrypted) {
         try {
+            if (!encrypted || typeof encrypted !== 'string') return null;
             return JSON.parse(atob(encrypted));
         } catch (error) {
             console.error('⚠️ خطأ في فك تشفير البيانات:', error);
@@ -202,7 +338,17 @@ window.SecurityCore = {
 
 // تهيئة النظام عند تحميل الصفحة
 if (document.readyState === 'loading') {
-    document.addEventListener('DOMContentLoaded', () => window.SecurityCore.init());
+    document.addEventListener('DOMContentLoaded', () => {
+        try {
+            window.SecurityCore.init();
+        } catch (error) {
+            console.error('⚠️ خطأ في تهيئة نظام الأمان:', error);
+        }
+    });
 } else {
-    window.SecurityCore.init();
+    try {
+        window.SecurityCore.init();
+    } catch (error) {
+        console.error('⚠️ خطأ في تهيئة نظام الأمان:', error);
+    }
 }
