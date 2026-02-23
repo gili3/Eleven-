@@ -166,6 +166,8 @@ function resetUsersFilter() {
 }
 
 async function toggleUserStatus(userId, currentStatus) {
+    // يجب أن يتم التحقق من صلاحيات المسؤول على الخادم (عبر Firebase Security Rules أو Cloud Functions)
+    // قبل السماح بتغيير حالة المستخدم.
     if (!confirm(`هل أنت متأكد من ${currentStatus ? 'تعطيل' : 'تفعيل'} هذا المستخدم؟`)) return;
     try {
         const { db, firebaseModules } = window;
@@ -184,6 +186,8 @@ async function toggleUserStatus(userId, currentStatus) {
 }
 
 async function makeAdmin(userId) {
+    // يجب أن يتم التحقق من صلاحيات المسؤول على الخادم (عبر Firebase Security Rules أو Cloud Functions)
+    // قبل السماح بترقية المستخدم إلى مسؤول.
     if (!confirm('هل أنت متأكد من ترقية هذا المستخدم ليكون مسؤولاً (Admin)؟')) return;
     try {
         const { db, firebaseModules } = window;

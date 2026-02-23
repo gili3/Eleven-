@@ -72,4 +72,70 @@ async function deleteCategory(id) {
 
 window.loadCategories = loadCategories;
 window.deleteCategory = deleteCategory;
-window.openCategoryModal = () => alert('سيتم إضافة نموذج إضافة فئة قريباً');
+window.openCategoryModal = function() {
+    const modalHtml = `
+        <div id="categoryModal" class="modal-overlay active">
+            <div class="modal-content">
+                <div class="modal-header">
+                    <h3>إضافة فئة جديدة</h3>
+                    <button onclick="closeModal('categoryModal')" class="btn-close"><i class="fas fa-times"></i></button>
+                </div>
+                <form id="categoryForm" onsubmit="saveCategory(event)">
+                    <div class="form-group">
+                        <label>اسم الفئة</label>
+                        <input type="text" id="catName" required>
+                    </div>
+                    <div class="form-group">
+                        <label>الاسم اللطيف (Slug)</label>
+                        <input type="text" id="catSlug" required>
+                    </div>
+                    <div class="form-group">
+                        <label>صورة الفئة</label>
+                        <input type="file" id="catImageFile" accept="image/*" onchange="previewImageWithValidation(event, 'catImagePreview')">
+                        <img id="catImagePreview" style="max-width: 100px; margin-top: 10px; display: none;">
+                    </div>
+                    <div style="display: flex; gap: 10px; margin-top: 20px;">
+                        <button type="submit" class="btn btn-primary" style="flex: 1;">حفظ</button>
+                        <button type="button" class="btn btn-secondary" onclick="closeModal('categoryModal')" style="flex: 1;">إلغاء</button>
+                    </div>
+                </form>
+            </div>
+        </div>
+    `;
+    document.body.insertAdjacentHTML('beforeend', modalHtml);
+};
+
+window.saveCategory = async function(event) {
+    event.preventDefault();
+    const btn = event.target.querySelector('button[type="submit"]');
+    btn.disabled = true;
+    btn.innerText = 'جاري الحفظ...';
+
+    try {
+        const name = document.getElementById('catName').value;
+        const slug = document.getElementById('catSlug').value;
+        const imageFile = document.getElementById('catImageFile').files[0];
+
+        let imageUrl = '';
+        if (imageFile) {
+            imageUrl = await window.uploadImageWithValidation(imageFile, 'categories');
+        }
+
+        await window.firebaseModules.addDoc(window.firebaseModules.collection(window.db, 'categories'), {
+            name,
+            slug,
+            image: imageUrl,
+            createdAt: window.firebaseModules.serverTimestamp()
+        });
+
+        window.adminUtils.showToast('تم إضافة الفئة بنجاح', 'success');
+        closeModal('categoryModal');
+        loadCategories();
+    } catch (error) {
+        console.error('❌ خطأ في حفظ الفئة:', error);
+        window.adminUtils.showToast('حدث خطأ أثناء الحفظ', 'error');
+    } finally {
+        btn.disabled = false;
+        btn.innerText = 'حفظ';
+    }
+};
