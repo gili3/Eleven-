@@ -54,17 +54,6 @@
             uploadBytesResumable
         };
         console.log("✅ Firebase Modules Loaded");
-        
-        // تهيئة Firebase فوراً عند تحميل الوحدات لضمان عدم تأخر الجلسة
-        if (typeof window.initializeFirebaseApp === 'function') {
-            const instance = window.initializeFirebaseApp();
-            if (instance) {
-                window.auth = instance.auth;
-                window.db = instance.db;
-                window.storage = instance.storage;
-            }
-        }
-        
         window.dispatchEvent(new CustomEvent('firebase-ready'));
     </script>
     
@@ -75,8 +64,8 @@
     <link href="https://fonts.googleapis.com/css2?family=Cairo:wght@300;400;500;600;700;800&display=swap" rel="stylesheet">
     
     <!-- CSS -->
-    <link rel="stylesheet" href="public/css/style.css?v=111">
-    <link rel="stylesheet" href="shared/css/css-security.css?v=111">
+    <link rel="stylesheet" href="public/css/style.css?v=112">
+    <link rel="stylesheet" href="shared/css/css-security.css?v=112">
     
     <style>
         /* شاشة التحميل الأولية */
@@ -141,11 +130,11 @@
             100% { transform: scale(1); opacity: 0.8; }
         }
         
-        /* إخفاء العناصر الرئيسية حتى يتم التحقق من المصادقة */
-        #authScreen, #appContainer {
-            display: none !important;
-            visibility: hidden !important;
-            opacity: 0 !important;
+        /* التطبيق الرئيسي */
+        #appContainer {
+            display: block !important;
+            visibility: visible !important;
+            opacity: 1 !important;
         }
         
         /* أنماط جديدة للصور والإيصالات */
@@ -421,135 +410,9 @@
             <div class="loader-text">Eleven Store</div>
         </div>
     </div>
-    
-    <!-- تم نقل شاشة المصادقة إلى login.html -->
-    <div id="authScreen" class="auth-screen" style="display: none; visibility: hidden;">
-        <div class="auth-container">
-            <div class="auth-header">
-                <img id="authLogo" src="https://i.ibb.co/fVn1SghC/file-00000000cf8071f498fc71b66e09f615.png" alt="Eleven Logo" class="auth-logo" loading="lazy">
-                <h1>Eleven</h1>
-                <p>حيث تجد عطرك المفضل واكثر</p>
-            </div>
-            
-            <div class="auth-options">
-                <button id="googleSignInBtn" class="auth-btn google-btn">
-                    <i class="fab fa-google"></i>
-                    تسجيل الدخول بـ Google
-                </button>
-                
-                <button id="emailSignInBtn" class="auth-btn email-btn">
-                    <i class="fas fa-envelope"></i>
-                    تسجيل الدخول بالبريد الإلكتروني
-                </button>
-                
-                <button id="guestSignInBtn" class="auth-btn guest-btn">
-                    <i class="fas fa-user-clock"></i>
-                    الدخول كضيف
-                </button>
-                
-                <p class="auth-note">
-                    الدخول كضيف يسمح لك بالتسوق فقط، ولن يتم حفظ طلباتك
-                </p>
-            </div>
-            
-            <!-- نموذج المصادقة بالبريد -->
-            <div id="emailAuthForm" class="email-auth-form" style="display: none;">
-                <div class="form-header">
-                    <h2 id="authFormTitle">تسجيل الدخول</h2>
-                    <button id="backToAuthOptions" class="back-btn">
-                        <i class="fas fa-arrow-right"></i> رجوع
-                    </button>
-                </div>
-                
-                <!-- حقول تسجيل الدخول -->
-                <div id="loginFields">
-                    <div class="form-group">
-                        <label for="emailInput">
-                            <i class="fas fa-envelope"></i> البريد الإلكتروني
-                        </label>
-                        <input type="email" id="emailInput" placeholder="example@domain.com">
-                    </div>
-                    
-                    <div class="form-group">
-                        <label for="passwordInput">
-                            <i class="fas fa-lock"></i> كلمة المرور
-                        </label>
-                        <input type="password" id="passwordInput" placeholder="********">
-                    </div>
-                    
-                    <div class="form-actions">
-                        <button id="signInBtn" class="submit-btn">
-                            <i class="fas fa-sign-in-alt"></i> تسجيل الدخول
-                        </button>
-                        <button id="signUpBtn" class="submit-btn secondary">
-                            <i class="fas fa-user-plus"></i> إنشاء حساب جديد
-                        </button>
-                    </div>
-                </div>
-                
-                <!-- حقول إنشاء حساب جديد -->
-                <div id="registerFields" style="display: none;">
-                    <div class="form-group">
-                        <label for="registerName">
-                            <i class="fas fa-user"></i> الاسم الكامل *
-                        </label>
-                        <input type="text" id="registerName" placeholder="أدخل اسمك الكامل">
-                    </div>
-                    
-                    <div class="form-group">
-                        <label for="registerEmail">
-                            <i class="fas fa-envelope"></i> البريد الإلكتروني *
-                        </label>
-                        <input type="email" id="registerEmail" placeholder="example@domain.com">
-                    </div>
-                    
-                    <div class="form-group">
-                        <label for="registerPassword">
-                            <i class="fas fa-lock"></i> كلمة المرور *
-                        </label>
-                        <input type="password" id="registerPassword" placeholder="******** (6 أحرف على الأقل)" minlength="6">
-                        <small style="display: block; margin-top: 5px; color: #7f8c8d; font-size: 12px;">
-                            يجب أن تكون كلمة المرور 6 أحرف على الأقل
-                        </small>
-                    </div>
-                    
-                    <div class="form-group">
-                        <label for="registerPhone">
-                            <i class="fas fa-phone"></i> رقم الهاتف (اختياري)
-                        </label>
-                        <input type="tel" id="registerPhone" placeholder="مثال: 0912345678">
-                    </div>
-                    
-                    <div class="form-actions">
-                        <button id="completeSignUpBtn" class="submit-btn">
-                            <i class="fas fa-user-plus"></i> إنشاء حساب
-                        </button>
-                        <button id="switchToLoginBtn" class="submit-btn secondary">
-                            <i class="fas fa-sign-in-alt"></i> لدي حساب بالفعل
-                        </button>
-                    </div>
-                    
-                    <div class="auth-terms">
-                        <p>
-                            <i class="fas fa-info-circle"></i> 
-                            بمجرد إنشاء حسابك، ستتمكن من:
-                        </p>
-                        <ul>
-                            <li>تتبع طلباتك السابقة</li>
-                            <li>حفظ المنتجات في المفضلة</li>
-                            <li>تحديث معلومات ملفك الشخصي</li>
-                            <li>الحصول على عروض خاصة</li>
-                        </ul>
-                    </div>
-                </div>
-                
-                <div id="emailAuthMessage" class="auth-message"></div>
-            </div>
-        </div>
-    </div>
 
     <!-- التطبيق الرئيسي -->
-    <div id="appContainer" class="app-container" style="display: none;">
+    <div id="appContainer" class="app-container">
         <!-- الهيدر المعدل -->
         <header class="header" id="mainHeader">
             <div class="header-content">
@@ -777,53 +640,53 @@
             </section>
 
             <!-- قسم جميع المنتجات -->
-            <section id="products" class="section">
-                <div class="products-header">
-                    <h2 class="section-title">جميع المنتجات</h2>
-                    
-                    <!-- الفلاتر -->
-                    <div class="filters-container">
-                        <select id="categoryFilter" class="filter-select">
-                            <option value="">جميع الفئات</option>
-                            <option value="perfume">عطور</option>
-                            <option value="makeup">مكياج</option>
-                            <option value="skincare">عناية بالبشرة</option>
-                            <option value="haircare">عناية بالشعر</option>
-                        </select>
-                        
-                        <select id="sortFilter" class="filter-select">
-                            <option value="newest">الأحدث أولاً</option>
-                            <option value="price-low">السعر: من الأقل للأعلى</option>
-                            <option value="price-high">السعر: من الأعلى للأقل</option>
-                            <option value="popular">الأكثر شيوعاً</option>
-                        </select>
-                        
-                        <div class="filter-buttons">
-                            <button class="filter-btn" data-filter="isNew">
-                                <i class="fas fa-tag"></i> جديد
-                            </button>
-                            <button class="filter-btn" data-filter="isSale">
-                                <i class="fas fa-percentage"></i> عروض
-                            </button>
-                            <button class="filter-btn" data-filter="isBest">
-                                <i class="fas fa-crown"></i> الأفضل
-                            </button>
-                        </div>
-                    </div>
-                </div>
-                
-                <div class="products-grid" id="productsGrid">
-                    <!-- سيتم تعبئتها بواسطة JavaScript -->
-                </div>
-                
-                <!-- عنصر مراقبة التحميل اللانهائي لصفحة المنتجات -->
-                <div id="productsScrollSentinel" class="scroll-sentinel"></div>
-                
-                <div class="loading-more" id="productsLoading" style="display: none;">
-                    <div class="loading-spinner-small"></div>
-                    <p>جاري تحميل المزيد من المنتجات...</p>
-                </div>
-            </section>
+            <!-- قسم جميع المنتجات -->
+<section id="products" class="section">
+    <div class="products-header">
+        <h2 class="section-title">جميع المنتجات</h2>
+        
+        <!-- الفلاتر -->
+        <div class="filters-container">
+            <select id="categoryFilter" class="filter-select">
+                <option value="">جميع الفئات</option>
+                <!-- سيتم تعبئتها ديناميكياً من Firebase -->
+            </select>
+            
+            <select id="sortFilter" class="filter-select">
+                <option value="newest">الأحدث أولاً</option>
+                <option value="price-low">السعر: من الأقل للأعلى</option>
+                <option value="price-high">السعر: من الأعلى للأقل</option>
+                <option value="popular">الأكثر شيوعاً</option>
+            </select>
+            
+            <div class="filter-buttons">
+                <button class="filter-btn" data-filter="isNew">
+                    <i class="fas fa-tag"></i> جديد
+                </button>
+                <button class="filter-btn" data-filter="isSale">
+                    <i class="fas fa-percentage"></i> عروض
+                </button>
+                <button class="filter-btn" data-filter="isBest">
+                    <i class="fas fa-crown"></i> الأفضل
+                </button>
+            </div>
+        </div>
+    </div>
+    
+    <!-- حاوية الفئات الجانبية (ستتم إضافتها تلقائياً) -->
+    
+    <div class="products-grid" id="productsGrid">
+        <!-- سيتم تعبئتها بواسطة JavaScript -->
+    </div>
+    
+    <!-- عنصر مراقبة التحميل اللانهائي -->
+    <div id="productsScrollSentinel" class="scroll-sentinel"></div>
+    
+    <div class="loading-more" id="productsLoading" style="display: none;">
+        <div class="loading-spinner-small"></div>
+        <p>جاري تحميل المزيد من المنتجات...</p>
+    </div>
+</section>
             
             <!-- قسم سلة التسوق -->
             <section id="cart" class="section">
@@ -1391,23 +1254,21 @@
     <!-- الإشعارات -->
     <div id="toastContainer"></div>
     
-    <!-- JavaScript Files -->
-    <script src="shared/js/security-core.js?v=111"></script>
-    <script src="shared/js/firebase-config.js?v=111"></script>
-    <script src="shared/js/firebase-unified.js?v=111"></script>
-    <script src="shared/js/firebase-messaging.js?v=111"></script>
-    <script src="public/js/notifications-system.js?v=111"></script>
-    <script src="public/js/app-core.js?v=111"></script>
-    <script src="public/js/auth-system.js?v=111"></script>
-    <script src="public/js/products-system.js?v=111"></script>
-    <script src="public/js/image-viewer.js?v=111"></script>
-    <script src="public/js/categories-system.js?v=111"></script>
-    <script src="public/js/cart-system.js?v=111"></script>
-    <script src="public/js/orders-system.js?v=111"></script>
-    <script src="public/js/checkout-system.js?v=111"></script>
-    <script src="public/js/profile-system.js?v=111"></script>
-    <script src="public/js/utils.js?v=111"></script>
-    <script src="public/js/main.js?v=111"></script>
+    <!-- JavaScript Files (بدون auth-system.js) -->
+    <script src="shared/js/security-core.js?v=112"></script>
+    <script src="shared/js/firebase-unified.js?v=112"></script>
+    <script src="shared/js/firebase-messaging.js?v=112"></script>
+    <script src="public/js/notifications-system.js?v=112"></script>
+    <script src="public/js/app-core.js?v=112"></script>
+    <script src="public/js/sections/products-system.js?v=112"></script>
+    <script src="public/js/image-viewer.js?v=112"></script>
+    <script src="public/js/sections/categories-system.js?v=112"></script>
+    <script src="public/js/sections/cart-system.js?v=112"></script>
+    <script src="public/js/sections/orders-system.js?v=112"></script>
+    <script src="public/js/sections/checkout-system.js?v=112"></script>
+    <script src="public/js/sections/profile-system.js?v=112"></script>
+    <script src="public/js/utils.js?v=112"></script>
+    <script src="public/js/main.js?v=112"></script>
     
     <!-- تهيئة تحسينات الأداء بعد تحميل الصفحة -->
     <script>

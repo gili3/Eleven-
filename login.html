@@ -60,66 +60,417 @@
     <!-- Google Fonts -->
     <link href="https://fonts.googleapis.com/css2?family=Cairo:wght@300;400;500;600;700;800&display=swap" rel="stylesheet">
     
-    <!-- CSS -->
-    <link rel="stylesheet" href="public/css/style.css?v=111">
-    <link rel="stylesheet" href="shared/css/css-security.css?v=111">
-    
+    <!-- CSS فقط لصفحة تسجيل الدخول -->
     <style>
+        :root {
+            --primary-color: #c9a24d;
+            --secondary-color: #a88b3d;
+            --danger-color: #e74c3c;
+            --success-color: #27ae60;
+            --warning-color: #f39c12;
+            --dark-color: #333;
+            --gray-color: #7f8c8d;
+            --light-color: #f8f9fa;
+            --border-color: #e0e0e0;
+            --shadow: 0 4px 20px rgba(0,0,0,0.08);
+            --border-radius: 16px;
+        }
+
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+
         body {
+            font-family: 'Cairo', sans-serif;
             background: linear-gradient(135deg, #f7f5f2 0%, #ffffff 100%);
             min-height: 100vh;
             display: flex;
             justify-content: center;
             align-items: center;
-        }
-        .auth-screen {
-            position: relative;
-            z-index: 1;
-            width: 100%;
-            display: flex;
-            justify-content: center;
-            align-items: center;
+            direction: rtl;
             padding: 20px;
         }
-        .auth-container {
-            max-height: none;
-            overflow-y: visible;
-        }
+
+        /* شاشة التحميل */
         #initialLoader {
             position: fixed;
             top: 0;
             left: 0;
-            width: 100vw;
-            height: 100vh;
-            background-color: #fff;
+            width: 100%;
+            height: 100%;
+            background-color: #ffffff;
             display: flex;
             flex-direction: column;
             justify-content: center;
             align-items: center;
-            z-index: 9999;
-            transition: opacity 0.5s ease;
+            z-index: 10000;
+            transition: opacity 0.5s ease, visibility 0.5s;
         }
+
         .loader-spinner {
             width: 50px;
             height: 50px;
             border: 5px solid #f3f3f3;
-            border-top: 5px solid var(--primary-color, #555555);
+            border-top: 5px solid var(--primary-color);
             border-radius: 50%;
             animation: spin 1s linear infinite;
             margin-bottom: 15px;
         }
+
         @keyframes spin {
             0% { transform: rotate(0deg); }
             100% { transform: rotate(360deg); }
         }
+
+        /* شاشة المصادقة */
+        .auth-screen {
+            width: 100%;
+            max-width: 450px;
+            background: white;
+            border-radius: var(--border-radius);
+            box-shadow: var(--shadow);
+            overflow: hidden;
+            animation: fadeIn 0.5s ease;
+        }
+
+        @keyframes fadeIn {
+            from { opacity: 0; transform: translateY(20px); }
+            to { opacity: 1; transform: translateY(0); }
+        }
+
+        .auth-container {
+            padding: 30px 25px;
+        }
+
+        .auth-header {
+            text-align: center;
+            margin-bottom: 30px;
+        }
+
+        .auth-logo {
+            width: 100px;
+            height: 100px;
+            object-fit: contain;
+            margin-bottom: 15px;
+            border-radius: 50%;
+            background: var(--light-color);
+            padding: 10px;
+            box-shadow: var(--shadow);
+        }
+
+        .auth-header h1 {
+            font-size: 28px;
+            color: var(--dark-color);
+            margin-bottom: 5px;
+            font-weight: 800;
+        }
+
+        .auth-header p {
+            color: var(--gray-color);
+            font-size: 14px;
+        }
+
+        .auth-options {
+            display: flex;
+            flex-direction: column;
+            gap: 15px;
+            margin-bottom: 20px;
+        }
+
+        .auth-btn {
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            gap: 12px;
+            width: 100%;
+            padding: 14px;
+            border: none;
+            border-radius: 12px;
+            font-size: 16px;
+            font-weight: 600;
+            font-family: 'Cairo', sans-serif;
+            cursor: pointer;
+            transition: all 0.3s ease;
+            background: white;
+            border: 1px solid var(--border-color);
+            color: var(--dark-color);
+        }
+
+        .auth-btn:hover {
+            transform: translateY(-2px);
+            box-shadow: var(--shadow);
+        }
+
+        .auth-btn.google-btn {
+            background: #ffffff;
+            color: #333;
+            border: 2px solid #dddddd;
+        }
+
+        .auth-btn.google-btn i {
+            color: #DB4437;
+            font-size: 20px;
+        }
+
+        .auth-btn.email-btn {
+            background: var(--primary-color);
+            color: white;
+            border: none;
+        }
+
+        .auth-btn.email-btn i {
+            font-size: 18px;
+        }
+
+        .auth-btn.guest-btn {
+            background: var(--light-color);
+            color: var(--gray-color);
+            border: 1px solid var(--border-color);
+        }
+
+        .auth-btn.guest-btn i {
+            color: var(--gray-color);
+        }
+
+        .auth-note {
+            text-align: center;
+            font-size: 13px;
+            color: var(--gray-color);
+            background: var(--light-color);
+            padding: 12px;
+            border-radius: 10px;
+            margin-top: 10px;
+        }
+
+        /* نموذج البريد الإلكتروني */
+        .email-auth-form {
+            animation: slideIn 0.3s ease;
+        }
+
+        @keyframes slideIn {
+            from { opacity: 0; transform: translateX(-20px); }
+            to { opacity: 1; transform: translateX(0); }
+        }
+
+        .form-header {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            margin-bottom: 25px;
+            padding-bottom: 15px;
+            border-bottom: 2px solid var(--border-color);
+        }
+
+        .form-header h2 {
+            font-size: 20px;
+            color: var(--dark-color);
+        }
+
+        .back-btn {
+            background: none;
+            border: none;
+            color: var(--primary-color);
+            font-size: 14px;
+            font-weight: 600;
+            cursor: pointer;
+            display: flex;
+            align-items: center;
+            gap: 5px;
+            padding: 8px 12px;
+            border-radius: 8px;
+            transition: all 0.2s ease;
+        }
+
+        .back-btn:hover {
+            background: var(--light-color);
+        }
+
+        .form-group {
+            margin-bottom: 20px;
+        }
+
+        .form-group label {
+            display: block;
+            margin-bottom: 8px;
+            font-weight: 600;
+            color: var(--dark-color);
+            font-size: 14px;
+        }
+
+        .form-group label i {
+            color: var(--primary-color);
+            margin-left: 5px;
+        }
+
+        .form-group input {
+            width: 100%;
+            padding: 12px 15px;
+            border: 2px solid var(--border-color);
+            border-radius: 12px;
+            font-family: 'Cairo', sans-serif;
+            font-size: 15px;
+            transition: all 0.3s ease;
+            background: white;
+        }
+
+        .form-group input:focus {
+            border-color: var(--primary-color);
+            outline: none;
+            box-shadow: 0 0 0 3px rgba(201, 162, 77, 0.1);
+        }
+
+        .form-group small {
+            display: block;
+            margin-top: 5px;
+            color: var(--gray-color);
+            font-size: 12px;
+        }
+
+        .form-actions {
+            display: flex;
+            gap: 12px;
+            margin-top: 25px;
+            flex-direction: column;
+        }
+
+        .submit-btn {
+            width: 100%;
+            padding: 14px;
+            border: none;
+            border-radius: 12px;
+            font-size: 16px;
+            font-weight: 700;
+            font-family: 'Cairo', sans-serif;
+            cursor: pointer;
+            transition: all 0.3s ease;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            gap: 10px;
+        }
+
+        .submit-btn.primary {
+            background: var(--primary-color);
+            color: white;
+        }
+
+        .submit-btn.secondary {
+            background: var(--light-color);
+            color: var(--dark-color);
+            border: 1px solid var(--border-color);
+        }
+
+        .submit-btn:hover {
+            transform: translateY(-2px);
+            box-shadow: var(--shadow);
+        }
+
+        .auth-terms {
+            margin-top: 25px;
+            padding: 15px;
+            background: var(--light-color);
+            border-radius: 12px;
+            font-size: 14px;
+        }
+
+        .auth-terms p {
+            font-weight: 600;
+            margin-bottom: 10px;
+            color: var(--dark-color);
+        }
+
+        .auth-terms ul {
+            list-style: none;
+            padding-right: 20px;
+        }
+
+        .auth-terms li {
+            margin-bottom: 8px;
+            color: var(--gray-color);
+            display: flex;
+            align-items: center;
+            gap: 8px;
+        }
+
+        .auth-terms li i {
+            color: var(--success-color);
+            font-size: 12px;
+        }
+
+        .auth-message {
+            margin-top: 20px;
+            padding: 12px;
+            border-radius: 10px;
+            font-size: 14px;
+            text-align: center;
+            animation: fadeIn 0.3s ease;
+        }
+
+        .auth-message.error {
+            background: #fee;
+            color: var(--danger-color);
+            border: 1px solid #fcc;
+        }
+
+        .auth-message.success {
+            background: #e8f8e8;
+            color: var(--success-color);
+            border: 1px solid #c3e6c3;
+        }
+
+        .auth-message.info {
+            background: #e8f4fd;
+            color: #3498db;
+            border: 1px solid #b8d9f5;
+        }
+
+        /* تحسينات للشاشات الصغيرة */
+        @media (max-width: 480px) {
+            .auth-container {
+                padding: 20px 15px;
+            }
+
+            .auth-logo {
+                width: 80px;
+                height: 80px;
+            }
+
+            .auth-header h1 {
+                font-size: 24px;
+            }
+
+            .auth-btn {
+                padding: 12px;
+                font-size: 15px;
+            }
+
+            .form-header h2 {
+                font-size: 18px;
+            }
+        }
+
+        /* تحسين الوصول */
+        button:focus, input:focus {
+            outline: 2px solid var(--primary-color);
+            outline-offset: 2px;
+        }
+
+        /* منع التحديد العشوائي */
+        .no-select {
+            user-select: none;
+        }
     </style>
+    
+    <!-- رابط أيقونة الموقع -->
     <link rel="icon" type="image/x-icon" href="https://i.ibb.co/fVn1SghC/file-00000000cf8071f498fc71b66e09f615.png">
 </head>
 <body>
     <!-- شاشة التحميل -->
     <div id="initialLoader">
         <div class="loader-spinner"></div>
-        <p>جاري التحميل...</p>
+        <p style="font-family: 'Cairo';">جاري التحميل...</p>
     </div>
 
     <!-- شاشة المصادقة -->
@@ -128,7 +479,7 @@
             <div class="auth-header">
                 <img id="authLogo" src="https://i.ibb.co/fVn1SghC/file-00000000cf8071f498fc71b66e09f615.png" alt="Eleven Logo" class="auth-logo" loading="lazy">
                 <h1>Eleven</h1>
-                <p>حيث تجد عطرك المفضل واكثر</p>
+                <p>حيث تجد عطرك المفضل وأكثر</p>
             </div>
             
             <div id="authOptions" class="auth-options">
@@ -167,18 +518,18 @@
                         <label for="emailInput">
                             <i class="fas fa-envelope"></i> البريد الإلكتروني
                         </label>
-                        <input type="email" id="emailInput" placeholder="example@domain.com">
+                        <input type="email" id="emailInput" placeholder="example@domain.com" dir="ltr">
                     </div>
                     
                     <div class="form-group">
                         <label for="passwordInput">
                             <i class="fas fa-lock"></i> كلمة المرور
                         </label>
-                        <input type="password" id="passwordInput" placeholder="********">
+                        <input type="password" id="passwordInput" placeholder="********" dir="ltr">
                     </div>
                     
                     <div class="form-actions">
-                        <button id="signInBtn" class="submit-btn">
+                        <button id="signInBtn" class="submit-btn primary">
                             <i class="fas fa-sign-in-alt"></i> تسجيل الدخول
                         </button>
                         <button id="signUpBtn" class="submit-btn secondary">
@@ -200,25 +551,25 @@
                         <label for="registerEmail">
                             <i class="fas fa-envelope"></i> البريد الإلكتروني *
                         </label>
-                        <input type="email" id="registerEmail" placeholder="example@domain.com">
+                        <input type="email" id="registerEmail" placeholder="example@domain.com" dir="ltr">
                     </div>
                     
                     <div class="form-group">
                         <label for="registerPassword">
                             <i class="fas fa-lock"></i> كلمة المرور *
                         </label>
-                        <input type="password" id="registerPassword" placeholder="******** (6 أحرف على الأقل)" minlength="6">
+                        <input type="password" id="registerPassword" placeholder="******** (6 أحرف على الأقل)" minlength="6" dir="ltr">
                     </div>
                     
                     <div class="form-group">
                         <label for="registerPhone">
                             <i class="fas fa-phone"></i> رقم الهاتف (اختياري)
                         </label>
-                        <input type="tel" id="registerPhone" placeholder="مثال: 0912345678">
+                        <input type="tel" id="registerPhone" placeholder="مثال: 0912345678" dir="ltr">
                     </div>
                     
                     <div class="form-actions">
-                        <button id="completeSignUpBtn" class="submit-btn">
+                        <button id="completeSignUpBtn" class="submit-btn primary">
                             <i class="fas fa-user-plus"></i> إنشاء حساب
                         </button>
                         <button id="switchToLoginBtn" class="submit-btn secondary">
@@ -232,70 +583,7 @@
         </div>
     </div>
 
-    <!-- Scripts -->
-    <script src="shared/js/firebase-config.js?v=111"></script>
-    <script src="shared/js/firebase-unified.js?v=111"></script>
-    <script src="public/js/app-core.js?v=111"></script>
-    <script src="shared/js/security-core.js?v=111"></script>
-    <script src="public/js/utils.js?v=111"></script>
-    <script src="public/js/auth-system.js?v=111"></script>
-    <script src="public/js/main.js?v=111"></script>
-    
-    <script>
-        // تخصيص لصفحة تسجيل الدخول المستقلة
-        window.addEventListener('firebase-ready', () => {
-            // تهيئة Firebase عبر app-core.js لضمان توحيد الإعدادات والجلسات
-            if (typeof initializeFirebaseApp === 'function') {
-                const instance = initializeFirebaseApp();
-                if (instance) {
-                    window.auth = instance.auth;
-                    window.db = instance.db;
-                    window.storage = instance.storage;
-                }
-            }
-
-            // مراقبة حالة المصادقة بشكل غير متزامن
-            if (window.firebaseModules && window.auth) {
-                window.firebaseModules.onAuthStateChanged(window.auth, (user) => {
-                    if (user) {
-                        console.log("User is logged in, redirecting to index.html");
-                        window.location.href = 'index.html';
-                    } else {
-                        console.log("No user session found on login page");
-                        forceHideInitialLoader();
-                    }
-                });
-            } else {
-                forceHideInitialLoader();
-            }
-            
-            // تعديل دالة showMainApp لتوجه المستخدم للرئيسية
-            window.showMainApp = () => {
-                window.location.href = 'index.html';
-            };
-            
-            // ربط زر تسجيل الدخول
-            const signInBtn = document.getElementById('signInBtn');
-            if (signInBtn) {
-                signInBtn.addEventListener('click', () => {
-                    if (typeof handleLogin === 'function') handleLogin();
-                });
-            }
-        });
-
-        function forceHideInitialLoader() {
-            const loader = document.getElementById('initialLoader');
-            if (loader) {
-                loader.style.opacity = '0';
-                setTimeout(() => loader.style.display = 'none', 500);
-            }
-        }
-
-        // التأكد من بقاء المستخدم في هذه الصفحة إذا لم يسجل دخول
-        window.showAuthScreen = () => {
-            console.log("User is on login page");
-            forceHideInitialLoader();
-        };
-    </script>
+    <!-- ملف JavaScript الخاص بصفحة تسجيل الدخول -->
+    <script src="shared/js/login.js?v=112"></script>
 </body>
 </html>
