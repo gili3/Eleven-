@@ -1,5 +1,5 @@
 /**
- * users.js - قسم إدارة المستخدمين (نسخة محسنة مع التحميل بالتمرير)
+ * users.js - قسم إدارة المستخدمين (نسخة محسنة مع التحميل بالتمرير وتحقق الصلاحيات)
  */
 
 let allUsers = [];
@@ -10,6 +10,7 @@ const USERS_PER_PAGE = 8;
 let usersObserver = null;
 
 async function loadUsers(isNextPage = false) {
+    if (!window.checkAdmin()) return; // التحقق من الصلاحية
     if (isLoadingUsers) return;
     
     const searchInput = document.getElementById('usersSearchInput');
@@ -50,12 +51,10 @@ async function loadUsers(isNextPage = false) {
             firebaseModules.collection(db, 'users')
         ];
 
-        // تطبيق الفلترة من Firebase
         if (filterStatus) {
             constraints.push(firebaseModules.where('isActive', '==', filterStatus === 'active'));
         }
 
-        // الترتيب
         constraints.push(firebaseModules.orderBy('createdAt', 'desc'));
 
         if (isNextPage && lastUserDoc) {
@@ -124,13 +123,21 @@ function displayUsers(append = false) {
         return;
     }
 
-    tbody.innerHTML = allUsers.map(user => `
+    tbody.innerHTML = allUsers.map(user => {
+        // تنظيف البيانات قبل العرض
+        const safeName = window.SecurityCore?.sanitizeHTML(user.displayName || user.name || 'بدون اسم') || 'بدون اسم';
+        const safeEmail = window.SecurityCore?.sanitizeHTML(user.email || '---') || '---';
+        const safePhone = window.SecurityCore?.sanitizeHTML(user.phone || '---') || '---';
+        const totalOrders = user.totalOrders || 0;
+        const totalSpent = user.totalSpent || 0;
+
+        return `
         <tr class="compact-row">
-            <td data-label="الاسم" style="font-weight: 600; font-size: 12px;">${user.displayName || user.name || 'بدون اسم'}</td>
-            <td data-label="البريد" style="font-size: 11px; max-width: 150px; overflow: hidden; text-overflow: ellipsis;">${user.email || '---'}</td>
-            <td data-label="الهاتف" style="font-size: 11px;">${user.phone || '---'}</td>
-            <td data-label="الطلبات" style="font-size: 11px;">${user.totalOrders || 0}</td>
-            <td data-label="الإنفاق" style="font-weight: bold; color: var(--primary-color);">${window.adminUtils.formatNumber(user.totalSpent || 0)}</td>
+            <td data-label="الاسم" style="font-weight: 600; font-size: 12px;">${safeName}</td>
+            <td data-label="البريد" style="font-size: 11px; max-width: 150px; overflow: hidden; text-overflow: ellipsis;">${safeEmail}</td>
+            <td data-label="الهاتف" style="font-size: 11px;">${safePhone}</td>
+            <td data-label="الطلبات" style="font-size: 11px;">${totalOrders}</td>
+            <td data-label="الإنفاق" style="font-weight: bold; color: var(--primary-color);">${window.adminUtils.formatNumber(totalSpent)}</td>
             <td data-label="الحالة">
                 <span class="badge badge-${user.isActive !== false ? 'success' : 'danger'}" style="padding: 1px 6px; font-size: 9px; border-radius: 4px;">
                     ${user.isActive !== false ? 'نشط' : 'معطل'}
@@ -148,7 +155,7 @@ function displayUsers(append = false) {
                 </div>
             </td>
         </tr>
-    `).join('');
+    `}).join('');
 }
 
 function applyUsersFilter() {
@@ -166,8 +173,7 @@ function resetUsersFilter() {
 }
 
 async function toggleUserStatus(userId, currentStatus) {
-    // يجب أن يتم التحقق من صلاحيات المسؤول على الخادم (عبر Firebase Security Rules أو Cloud Functions)
-    // قبل السماح بتغيير حالة المستخدم.
+    if (!window.checkAdmin()) return;
     if (!confirm(`هل أنت متأكد من ${currentStatus ? 'تعطيل' : 'تفعيل'} هذا المستخدم؟`)) return;
     try {
         const { db, firebaseModules } = window;
@@ -186,8 +192,7 @@ async function toggleUserStatus(userId, currentStatus) {
 }
 
 async function makeAdmin(userId) {
-    // يجب أن يتم التحقق من صلاحيات المسؤول على الخادم (عبر Firebase Security Rules أو Cloud Functions)
-    // قبل السماح بترقية المستخدم إلى مسؤول.
+    if (!window.checkAdmin()) return;
     if (!confirm('هل أنت متأكد من ترقية هذا المستخدم ليكون مسؤولاً (Admin)؟')) return;
     try {
         const { db, firebaseModules } = window;
@@ -204,6 +209,7 @@ async function makeAdmin(userId) {
 }
 
 function filterUsers() {
+    // هذه الدالة للبحث المحلي بعد التحميل، لكن الأفضل استخدام loadUsers مع search
     const searchTerm = document.getElementById('userSearch')?.value.toLowerCase() || '';
     const filtered = allUsers.filter(user => 
         (user.displayName || user.name || '').toLowerCase().includes(searchTerm) || 
@@ -219,11 +225,15 @@ function filterUsers() {
         return;
     }
 
-    tbody.innerHTML = filtered.map(user => `
+    tbody.innerHTML = filtered.map(user => {
+        const safeName = window.SecurityCore?.sanitizeHTML(user.displayName || user.name || 'بدون اسم') || 'بدون اسم';
+        const safeEmail = window.SecurityCore?.sanitizeHTML(user.email || '---') || '---';
+        const safePhone = window.SecurityCore?.sanitizeHTML(user.phone || '---') || '---';
+        return `
         <tr class="compact-row">
-            <td data-label="الاسم">${user.displayName || user.name || 'بدون اسم'}</td>
-            <td data-label="البريد">${user.email || '---'}</td>
-            <td data-label="الهاتف">${user.phone || '---'}</td>
+            <td data-label="الاسم">${safeName}</td>
+            <td data-label="البريد">${safeEmail}</td>
+            <td data-label="الهاتف">${safePhone}</td>
             <td data-label="الطلبات">${user.totalOrders || 0}</td>
             <td data-label="الإنفاق">${window.adminUtils.formatNumber(user.totalSpent || 0)} SDG</td>
             <td data-label="الحالة"><span class="badge ${user.isActive !== false ? 'badge-success' : 'badge-danger'}">${user.isActive !== false ? 'نشط' : 'معطل'}</span></td>
@@ -239,10 +249,12 @@ function filterUsers() {
                 </div>
             </td>
         </tr>
-    `).join('');
+    `}).join('');
 }
 
 window.loadUsers = loadUsers;
 window.toggleUserStatus = toggleUserStatus;
 window.makeAdmin = makeAdmin;
 window.filterUsers = filterUsers;
+window.applyUsersFilter = applyUsersFilter;
+window.resetUsersFilter = resetUsersFilter;

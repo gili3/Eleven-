@@ -1,5 +1,5 @@
 /**
- * products.js - قسم إدارة المنتجات (نسخة محسنة مع التحميل بالتمرير والبطاقات المصغرة)
+ * products.js - قسم إدارة المنتجات (نسخة محسنة مع التحميل بالتمرير وتحقق الصلاحيات)
  */
 
 let localAllProducts = [];
@@ -10,7 +10,102 @@ let isLoadingProducts = false;
 const PRODUCTS_PER_PAGE = 8;
 let productsObserver = null;
 
+// ======================== التحقق من صلاحيات المسؤول ========================
+function checkAdmin() {
+    // التحقق من وجود دالة checkAdmin في النطاق العام
+    if (typeof window.checkAdmin === 'function') {
+        return window.checkAdmin();
+    }
+    
+    // إذا لم تكن موجودة، نتحقق من وجود التوكن في localStorage
+    const adminToken = localStorage.getItem('adminToken');
+    const isAdmin = adminToken === 'true' || adminToken === 'admin-authenticated';
+    
+    if (!isAdmin) {
+        console.warn('⚠️ محاولة وصول غير مصرح بها إلى لوحة التحكم');
+        if (typeof window.showToast === 'function') {
+            window.showToast('يجب تسجيل الدخول أولاً', 'error');
+        }
+        // إعادة التوجيه إلى صفحة تسجيل الدخول إذا كانت موجودة
+        if (window.location.pathname.includes('admin')) {
+            setTimeout(() => {
+                window.location.href = 'login.html';
+            }, 1500);
+        }
+    }
+    
+    return isAdmin;
+}
+
+// تعيين الدالة في النطاق العام
+window.checkAdmin = checkAdmin;
+
+// ======================== دالة رفع الصور مع التحقق ========================
+window.uploadImageWithValidation = async function(file, folder = 'products') {
+    if (!file) return '';
+    
+    // التحقق من حجم الملف (max 2MB)
+    const maxSize = 2 * 1024 * 1024; // 2MB
+    if (file.size > maxSize) {
+        throw new Error('حجم الصورة يجب أن يكون أقل من 2 ميجابايت');
+    }
+    
+    // التحقق من نوع الملف
+    const allowedTypes = ['image/jpeg', 'image/png', 'image/gif', 'image/webp'];
+    if (!allowedTypes.includes(file.type)) {
+        throw new Error('نوع الملف غير مدعوم. الأنواع المسموحة: JPEG, PNG, GIF, WEBP');
+    }
+    
+    try {
+        const { storage, firebaseModules } = window;
+        const fileName = `${folder}/${Date.now()}_${file.name.replace(/[^a-zA-Z0-9.]/g, '_')}`;
+        const storageRef = firebaseModules.ref(storage, fileName);
+        
+        const snapshot = await firebaseModules.uploadBytes(storageRef, file);
+        const downloadUrl = await firebaseModules.getDownloadURL(storageRef);
+        
+        return downloadUrl;
+    } catch (error) {
+        console.error('❌ فشل رفع الصورة:', error);
+        throw new Error('فشل رفع الصورة: ' + error.message);
+    }
+};
+
+// ======================== معاينة الصورة مع التحقق ========================
+window.previewImageWithValidation = function(event, previewId) {
+    const file = event.target.files[0];
+    if (!file) return;
+    
+    // التحقق من الحجم
+    const maxSize = 2 * 1024 * 1024; // 2MB
+    if (file.size > maxSize) {
+        alert('⚠️ حجم الصورة كبير جداً. الحد الأقصى 2 ميجابايت');
+        event.target.value = ''; // إعادة تعيين حقل الملف
+        return;
+    }
+    
+    // التحقق من النوع
+    const allowedTypes = ['image/jpeg', 'image/png', 'image/gif', 'image/webp'];
+    if (!allowedTypes.includes(file.type)) {
+        alert('⚠️ نوع الملف غير مدعوم. الأنواع المسموحة: JPEG, PNG, GIF, WEBP');
+        event.target.value = '';
+        return;
+    }
+    
+    // عرض المعاينة
+    const reader = new FileReader();
+    reader.onload = function(e) {
+        const preview = document.getElementById(previewId);
+        if (preview) {
+            preview.src = e.target.result;
+            preview.style.display = 'block';
+        }
+    };
+    reader.readAsDataURL(file);
+};
+
 async function loadProducts(isNextPage = false) {
+    if (!window.checkAdmin()) return;
     if (isLoadingProducts) return;
     
     const searchInput = document.getElementById('productsSearchInput');
@@ -46,7 +141,6 @@ async function loadProducts(isNextPage = false) {
 
         let constraints = [];
 
-        // تطبيق الفلترة
         if (filterCategory) {
             constraints.push(firebaseModules.where('category', '==', filterCategory));
         }
@@ -55,7 +149,6 @@ async function loadProducts(isNextPage = false) {
             constraints.push(firebaseModules.where('isActive', '==', filterStatus === 'active'));
         }
 
-        // الترتيب
         constraints.push(firebaseModules.orderBy('createdAt', 'desc'));
 
         if (isNextPage && lastProductDoc) {
@@ -121,7 +214,10 @@ function displayProducts(append = false) {
         return;
     }
 
-    const html = localAllProducts.map(product => `
+    const html = localAllProducts.map(product => {
+        const safeName = window.SecurityCore?.sanitizeHTML(product.name) || product.name;
+        const categoryName = window.getCategoryName ? window.getCategoryName(product.category) : (product.category || '---');
+        return `
         <tr class="compact-row" onclick="viewProduct('${product.id}')" style="cursor: pointer;">
             <td data-label="التحديد" onclick="event.stopPropagation()">
                 <input type="checkbox" class="custom-checkbox product-select" value="${product.id}">
@@ -131,8 +227,8 @@ function displayProducts(append = false) {
                      style="width: 30px; height: 30px; border-radius: 4px; object-fit: cover;"
                      onerror="this.src='https://via.placeholder.com/40'">
             </td>
-            <td data-label="الاسم" style="max-width: 120px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; font-weight: 600;">${product.name}</td>
-            <td data-label="الفئة" style="font-size: 11px;">${window.getCategoryName ? window.getCategoryName(product.category) : (product.category || '---')}</td>
+            <td data-label="الاسم" style="max-width: 120px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; font-weight: 600;">${safeName}</td>
+            <td data-label="الفئة" style="font-size: 11px;">${categoryName}</td>
             <td data-label="السعر" style="font-weight: bold; color: var(--primary-color);">${product.price}</td>
             <td data-label="المخزون" style="font-size: 11px;">${product.stock || 0}</td>
             <td data-label="الحالة">
@@ -151,7 +247,7 @@ function displayProducts(append = false) {
                 </div>
             </td>
         </tr>
-    `).join('');
+    `}).join('');
 
     tbody.innerHTML = html;
 }
@@ -170,6 +266,7 @@ window.resetProductsFilter = () => {
  */
 
 window.openProductModal = function(productId = null) {
+    if (!window.checkAdmin()) return;
     currentEditingProductId = productId;
     const product = productId ? localAllProducts.find(p => p.id === productId) : null;
     
@@ -183,13 +280,13 @@ window.openProductModal = function(productId = null) {
                 <form id="productForm" onsubmit="saveProduct(event)">
                     <div class="form-group">
                         <label>اسم المنتج</label>
-                        <input type="text" id="prodName" value="${product ? product.name : ''}" required>
+                        <input type="text" id="prodName" value="${product ? (window.SecurityCore?.sanitizeHTML(product.name) || product.name) : ''}" required>
                     </div>
                     <div class="form-group">
                         <label>الفئة</label>
                         <select id="prodCategory" required>
                             <option value="">اختر الفئة</option>
-                            ${window.allCategories.map(cat => `<option value="${cat.id}" ${product && product.category === cat.id ? 'selected' : ''}>${cat.name}</option>`).join('')}
+                            ${window.allCategories ? window.allCategories.map(cat => `<option value="${cat.id}" ${product && product.category === cat.id ? 'selected' : ''}>${window.SecurityCore?.sanitizeHTML(cat.name) || cat.name}</option>`).join('') : ''}
                         </select>
                     </div>
                     <div class="form-group">
@@ -202,7 +299,7 @@ window.openProductModal = function(productId = null) {
                     </div>
                     <div class="form-group">
                         <label>الوصف</label>
-                        <textarea id="prodDescription" rows="3">${product ? product.description || '' : ''}</textarea>
+                        <textarea id="prodDescription" rows="3">${product ? (window.SecurityCore?.sanitizeHTML(product.description) || product.description) : ''}</textarea>
                     </div>
                     <div class="form-group">
                         <label>صورة المنتج</label>
@@ -227,6 +324,7 @@ window.openProductModal = function(productId = null) {
 };
 
 window.saveProduct = async function(event) {
+    if (!window.checkAdmin()) return;
     event.preventDefault();
     const btn = event.target.querySelector('button[type="submit"]');
     btn.disabled = true;
@@ -241,18 +339,28 @@ window.saveProduct = async function(event) {
         const isActive = document.getElementById('prodIsActive').checked;
         const imageFile = document.getElementById('prodImageFile').files[0];
 
-        let imageUrl = currentEditingProductId ? (localAllProducts.find(p => p.id === currentEditingProductId).image || '') : '';
+        let imageUrl = '';
+        if (currentEditingProductId) {
+            const existingProduct = localAllProducts.find(p => p.id === currentEditingProductId);
+            imageUrl = existingProduct?.image || '';
+        }
 
         if (imageFile) {
-            imageUrl = await window.uploadImageWithValidation(imageFile, 'products');
+            // استخدام دالة رفع الصور مع التحقق من وجودها
+            if (typeof window.uploadImageWithValidation === 'function') {
+                imageUrl = await window.uploadImageWithValidation(imageFile, 'products');
+            } else {
+                // إذا لم تكن الدالة موجودة، استخدم الطريقة المباشرة
+                imageUrl = await uploadCategoryImage(imageFile);
+            }
         }
 
         const productData = {
-            name,
+            name: window.SecurityCore?.sanitizeHTML(name) || name,
             category,
             price,
             stock,
-            description,
+            description: window.SecurityCore?.sanitizeHTML(description) || description,
             isActive,
             image: imageUrl,
             updatedAt: window.firebaseModules.serverTimestamp()
@@ -271,7 +379,7 @@ window.saveProduct = async function(event) {
         loadProducts(false);
     } catch (error) {
         console.error('❌ خطأ في حفظ المنتج:', error);
-        window.adminUtils.showToast('حدث خطأ أثناء الحفظ', 'error');
+        window.adminUtils.showToast('حدث خطأ أثناء الحفظ: ' + error.message, 'error');
     } finally {
         btn.disabled = false;
         btn.innerText = 'حفظ';
@@ -279,10 +387,12 @@ window.saveProduct = async function(event) {
 };
 
 window.editProduct = function(id) {
+    if (!window.checkAdmin()) return;
     window.openProductModal(id);
 };
 
 window.deleteProduct = async function(id) {
+    if (!window.checkAdmin()) return;
     if (!confirm('هل أنت متأكد من حذف هذا المنتج؟')) return;
     try {
         await window.firebaseModules.deleteDoc(window.firebaseModules.doc(window.db, 'products', id));
@@ -297,4 +407,40 @@ window.deleteProduct = async function(id) {
 window.viewProduct = function(id) {
     // يمكن إضافة نافذة عرض تفاصيل المنتج هنا
     console.log('عرض المنتج:', id);
+    if (typeof window.openProductDetails === 'function') {
+        window.openProductDetails(id);
+    } else {
+        alert('عرض المنتج: ' + id);
+    }
 };
+
+// دالة مساعدة لإغلاق المودال
+window.closeModal = function(modalId) {
+    const modal = document.getElementById(modalId);
+    if (modal) {
+        modal.remove();
+    }
+};
+
+// دالة رفع صورة احتياطية (إذا لم تكن uploadImageWithValidation موجودة)
+async function uploadCategoryImage(file) {
+    if (!file) return '';
+    
+    // التحقق من الحجم (2MB)
+    if (file.size > 2 * 1024 * 1024) {
+        throw new Error('حجم الصورة يجب أن يكون أقل من 2 ميجابايت');
+    }
+    
+    const { storage, firebaseModules } = window;
+    const fileName = `products/${Date.now()}_${file.name.replace(/[^a-zA-Z0-9.]/g, '_')}`;
+    const storageRef = firebaseModules.ref(storage, fileName);
+    
+    try {
+        const snapshot = await firebaseModules.uploadBytes(storageRef, file);
+        const downloadUrl = await firebaseModules.getDownloadURL(storageRef);
+        return downloadUrl;
+    } catch (error) {
+        console.error('❌ فشل رفع الصورة:', error);
+        throw error;
+    }
+}

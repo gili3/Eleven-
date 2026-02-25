@@ -1,5 +1,5 @@
 /**
- * orders.js - قسم إدارة الطلبات (نسخة محسنة مع التحميل بالتمرير والبطاقات المصغرة)
+ * orders.js - قسم إدارة الطلبات (نسخة محسنة مع التحميل بالتمرير وتحقق الصلاحيات)
  */
 
 let allOrders = [];
@@ -7,9 +7,10 @@ let lastOrderDoc = null;
 let hasMoreOrders = true;
 let isLoadingOrders = false;
 const ORDERS_PER_PAGE = 8;
-let ordersObserver = null;
+let ordersObserver = ffnull;
 
 async function loadOrders(isNextPage = false) {
+    if (!window.checkAdmin()) return;
     if (isLoadingOrders) return;
     
     const searchInput = document.getElementById('ordersSearchInput');
@@ -49,12 +50,10 @@ async function loadOrders(isNextPage = false) {
             firebaseModules.collection(db, 'orders')
         ];
 
-        // تطبيق الفلترة من Firebase
         if (filterStatus) {
             constraints.push(firebaseModules.where('status', '==', filterStatus));
         }
 
-        // الترتيب
         constraints.push(firebaseModules.orderBy('createdAt', 'desc'));
 
         if (isNextPage && lastOrderDoc) {
@@ -124,11 +123,15 @@ function displayOrders(append = false) {
         return;
     }
 
-    tbody.innerHTML = allOrders.map(order => `
+    tbody.innerHTML = allOrders.map(order => {
+        const safeName = window.SecurityCore?.sanitizeHTML(order.userName || 'عميل') || 'عميل';
+        const safePhone = window.SecurityCore?.sanitizeHTML(order.phone || '---') || '---';
+        const safeOrderId = window.SecurityCore?.sanitizeHTML(order.orderId || order.id.substring(0, 6)) || order.id.substring(0, 6);
+        return `
         <tr class="compact-row" onclick="viewOrder('${order.id}')" style="cursor: pointer;">
-            <td data-label="رقم الطلب" style="font-weight: 600; font-size: 12px;">#${order.orderId || order.id.substring(0, 6)}</td>
-            <td data-label="العميل" style="font-size: 12px;">${order.userName || 'عميل'}</td>
-            <td data-label="الهاتف" style="font-size: 11px;">${order.phone || '---'}</td>
+            <td data-label="رقم الطلب" style="font-weight: 600; font-size: 12px;">#${safeOrderId}</td>
+            <td data-label="العميل" style="font-size: 12px;">${safeName}</td>
+            <td data-label="الهاتف" style="font-size: 11px;">${safePhone}</td>
             <td data-label="الإجمالي" style="font-weight: bold; color: var(--primary-color);">${window.adminUtils.formatNumber(order.total)}</td>
             <td data-label="الحالة">
                 <span class="badge badge-${window.adminUtils.getStatusColor(order.status)}" style="padding: 1px 6px; font-size: 9px; border-radius: 4px;">
@@ -147,7 +150,7 @@ function displayOrders(append = false) {
                 </div>
             </td>
         </tr>
-    `).join('');
+    `}).join('');
 }
 
 function applyOrdersFilter() {
@@ -165,8 +168,15 @@ function resetOrdersFilter() {
 }
 
 function viewOrder(orderId) {
+    if (!window.checkAdmin()) return;
     const order = allOrders.find(o => o.id === orderId);
     if (!order) return;
+
+    // تنظيف البيانات للعرض
+    const safeName = window.SecurityCore?.sanitizeHTML(order.userName || '---') || '---';
+    const safePhone = window.SecurityCore?.sanitizeHTML(order.phone || '---') || '---';
+    const safeAddress = window.SecurityCore?.sanitizeHTML(order.address || '---') || '---';
+    const safeOrderId = window.SecurityCore?.sanitizeHTML(order.orderId || order.id.substring(0, 8)) || order.id.substring(0, 8);
 
     const modal = document.createElement('div');
     modal.className = 'modal-overlay active';
@@ -174,15 +184,15 @@ function viewOrder(orderId) {
     modal.innerHTML = `
         <div class="modal-content" style="max-width: 600px;">
             <div class="modal-header">
-                <h2>تفاصيل الطلب: #${order.orderId || order.id.substring(0, 8)}</h2>
+                <h2>تفاصيل الطلب: #${safeOrderId}</h2>
                 <button class="modal-close" onclick="window.adminUtils.closeModal('orderModal')">&times;</button>
             </div>
             
             <div style="padding: 15px;">
                 <div style="background: #f8f9fa; padding: 15px; border-radius: 10px; margin-bottom: 15px; display: grid; grid-template-columns: 1fr 1fr; gap: 10px; font-size: 14px;">
-                    <p><strong>الاسم:</strong> ${order.userName || '---'}</p>
-                    <p><strong>الهاتف:</strong> ${order.phone || '---'}</p>
-                    <p><strong>العنوان:</strong> ${order.address || '---'}</p>
+                    <p><strong>الاسم:</strong> ${safeName}</p>
+                    <p><strong>الهاتف:</strong> ${safePhone}</p>
+                    <p><strong>العنوان:</strong> ${safeAddress}</p>
                     <p><strong>السعر الإجمالي:</strong> ${window.adminUtils.formatNumber(order.total)} SDG</p>
                     <p><strong>الحالة:</strong> <span class="badge badge-${window.adminUtils.getStatusColor(order.status)}">${window.adminUtils.getStatusText(order.status)}</span></p>
                     <p><strong>التاريخ:</strong> ${window.adminUtils.formatDate(order.createdAt)}</p>
@@ -190,15 +200,17 @@ function viewOrder(orderId) {
 
                 <h4 style="margin-bottom: 10px; border-bottom: 1px solid #eee; padding-bottom: 5px;">المنتجات</h4>
                 <div style="max-height: 200px; overflow-y: auto; margin-bottom: 15px;">
-                    ${(order.items || []).map(item => `
+                    ${(order.items || []).map(item => {
+                        const safeItemName = window.SecurityCore?.sanitizeHTML(item.name) || item.name;
+                        return `
                         <div style="display: flex; align-items: center; gap: 10px; padding: 8px; border-bottom: 1px solid #f1f1f1;">
                             <img src="${item.image || 'https://via.placeholder.com/30'}" style="width: 35px; height: 35px; border-radius: 4px; object-fit: cover;">
                             <div style="flex: 1;">
-                                <p style="font-size: 13px; margin: 0;">${item.name}</p>
+                                <p style="font-size: 13px; margin: 0;">${safeItemName}</p>
                                 <p style="font-size: 11px; color: #666; margin: 0;">${item.quantity} × ${window.adminUtils.formatNumber(item.price)} SDG</p>
                             </div>
                         </div>
-                    `).join('')}
+                    `}).join('')}
                 </div>
 
                 ${order.receiptUrl ? `
@@ -221,6 +233,7 @@ function viewOrder(orderId) {
 }
 
 async function editOrderStatus(orderId) {
+    if (!window.checkAdmin()) return;
     const order = allOrders.find(o => o.id === orderId);
     if (!order) return;
 
@@ -232,7 +245,6 @@ async function editOrderStatus(orderId) {
         'cancelled': 'ملغي'
     };
 
-    // إنشاء Modal لاختيار الحالة
     const modal = document.createElement('div');
     modal.className = 'modal-overlay active';
     modal.id = 'statusUpdateModal';
@@ -284,7 +296,6 @@ async function editOrderStatus(orderId) {
             
             window.adminUtils.closeModal('statusUpdateModal');
             
-            // تحديث نافذة التفاصيل إذا كانت مفتوحة
             if (document.getElementById('orderModal')) {
                 window.adminUtils.closeModal('orderModal');
                 viewOrder(orderId);
@@ -297,14 +308,21 @@ async function editOrderStatus(orderId) {
 }
 
 function printInvoice(orderId) {
+    if (!window.checkAdmin()) return;
     const order = allOrders.find(o => o.id === orderId);
     if (!order) return;
     
     const printWindow = window.open('', '_blank');
+    // تنظيف البيانات للطباعة
+    const safeName = window.SecurityCore?.sanitizeHTML(order.userName || '---') || '---';
+    const safePhone = window.SecurityCore?.sanitizeHTML(order.phone || '---') || '---';
+    const safeAddress = window.SecurityCore?.sanitizeHTML(order.address || '---') || '---';
+    const safeOrderId = window.SecurityCore?.sanitizeHTML(order.orderId || order.id.substring(0, 8)) || order.id.substring(0, 8);
+    
     printWindow.document.write(`
         <html dir="rtl">
         <head>
-            <title>فاتورة طلب #${order.orderId || order.id.substring(0, 8)}</title>
+            <title>فاتورة طلب #${safeOrderId}</title>
             <style>
                 body { font-family: 'Cairo', sans-serif; padding: 20px; }
                 .header { text-align: center; margin-bottom: 30px; border-bottom: 2px solid #333; padding-bottom: 10px; }
@@ -318,13 +336,13 @@ function printInvoice(orderId) {
         <body>
             <div class="header">
                 <h1>فاتورة شراء</h1>
-                <p>رقم الطلب: #${order.orderId || order.id.substring(0, 8)}</p>
+                <p>رقم الطلب: #${safeOrderId}</p>
             </div>
             <div class="info">
                 <div>
-                    <p><strong>العميل:</strong> ${order.userName || '---'}</p>
-                    <p><strong>الهاتف:</strong> ${order.phone || '---'}</p>
-                    <p><strong>العنوان:</strong> ${order.address || '---'}</p>
+                    <p><strong>العميل:</strong> ${safeName}</p>
+                    <p><strong>الهاتف:</strong> ${safePhone}</p>
+                    <p><strong>العنوان:</strong> ${safeAddress}</p>
                 </div>
                 <div>
                     <p><strong>التاريخ:</strong> ${window.adminUtils.formatDate(order.createdAt)}</p>
@@ -341,14 +359,16 @@ function printInvoice(orderId) {
                     </tr>
                 </thead>
                 <tbody>
-                    ${(order.items || []).map(item => `
+                    ${(order.items || []).map(item => {
+                        const safeItemName = window.SecurityCore?.sanitizeHTML(item.name) || item.name;
+                        return `
                         <tr>
-                            <td>${item.name}</td>
+                            <td>${safeItemName}</td>
                             <td>${window.adminUtils.formatNumber(item.price)} SDG</td>
                             <td>${item.quantity}</td>
                             <td>${window.adminUtils.formatNumber(item.price * item.quantity)} SDG</td>
                         </tr>
-                    `).join('')}
+                    `}).join('')}
                 </tbody>
             </table>
             <div class="total">
@@ -365,3 +385,5 @@ window.loadOrders = loadOrders;
 window.viewOrder = viewOrder;
 window.editOrderStatus = editOrderStatus;
 window.printInvoice = printInvoice;
+window.applyOrdersFilter = applyOrdersFilter;
+window.resetOrdersFilter = resetOrdersFilter;
