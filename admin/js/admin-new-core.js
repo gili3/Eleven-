@@ -1,6 +1,6 @@
 /**
  * admin-new-core.js
- * المحرك الأساسي لوحة التحكم - النسخة المصلحة
+ * المحرك الأساسي لوحة التحكم - النسخة المصلحة (مع جلسة موحدة وتحقق من الصلاحيات)
  */
 
 // المتغيرات العامة
@@ -13,39 +13,53 @@ window.allMessages = [];
 window.allReviews = [];
 window.allCoupons = [];
 
+// دالة للتحقق من صلاحية المسؤول (تستخدم في كل عملية)
+window.checkAdmin = function() {
+    if (!window.currentUser || !window.currentUser.isAdmin) {
+        if (window.adminUtils) {
+            window.adminUtils.showToast('غير مصرح لك بهذه العملية', 'error');
+        } else {
+            alert('غير مصرح');
+        }
+        return false;
+    }
+    return true;
+};
+
 document.addEventListener('DOMContentLoaded', async () => {
     console.log('🚀 بدء تشغيل لوحة التحكم...');
     
     try {
-        // استخدام Firebase الموحد
+        // استخدام Firebase الموحد (مع جلسة دائمة)
         if (typeof window.initializeFirebaseUnified === 'function') {
             const instance = await window.initializeFirebaseUnified();
             if (instance) {
                 window.db = instance.db;
                 window.storage = instance.storage;
                 window.auth = instance.auth;
-                console.log('✅ Firebase مهيأ (موحد)');
+                console.log('✅ Firebase مهيأ (موحد مع جلسة دائمة)');
             }
         } else {
             // الطريقة البديلة
-            if (!window.firebaseConfig) {
-                console.warn('⚠️ Firebase config not found, waiting...');
-                await new Promise(resolve => window.addEventListener('firebase-config-loaded', resolve, { once: true }));
-            }
-
-            const firebaseConfig = window.firebaseConfig;
+            const config = {
+                apiKey: "AIzaSyB1vNmCapPK0MI4H_Q0ilO7OnOgZa02jx0",
+                authDomain: "queen-beauty-b811b.firebaseapp.com",
+                projectId: "queen-beauty-b811b",
+                storageBucket: "queen-beauty-b811b.firebasestorage.app",
+                messagingSenderId: "418964206430",
+                appId: "1:418964206430:web:8c9451fc56ca7f956bd5cf"
+            };
             let app;
             try {
                 app = window.firebaseModules.getApp();
             } catch (e) {
-                app = window.firebaseModules.initializeApp(firebaseConfig);
+                app = window.firebaseModules.initializeApp(config);
             }
             
             window.db = window.firebaseModules.getFirestore(app);
             window.storage = window.firebaseModules.getStorage(app);
             window.auth = window.firebaseModules.getAuth(app);
 
-            // إعداد الجلسة - استخدام LOCAL بدلاً من SESSION
             if (window.firebaseModules.setPersistence && window.firebaseModules.browserLocalPersistence) {
                 try {
                     await window.firebaseModules.setPersistence(window.auth, window.firebaseModules.browserLocalPersistence);
@@ -56,15 +70,11 @@ document.addEventListener('DOMContentLoaded', async () => {
             }
         }
 
-        // إظهار المحتوى
-        const showAdminContent = () => {
-            const loader = document.getElementById('initialLoaderAdmin');
-            if (loader) loader.style.display = 'none';
-            const container = document.querySelector('.admin-container');
-            if (container) container.style.display = 'block';
-        };
-
-        showAdminContent();
+        // إخفاء شاشة التحميل
+        const loader = document.getElementById('initialLoaderAdmin');
+        if (loader) loader.style.display = 'none';
+        const container = document.querySelector('.admin-container');
+        if (container) container.style.display = 'block';
 
         // التحقق من حالة المصادقة
         window.firebaseModules.onAuthStateChanged(window.auth, async (user) => {
@@ -76,17 +86,29 @@ document.addEventListener('DOMContentLoaded', async () => {
                     );
                     if (userDoc.exists()) {
                         window.currentUser = { uid: user.uid, ...userDoc.data() };
+                        // إذا لم يكن المستخدم مسؤولاً، إعادة توجيهه للصفحة الرئيسية
+                        if (!window.currentUser.isAdmin) {
+                            window.adminUtils.showToast('ليس لديك صلاحية الوصول للوحة التحكم', 'error');
+                            setTimeout(() => { window.location.href = 'index.html'; }, 2000);
+                        }
+                    } else {
+                        // مستخدم غير موجود في قاعدة البيانات (غريب) - نعتبره غير مسؤول
+                        window.currentUser = { uid: user.uid, isAdmin: false };
+                        window.location.href = 'index.html';
                     }
                 } catch (error) {
                     console.error('❌ خطأ في جلب بيانات المستخدم:', error);
                 }
+            } else {
+                // لا يوجد مستخدم مسجل، إعادة توجيه لصفحة تسجيل الدخول
+                window.location.href = 'login.html';
             }
             
-            // تحميل البيانات الأولية
-            await loadInitialData();
-            
-            // تحميل القسم الافتراضي (الإحصائيات)
-            await loadCurrentSection('dashboard');
+            // تحميل البيانات الأولية بعد التأكد من أن المستخدم مسؤول
+            if (window.currentUser && window.currentUser.isAdmin) {
+                await loadInitialData();
+                await loadCurrentSection('dashboard');
+            }
         });
 
     } catch (error) {
@@ -95,6 +117,7 @@ document.addEventListener('DOMContentLoaded', async () => {
         if (loader) loader.style.display = 'none';
         const container = document.querySelector('.admin-container');
         if (container) container.style.display = 'block';
+        window.location.href = 'login.html';
     }
 });
 
@@ -117,6 +140,8 @@ async function loadInitialData() {
  * التبديل بين التبويبات
  */
 window.switchTab = async function(tabId) {
+    if (!window.checkAdmin()) return; // التحقق من الصلاحية
+
     // تحديث الأزرار النشطة
     document.querySelectorAll('.admin-tab').forEach(tab => {
         tab.classList.remove('active');
@@ -141,6 +166,8 @@ window.switchTab = async function(tabId) {
 
 // تحميل بيانات القسم الحالي
 async function loadCurrentSection(sectionId) {
+    if (!window.checkAdmin()) return;
+
     console.log(`📂 تحميل القسم: ${sectionId}`);
     try {
         switch(sectionId) {
@@ -178,6 +205,10 @@ window.logoutAdmin = function() {
     if (confirm('هل أنت متأكد من تسجيل الخروج؟')) {
         window.firebaseModules.signOut(window.auth)
             .then(() => {
+                sessionStorage.clear();
+                localStorage.removeItem("_usr");
+                localStorage.removeItem("currentUser");
+                localStorage.removeItem("_uid");
                 window.location.href = 'index.html';
             })
             .catch(error => {
