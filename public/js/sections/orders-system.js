@@ -1,4 +1,4 @@
-// orders-system.js - إدارة طلبات المستخدم مع التحميل اللانهائي (إصدار احترافي)
+// orders-system.js - إدارة طلبات المستخدم مع التحميل اللانهائي (إصدار احترافي كامل)
 // ======================== طلباتي ========================
 
 let lastOrderDoc = null;
@@ -8,30 +8,46 @@ let isOrdersLoading = false;
 let ordersObserver = null;
 
 /**
+ * دالة لإعادة ضبط حالة الطلبات
+ */
+function resetOrdersState() {
+    console.log('📦 Resetting orders state from orders-system');
+    lastOrderDoc = null;
+    hasMoreOrders = true;
+    isOrdersLoading = false;
+}
+
+/**
  * تهيئة مراقب التمرير لصفحة الطلبات
  */
 function setupOrdersInfiniteScroll() {
     const ordersList = document.getElementById('myOrdersList');
     if (!ordersList) return;
 
+    // إزالة الحارس القديم إذا وجد
     const oldSentinel = document.getElementById('ordersScrollSentinel');
     if (oldSentinel) {
         oldSentinel.remove();
     }
 
+    // إنشاء حارس جديد
     const sentinel = document.createElement('div');
     sentinel.id = 'ordersScrollSentinel';
     sentinel.style.height = '20px';
     sentinel.style.width = '100%';
     sentinel.style.marginTop = '10px';
     sentinel.style.marginBottom = '10px';
+    sentinel.style.background = 'transparent';
+    sentinel.style.pointerEvents = 'none';
     
     ordersList.parentNode?.appendChild(sentinel);
 
+    // إيقاف المراقب القديم
     if (ordersObserver) {
         ordersObserver.disconnect();
     }
 
+    // إنشاء مراقب جديد
     ordersObserver = new IntersectionObserver((entries) => {
         entries.forEach(entry => {
             if (entry.isIntersecting && hasMoreOrders && !isOrdersLoading) {
@@ -46,7 +62,7 @@ function setupOrdersInfiniteScroll() {
     });
 
     ordersObserver.observe(sentinel);
-    console.log('✅ Infinite scroll initialized');
+    console.log('✅ Infinite scroll initialized for orders');
 }
 
 /**
@@ -134,19 +150,30 @@ function renderOrderStages(status) {
  * تحميل طلبات المستخدم من Firestore
  */
 async function loadMyOrders(isNextPage = false) {
+    console.log('📦 Loading orders, next page:', isNextPage);
+    
     const ordersList = document.getElementById('myOrdersList');
     const emptyMessage = document.getElementById('emptyOrdersMessage');
     
-    if (!ordersList) return;
+    if (!ordersList) {
+        console.error('❌ ordersList element not found');
+        return;
+    }
     
-    const user = window.currentUser || (typeof auth !== 'undefined' ? auth.currentUser : null);
+    // التحقق من تسجيل الدخول - دعم مصادر متعددة للمستخدم
+    const user = window.currentUser || 
+                 (typeof auth !== 'undefined' ? auth.currentUser : null) || 
+                 (window.AppState?.user) ||
+                 (window.firebaseModules?.getAuth ? window.firebaseModules.getAuth().currentUser : null);
+                 
     if (!user) {
+        console.log('👤 No user logged in');
         ordersList.innerHTML = `
-            <div style="text-align: center; padding: 40px 20px;">
+            <div style="text-align: center; padding: 40px 20px; background: white; border-radius: 15px;">
                 <i class="fas fa-user-lock fa-3x" style="color: #ccc; margin-bottom: 20px;"></i>
                 <h3 style="color: var(--primary-color); margin-bottom: 10px;">الدخول مطلوب</h3>
                 <p style="color: #888; margin-bottom: 20px;">يجب تسجيل الدخول لعرض الطلبات السابقة</p>
-                <button onclick="showAuthScreen()" class="btn-primary" style="padding: 12px 25px; border-radius: 10px; border: none; background: var(--primary-color); color: white; cursor: pointer;">
+                <button onclick="showAuthScreen ? showAuthScreen() : (window.location.href='login.html')" class="btn-primary" style="padding: 12px 25px; border-radius: 10px; border: none; background: var(--primary-color); color: white; cursor: pointer;">
                     <i class="fas fa-sign-in-alt"></i> تسجيل الدخول
                 </button>
             </div>
@@ -155,56 +182,96 @@ async function loadMyOrders(isNextPage = false) {
         return;
     }
 
-    if (isOrdersLoading || (isNextPage && !hasMoreOrders)) return;
+    // منع التحميل المتكرر
+    if (isOrdersLoading) {
+        console.log('⏳ Already loading orders');
+        return;
+    }
+    
+    if (isNextPage && !hasMoreOrders) {
+        console.log('📭 No more orders to load');
+        return;
+    }
 
     isOrdersLoading = true;
     
+    // عرض محمل التحميل للصفحة الأولى فقط
     if (!isNextPage) {
-        ordersList.innerHTML = '<div style="text-align:center; padding:40px;"><div class="modern-loader" style="margin: 0 auto;"></div><p style="margin-top:15px; color:#888;">جاري تحميل طلباتك...</p></div>';
+        ordersList.innerHTML = `
+            <div style="text-align:center; padding:40px; background: white; border-radius: 15px;">
+                <div class="modern-loader" style="margin: 0 auto; width: 40px; height: 40px;"></div>
+                <p style="margin-top:15px; color:#888;">جاري تحميل طلباتك...</p>
+            </div>
+        `;
         lastOrderDoc = null;
         hasMoreOrders = true;
         if (window.allOrdersArray) window.allOrdersArray = [];
         
+        // إزالة الحارس القديم
         const oldSentinel = document.getElementById('ordersScrollSentinel');
         if (oldSentinel) oldSentinel.remove();
     }
 
-    const loader = document.getElementById('ordersLoader');
-    if (loader && isNextPage) loader.style.display = 'block';
+    // عرض محمل التحميل للصفحات التالية
+    if (isNextPage) {
+        const loader = document.getElementById('ordersLoader');
+        if (loader) loader.style.display = 'block';
+    }
 
     try {
-        const db = window.firebaseDb || (window.getFirebaseInstance ? window.getFirebaseInstance().db : null);
-        if (!db || !window.firebaseModules) throw new Error('Firebase not initialized');
-
-        const ordersRef = window.firebaseModules.collection(db, "orders");
-        let constraints = [
-            window.firebaseModules.where("userId", "==", user.uid),
-            window.firebaseModules.orderBy("createdAt", "desc"),
-            window.firebaseModules.limit(ORDERS_PER_PAGE)
-        ];
-
-        if (isNextPage && lastOrderDoc) {
-            constraints.splice(2, 0, window.firebaseModules.startAfter(lastOrderDoc));
+        // الحصول على مرجع Firebase
+        const db = window.firebaseDb || window.db;
+        if (!db || !window.firebaseModules) {
+            throw new Error('Firebase not initialized');
         }
 
+        const ordersRef = window.firebaseModules.collection(db, "orders");
+        let constraints = [];
+        
+        // إضافة شرط المستخدم أولاً
+        constraints.push(window.firebaseModules.where("userId", "==", user.uid));
+        
+        // إضافة الترتيب
+        constraints.push(window.firebaseModules.orderBy("createdAt", "desc"));
+
+        // إضافة نقطة البداية للصفحات التالية
+        if (isNextPage && lastOrderDoc) {
+            constraints.push(window.firebaseModules.startAfter(lastOrderDoc));
+        }
+        
+        // إضافة الحد الأقصى
+        constraints.push(window.firebaseModules.limit(ORDERS_PER_PAGE));
+
+        // تنفيذ الاستعلام
         const q = window.firebaseModules.query(ordersRef, ...constraints);
         const querySnapshot = await window.firebaseModules.getDocs(q);
 
+        console.log(`📦 Found ${querySnapshot.size} orders`);
+
+        // التحقق من النتائج
         if (querySnapshot.empty) {
             hasMoreOrders = false;
             if (!isNextPage) {
                 ordersList.innerHTML = '';
                 if (emptyMessage) emptyMessage.style.display = 'block';
             }
+            
+            // إخفاء المحمل
+            const loader = document.getElementById('ordersLoader');
             if (loader) loader.style.display = 'none';
+            
+            isOrdersLoading = false;
             return;
         }
 
+        // إخفاء رسالة عدم وجود طلبات
         if (emptyMessage) emptyMessage.style.display = 'none';
 
+        // تحديث آخر مستند للصفحة التالية
         lastOrderDoc = querySnapshot.docs[querySnapshot.docs.length - 1];
         hasMoreOrders = querySnapshot.docs.length === ORDERS_PER_PAGE;
 
+        // معالجة البيانات
         const newOrders = querySnapshot.docs.map(doc => {
             const data = doc.data();
             return {
@@ -214,40 +281,51 @@ async function loadMyOrders(isNextPage = false) {
             };
         });
         
-        if (window.allOrdersArray) {
-            window.allOrdersArray = [...(window.allOrdersArray || []), ...newOrders];
-        }
+        // تخزين في المصفوفة العامة
+        if (!window.allOrdersArray) window.allOrdersArray = [];
+        window.allOrdersArray = [...window.allOrdersArray, ...newOrders];
         
+        // عرض الطلبات
         renderOrdersList(newOrders, isNextPage);
         
+        // تهيئة التمرير اللانهائي للصفحة الأولى
         if (!isNextPage) {
-            setupOrdersInfiniteScroll();
+            setTimeout(() => {
+                setupOrdersInfiniteScroll();
+            }, 100);
         }
 
     } catch (error) {
-        console.error('Error loading orders:', error);
+        console.error('❌ Error loading orders:', error);
         if (!isNextPage) {
             ordersList.innerHTML = `
-                <div style="text-align: center; padding: 40px 20px; color: #e74c3c;">
+                <div style="text-align: center; padding: 40px 20px; background: white; border-radius: 15px; color: #e74c3c;">
                     <i class="fas fa-exclamation-triangle fa-3x" style="margin-bottom: 20px;"></i>
                     <h3>حدث خطأ أثناء تحميل الطلبات</h3>
-                    <p>يرجى التأكد من اتصالك بالإنترنت والمحاولة مرة أخرى</p>
-                    <button onclick="loadMyOrders(false)" class="btn-primary" style="margin-top:15px; background:#e74c3c; border:none; padding:10px 20px; border-radius:8px; color:white; cursor:pointer;">حاول مرة أخرى</button>
+                    <p style="color: #666; margin: 10px 0;">يرجى التأكد من اتصالك بالإنترنت والمحاولة مرة أخرى</p>
+                    <button onclick="loadMyOrders(false)" class="btn-primary" style="margin-top:15px; background:#e74c3c; border:none; padding:10px 30px; border-radius:8px; color:white; cursor:pointer;">
+                        <i class="fas fa-redo"></i> إعادة المحاولة
+                    </button>
                 </div>
             `;
         }
     } finally {
         isOrdersLoading = false;
+        
+        // إخفاء محمل التحميل
+        const loader = document.getElementById('ordersLoader');
         if (loader) loader.style.display = 'none';
     }
 }
 
 /**
- * عرض قائمة الطلبات في الواجهة (مع تنظيف البيانات)
+ * عرض قائمة الطلبات في الواجهة (مع تنظيف البيانات وجميع الميزات)
  */
 function renderOrdersList(ordersToRender, append = false) {
     const ordersList = document.getElementById('myOrdersList');
     if (!ordersList) return;
+
+    console.log(`📦 Rendering ${ordersToRender.length} orders, append: ${append}`);
 
     const statusColors = {
         'pending': '#000000',
@@ -264,18 +342,39 @@ function renderOrdersList(ordersToRender, append = false) {
         return num.toLocaleString('ar-EG');
     };
     
+    // إنشاء HTML لكل طلب
     const ordersHTML = ordersToRender.map(order => {
-        // تنظيف البيانات قبل العرض
-        const safeOrderId = window.SecurityCore?.sanitizeHTML(order.orderId || order.id.substring(0, 8)) || order.id.substring(0, 8);
-        const safeAddress = window.SecurityCore?.sanitizeHTML(order.address || 'غير محدد') || 'غير محدد';
-        const safePhone = window.SecurityCore?.sanitizeHTML(order.phone || '') || '';
-        const safeUserName = window.SecurityCore?.sanitizeHTML(order.userName || '') || '';
+        // تنظيف البيانات قبل العرض (إذا كانت دوال الأمان متوفرة)
+        const safeOrderId = (window.SecurityCore?.sanitizeHTML ? 
+            window.SecurityCore.sanitizeHTML(order.orderId || order.id.substring(0, 8)) : 
+            (order.orderId || order.id.substring(0, 8)));
+            
+        const safeAddress = (window.SecurityCore?.sanitizeHTML ? 
+            window.SecurityCore.sanitizeHTML(order.address || 'غير محدد') : 
+            (order.address || 'غير محدد'));
+            
+        const safePhone = (window.SecurityCore?.sanitizeHTML ? 
+            window.SecurityCore.sanitizeHTML(order.phone || '') : 
+            (order.phone || ''));
+            
+        const safeUserName = (window.SecurityCore?.sanitizeHTML ? 
+            window.SecurityCore.sanitizeHTML(order.userName || '') : 
+            (order.userName || ''));
 
-        const dateStr = order.createdAt.toLocaleDateString('ar-EG', {
-            year: 'numeric', month: 'long', day: 'numeric',
-            hour: '2-digit', minute: '2-digit'
-        });
+        // تنسيق التاريخ
+        let dateStr = 'تاريخ غير محدد';
+        try {
+            if (order.createdAt) {
+                dateStr = order.createdAt.toLocaleDateString('ar-EG', {
+                    year: 'numeric', month: 'long', day: 'numeric',
+                    hour: '2-digit', minute: '2-digit'
+                });
+            }
+        } catch (e) {
+            console.warn('Date formatting error:', e);
+        }
         
+        // حالة الطلب
         const statusMap = {
             'pending': { text: 'قيد الانتظار', icon: 'fa-clock' },
             'paid': { text: 'تم الدفع', icon: 'fa-check-double' },
@@ -290,6 +389,7 @@ function renderOrdersList(ordersToRender, append = false) {
 
         return `
             <div class="order-card ${isCancelled ? 'cancelled-order' : ''}" style="background: white; border-radius: 15px; padding: 20px; margin-bottom: 20px; box-shadow: 0 4px 12px rgba(0,0,0,0.05); border: 1px solid #eee; transition: transform 0.2s ease;">
+                <!-- رأس الطلب -->
                 <div class="order-header" style="display: flex; justify-content: space-between; align-items: flex-start; margin-bottom: 15px; border-bottom: 1px solid #f5f5f5; padding-bottom: 10px;">
                     <div>
                         <div style="font-weight: 700; color: var(--primary-color); font-size: 16px;">
@@ -305,14 +405,18 @@ function renderOrdersList(ordersToRender, append = false) {
                     </span>
                 </div>
 
+                <!-- مراحل الطلب -->
                 ${renderOrderStages(order.status)}
 
+                <!-- محتوى الطلب -->
                 <div class="order-body" style="margin-bottom: 15px;">
                     <div style="font-size: 14px; color: #555; margin-bottom: 10px;">
+                        ${safeAddress ? `
                         <div style="margin-bottom: 5px;">
                             <strong><i class="fas fa-map-marker-alt" style="color: #e74c3c;"></i> العنوان:</strong> 
                             ${safeAddress}
                         </div>
+                        ` : ''}
                         ${safePhone ? `
                         <div style="margin-bottom: 5px;">
                             <strong><i class="fas fa-phone" style="color: #27ae60;"></i> الهاتف:</strong> 
@@ -325,9 +429,12 @@ function renderOrdersList(ordersToRender, append = false) {
                         </div>
                     </div>
                     
+                    <!-- المنتجات المصغرة -->
                     <div class="order-items-mini" style="background: #f9f9f9; border-radius: 10px; padding: 10px;">
                         ${(order.items || []).slice(0, 3).map(item => {
-                            const safeItemName = window.SecurityCore?.sanitizeHTML(item.name) || item.name;
+                            const safeItemName = (window.SecurityCore?.sanitizeHTML ? 
+                                window.SecurityCore.sanitizeHTML(item.name) : 
+                                item.name);
                             return `
                             <div style="display: flex; justify-content: space-between; font-size: 13px; margin-bottom: 4px; padding-bottom: 4px; border-bottom: 1px solid #eee;">
                                 <span>${safeItemName} × ${item.quantity}</span>
@@ -342,6 +449,7 @@ function renderOrdersList(ordersToRender, append = false) {
                     </div>
                 </div>
 
+                <!-- تذييل الطلب مع الأزرار -->
                 <div class="order-footer" style="display: flex; justify-content: space-between; align-items: center; border-top: 1px solid #f5f5f5; padding-top: 15px; gap: 10px;">
                     <div style="font-weight: 800; font-size: 18px; color: var(--secondary-color);">
                         ${formatNumber(order.total || 0)} ${currency}
@@ -359,7 +467,9 @@ function renderOrdersList(ordersToRender, append = false) {
         `;
     }).join('');
 
+    // إضافة الطلبات إلى الصفحة
     if (append) {
+        // إزالة المحمل القديم إذا كان موجوداً
         const oldLoader = document.getElementById('ordersLoader');
         if (oldLoader) oldLoader.remove();
         
@@ -368,10 +478,13 @@ function renderOrdersList(ordersToRender, append = false) {
         ordersList.innerHTML = ordersHTML;
     }
 
+    // إضافة محمل التحميل إذا كان هناك المزيد
     if (hasMoreOrders) {
-        const existingLoader = document.getElementById('ordersLoader');
-        if (existingLoader) existingLoader.remove();
+        // إزالة المحمل القديم
+        const oldLoader = document.getElementById('ordersLoader');
+        if (oldLoader) oldLoader.remove();
         
+        // إضافة محمل جديد
         const loaderHTML = `
             <div id="ordersLoader" style="text-align: center; padding: 20px; color: #888;">
                 <div class="modern-loader" style="width: 24px; height: 24px; border-width: 2px; display: inline-block; vertical-align: middle; margin-left: 10px;"></div>
@@ -382,13 +495,8 @@ function renderOrdersList(ordersToRender, append = false) {
     }
 }
 
-// تصدير الدوال للنافذة العالمية
-window.loadMyOrders = loadMyOrders;
-window.setupOrdersInfiniteScroll = setupOrdersInfiniteScroll;
-window.renderOrdersList = renderOrdersList;
-
 /**
- * عرض إيصال الطلب في نافذة منبثقة
+ * عرض إيصال الطلب في نافذة منبثقة (مع جميع الميزات)
  */
 async function viewOrderReceipt(orderId) {
     try {
@@ -413,12 +521,21 @@ async function viewOrderReceipt(orderId) {
             return num.toLocaleString('ar-EG');
         };
 
-        const dateStr = order.createdAt?.toDate ? 
-            order.createdAt.toDate().toLocaleDateString('ar-EG', {
-                year: 'numeric', month: 'long', day: 'numeric',
-                hour: '2-digit', minute: '2-digit'
-            }) : 'غير محدد';
+        // تنسيق التاريخ
+        let dateStr = 'غير محدد';
+        try {
+            if (order.createdAt) {
+                const date = order.createdAt.toDate ? order.createdAt.toDate() : new Date(order.createdAt);
+                dateStr = date.toLocaleDateString('ar-EG', {
+                    year: 'numeric', month: 'long', day: 'numeric',
+                    hour: '2-digit', minute: '2-digit'
+                });
+            }
+        } catch (e) {
+            console.warn('Date formatting error:', e);
+        }
 
+        // حالة الطلب
         const statusMap = {
             'pending': 'قيد الانتظار',
             'paid': 'تم الدفع',
@@ -429,13 +546,31 @@ async function viewOrderReceipt(orderId) {
         };
 
         // تنظيف البيانات للعرض
-        const safeOrderId = window.SecurityCore?.sanitizeHTML(order.orderId || order.id.substring(0, 8)) || order.id.substring(0, 8);
-        const safeUserName = window.SecurityCore?.sanitizeHTML(order.userName || 'غير محدد') || 'غير محدد';
-        const safeUserEmail = window.SecurityCore?.sanitizeHTML(order.userEmail || '') || '';
-        const safePhone = window.SecurityCore?.sanitizeHTML(order.phone || '') || '';
-        const safeAddress = window.SecurityCore?.sanitizeHTML(order.address || '') || '';
-        const safeNotes = window.SecurityCore?.sanitizeHTML(order.notes || '') || '';
+        const safeOrderId = (window.SecurityCore?.sanitizeHTML ? 
+            window.SecurityCore.sanitizeHTML(order.orderId || order.id.substring(0, 8)) : 
+            (order.orderId || order.id.substring(0, 8)));
+            
+        const safeUserName = (window.SecurityCore?.sanitizeHTML ? 
+            window.SecurityCore.sanitizeHTML(order.userName || 'غير محدد') : 
+            (order.userName || 'غير محدد'));
+            
+        const safeUserEmail = (window.SecurityCore?.sanitizeHTML ? 
+            window.SecurityCore.sanitizeHTML(order.userEmail || '') : 
+            (order.userEmail || ''));
+            
+        const safePhone = (window.SecurityCore?.sanitizeHTML ? 
+            window.SecurityCore.sanitizeHTML(order.phone || '') : 
+            (order.phone || ''));
+            
+        const safeAddress = (window.SecurityCore?.sanitizeHTML ? 
+            window.SecurityCore.sanitizeHTML(order.address || '') : 
+            (order.address || ''));
+            
+        const safeNotes = (window.SecurityCore?.sanitizeHTML ? 
+            window.SecurityCore.sanitizeHTML(order.notes || '') : 
+            (order.notes || ''));
 
+        // إنشاء نافذة منبثقة
         const modal = document.createElement('div');
         modal.className = 'modal-overlay active';
         modal.id = 'receiptModal';
@@ -498,7 +633,9 @@ async function viewOrderReceipt(orderId) {
                             </thead>
                             <tbody>
                                 ${(order.items || []).map(item => {
-                                    const safeItemName = window.SecurityCore?.sanitizeHTML(item.name) || item.name;
+                                    const safeItemName = (window.SecurityCore?.sanitizeHTML ? 
+                                        window.SecurityCore.sanitizeHTML(item.name) : 
+                                        item.name);
                                     return `
                                     <tr style="border-bottom: 1px solid #eee;">
                                         <td style="padding: 12px;">${safeItemName}</td>
@@ -597,5 +734,83 @@ async function downloadOrderReceipt(orderId) {
     }
 }
 
+/**
+ * عرض قسم الطلبات (يتم استدعاؤها عند فتح القسم)
+ */
+function showOrdersSection() {
+    console.log('📦 Showing orders section');
+    
+    // إعادة تعيين المتغيرات
+    resetOrdersState();
+    
+    // تحميل الطلبات
+    loadMyOrders(false);
+}
+
+/**
+ * دالة للتحقق وتحميل الطلبات عند عرض القسم
+ */
+function checkAndLoadOrders() {
+    console.log('📦 Checking if orders section is active...');
+    const ordersSection = document.getElementById('my-orders');
+    if (ordersSection && ordersSection.classList.contains('active')) {
+        console.log('📦 Orders section is active, loading orders...');
+        showOrdersSection();
+    }
+}
+
+// تصدير الدوال
+window.resetOrdersState = resetOrdersState;
+window.loadMyOrders = loadMyOrders;
+window.setupOrdersInfiniteScroll = setupOrdersInfiniteScroll;
+window.renderOrdersList = renderOrdersList;
 window.viewOrderReceipt = viewOrderReceipt;
 window.downloadOrderReceipt = downloadOrderReceipt;
+window.showOrdersSection = showOrdersSection;
+window.checkAndLoadOrders = checkAndLoadOrders;
+
+// الاستماع لحدث عرض القسم
+document.addEventListener('sectionChanged', function(e) {
+    if (e.detail && e.detail.section === 'my-orders') {
+        console.log('📦 Section changed to my-orders via event');
+        showOrdersSection();
+    }
+});
+
+// تهيئة عند تحميل الملف
+document.addEventListener('DOMContentLoaded', () => {
+    console.log('✅ orders-system.js loaded');
+    
+    // تأخير بسيط للتأكد من تحميل كل شيء
+    setTimeout(checkAndLoadOrders, 1000);
+});
+
+// إضافة مستمع لتغيير حالة المصادقة
+if (window.firebaseModules && window.firebaseModules.onAuthStateChanged) {
+    // محاولة الحصول على كائن المصادقة بعدة طرق
+    const auth = window.auth || 
+                 (window.firebaseModules.getAuth ? window.firebaseModules.getAuth() : null) ||
+                 (window.firebaseModules.auth ? window.firebaseModules.auth() : null);
+                 
+    if (auth) {
+        window.firebaseModules.onAuthStateChanged(auth, function(user) {
+            console.log('📦 Auth state changed in orders-system, user:', user ? 'logged in' : 'logged out');
+            setTimeout(checkAndLoadOrders, 500);
+        });
+    } else {
+        console.log('⚠️ Auth object not available yet, will retry later');
+        // محاولة مرة أخرى بعد فترة
+        setTimeout(() => {
+            const authRetry = window.auth || 
+                             (window.firebaseModules.getAuth ? window.firebaseModules.getAuth() : null);
+            if (authRetry) {
+                window.firebaseModules.onAuthStateChanged(authRetry, function(user) {
+                    console.log('📦 Auth state changed (retry) in orders-system');
+                    setTimeout(checkAndLoadOrders, 500);
+                });
+            }
+        }, 2000);
+    }
+}
+
+console.log('✅ orders-system.js loaded successfully with all features');

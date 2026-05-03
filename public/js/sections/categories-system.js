@@ -492,6 +492,9 @@ window.updateCategoryFilter = updateCategoryFilter;
 window.updateCategoriesBar = updateCategoriesBar;
 window.updateAllCategoryButtons = updateAllCategoryButtons;
 window.initializeCategoriesSystem = initializeCategoriesSystem;
+window.loadCategoriesFromFirebase = loadCategoriesFromFirebase;
+window.displayEmptyCategoriesMessage = displayEmptyCategoriesMessage;
+window.renderCategoriesUI = renderCategoriesUI;
 
 // ======================== التهيئة عند تحميل الصفحة ========================
 

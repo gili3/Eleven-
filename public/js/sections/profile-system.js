@@ -2,13 +2,13 @@
 // ======================== الملف الشخصي ========================
 
 function updateUserProfile() {
-    if (!currentUser) return;
+    if (!window.currentUser) return;
     
     const savedUser = JSON.parse(sessionStorage.getItem('currentUser')) || {};
-    const userName = currentUser.displayName || savedUser.displayName || savedUser.name || 'زائر';
-    const userEmail = currentUser.email || savedUser.email || 'ليس لديك حساب';
-    const userPhone = currentUser.phone || savedUser.phone || '--';
-    const userAddress = currentUser.address || savedUser.address || '--';
+    const userName = window.currentUser.displayName || savedUser.displayName || savedUser.name || 'زائر';
+    const userEmail = window.currentUser.email || savedUser.email || 'ليس لديك حساب';
+    const userPhone = window.currentUser.phone || savedUser.phone || '--';
+    const userAddress = window.currentUser.address || savedUser.address || '--';
     
     const elements = [
         { id: 'profileName', text: userName },
@@ -32,11 +32,11 @@ function updateUserProfile() {
     });
     
     // تحديث الصور الشخصية مع التحقق
-    if (currentUser.photoURL) {
+    if (window.currentUser.photoURL) {
         const images = document.querySelectorAll('#profileImage, #mobileUserImage');
         images.forEach(img => {
             if (img) {
-                img.src = currentUser.photoURL;
+                img.src = window.currentUser.photoURL;
             }
         });
     }
@@ -45,7 +45,7 @@ function updateUserProfile() {
 }
 
 async function updateProfileStats() {
-    const favoritesCount = favorites.length;
+    const favoritesCount = window.favorites ? window.favorites.length : 0;
     
     const favoritesCountElement = document.getElementById('favoritesCount');
     if (favoritesCountElement) {
@@ -55,7 +55,8 @@ async function updateProfileStats() {
     let ordersCount = 0;
     let totalSpent = 0;
     
-    const userId = currentUser?.uid;
+    const userId = window.currentUser?.uid;
+    const db = window.db;
     
     if (db && userId) {
         try {
@@ -79,10 +80,22 @@ async function updateProfileStats() {
     const totalSpentElement = document.getElementById('totalSpent');
     
     if (ordersCountElement) ordersCountElement.textContent = ordersCount;
-    if (totalSpentElement) totalSpentElement.textContent = formatNumber(totalSpent) + ' SDG';
+    if (totalSpentElement) totalSpentElement.textContent = (typeof window.formatNumber === 'function' ? window.formatNumber(totalSpent) : totalSpent) + ' SDG';
 }
 
 function editProfile() {
+    // التحقق من وجود مستخدم مسجل
+    if (!window.currentUser || window.currentUser.isGuest) {
+        if (typeof showToast === 'function') {
+            showToast('يجب تسجيل الدخول أولاً لتعديل الملف الشخصي', 'warning');
+        }
+        // توجيه المستخدم إلى صفحة تسجيل الدخول
+        setTimeout(() => {
+            window.location.href = 'login.html';
+        }, 1500);
+        return;
+    }
+    
     const modal = document.getElementById('editProfileModal');
     if (!modal) return;
     
@@ -92,14 +105,22 @@ function editProfile() {
     const phoneInput = document.getElementById('editPhone');
     const addressInput = document.getElementById('editAddress');
     
-    if (nameInput) nameInput.value = currentUser?.displayName || savedUser.displayName || '';
-    if (phoneInput) phoneInput.value = currentUser?.phone || savedUser.phone || '';
-    if (addressInput) addressInput.value = currentUser?.address || savedUser.address || '';
+    if (nameInput) nameInput.value = window.currentUser?.displayName || savedUser.displayName || '';
+    if (phoneInput) phoneInput.value = window.currentUser?.phone || savedUser.phone || '';
+    if (addressInput) addressInput.value = window.currentUser?.address || savedUser.address || '';
     
     modal.classList.add('active');
 }
 
 async function saveProfileChanges() {
+    // التحقق من وجود مستخدم مسجل
+    if (!window.currentUser || window.currentUser.isGuest) {
+        if (typeof showToast === 'function') {
+            showToast('يجب تسجيل الدخول أولاً لحفظ التغييرات', 'warning');
+        }
+        return;
+    }
+    
     const nameInput = document.getElementById('editName');
     const phoneInput = document.getElementById('editPhone');
     const addressInput = document.getElementById('editAddress');
@@ -109,9 +130,10 @@ async function saveProfileChanges() {
         return;
     }
     
-    const name = nameInput.value.trim();
-    const phone = phoneInput.value.trim();
-    const address = addressInput.value.trim();
+    // تنظيف المدخلات من XSS باستخدام safeHTML
+    const name = window.safeHTML ? window.safeHTML(nameInput.value.trim()) : nameInput.value.trim();
+    const phone = phoneInput.value.trim().replace(/[^0-9+\-\s]/g, '');
+    const address = window.safeHTML ? window.safeHTML(addressInput.value.trim()) : addressInput.value.trim();
     
     if (!name) {
         if (typeof showToast === 'function') showToast('يرجى إدخال الاسم', 'warning');
@@ -121,13 +143,16 @@ async function saveProfileChanges() {
     if (typeof showLoadingSpinner === 'function') showLoadingSpinner('جاري حفظ التغييرات...');
     
     try {
-        if (auth.currentUser) {
+        const auth = window.auth;
+        const db = window.db;
+        
+        if (auth && auth.currentUser) {
             await window.firebaseModules.updateProfile(auth.currentUser, {
                 displayName: name
             });
         }
         
-        const userRef = window.firebaseModules.doc(db, "users", currentUser.uid);
+        const userRef = window.firebaseModules.doc(db, "users", window.currentUser.uid);
         await window.firebaseModules.updateDoc(userRef, {
             displayName: name,
             phone: phone,
@@ -135,10 +160,31 @@ async function saveProfileChanges() {
             updatedAt: window.firebaseModules.serverTimestamp()
         });
         
-        currentUser.displayName = name;
-        currentUser.phone = phone;
-        currentUser.address = address;
-        sessionStorage.setItem('currentUser', JSON.stringify(currentUser));
+        // تحديث المتغيرات المحلية
+        window.currentUser.displayName = name;
+        window.currentUser.phone = phone;
+        window.currentUser.address = address;
+        
+        // تخزين بيانات ضرورية فقط في sessionStorage
+        const userSnapshot = {
+            uid: window.currentUser.uid,
+            displayName: name,
+            email: window.currentUser.email,
+            phone: phone,
+            address: address,
+            isGuest: window.currentUser.isGuest || false
+        };
+        sessionStorage.setItem('currentUser', JSON.stringify(userSnapshot));
+        
+        // تحديث AppState إن وجد
+        if (window.AppState && window.AppState.setUser) {
+            window.AppState.setUser({
+                ...window.AppState.user,
+                displayName: name,
+                phone: phone,
+                address: address
+            }, window.currentUser.isGuest);
+        }
         
         if (typeof updateUserProfile === 'function') updateUserProfile();
         
@@ -161,5 +207,14 @@ window.updateProfileStats = updateProfileStats;
 window.editProfile = editProfile;
 window.saveProfileChanges = saveProfileChanges;
 
-console.log('✅ profile-system.js loaded');
+// تهيئة عند تحميل الملف
+document.addEventListener('DOMContentLoaded', () => {
+    console.log('✅ profile-system.js loaded');
+    // تحديث الملف الشخصي عند فتح القسم
+    const profileSection = document.getElementById('profile');
+    if (profileSection && profileSection.classList.contains('active')) {
+        setTimeout(() => updateUserProfile(), 100);
+    }
+});
 
+console.log('✅ profile-system.js loaded successfully');
