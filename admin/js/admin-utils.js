@@ -1,7 +1,27 @@
 /**
  * admin-utils.js
- * وظائف مساعدة مشتركة للوحة التحكم
+ * وظائف مساعدة مشتركة للوحة التحكم - تم تحديثه لتوحيد التحقق من الصلاحيات
  */
+
+// دالة موحدة للتحقق من صلاحية المسؤول
+window.checkAdmin = function() {
+    // 1. التحقق من AppState (المصدر الأساسي للحقيقة)
+    if (window.AppState && window.AppState.isAdmin) {
+        return true;
+    }
+
+    // 2. التحقق من وجود مستخدم مسجل أصلاً في Firebase
+    if (!window.auth || !window.auth.currentUser) {
+        console.warn('⚠️ محاولة وصول بدون تسجيل دخول');
+        window.adminUtils.showToast('يجب تسجيل الدخول أولاً', 'error');
+        return false;
+    }
+
+    // 3. إذا وصلنا هنا، فالمستخدم مسجل ولكن ليس لديه صلاحية في AppState
+    console.error('❌ وصول غير مصرح به للوحة التحكم');
+    window.adminUtils.showToast('ليس لديك صلاحية الوصول لهذه الصفحة', 'error');
+    return false;
+};
 
 // تنسيق الأرقام
 function formatNumber(num) {
@@ -61,6 +81,19 @@ function getStatusText(status) {
     return texts[status] || status;
 }
 
+// دالة تنظيف النصوص
+function escapeHTML(text) {
+    if (!text) return '';
+    const map = {
+        '&': '&amp;',
+        '<': '&lt;',
+        '>': '&gt;',
+        '"': '&quot;',
+        "'": '&#039;'
+    };
+    return text.replace(/[&<>"']/g, m => map[m]);
+}
+
 // إغلاق المودال
 function closeModal(modalId) {
     const modal = document.getElementById(modalId);
@@ -79,9 +112,7 @@ function scrollToTop() {
 
 // عرض رسالة تأكيد
 function confirmAction(message, callback) {
-    if (confirm(message)) {
-        callback();
-    }
+    ModalManager.confirm(message, 'تأكيد', callback);
 }
 
 // عرض إشعار
@@ -97,7 +128,7 @@ function showToast(message, type = 'info') {
     toast.className = `toast ${type}`;
     toast.innerHTML = `
         <i class="fas fa-${type === 'success' ? 'check-circle' : type === 'error' ? 'exclamation-circle' : 'info-circle'}"></i>
-        <span>${message}</span>
+        <span>${escapeHTML(message)}</span>
     `;
 
     toastContainer.appendChild(toast);
@@ -134,10 +165,12 @@ window.adminUtils = {
     formatDate,
     getStatusColor,
     getStatusText,
+    escapeHTML,
     closeModal,
     scrollToTop,
     confirmAction,
     showToast,
     downloadFile,
-    copyToClipboard
+    copyToClipboard,
+    checkAdmin: window.checkAdmin // إضافة الدالة الموحدة
 };
