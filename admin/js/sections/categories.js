@@ -38,17 +38,18 @@ async function loadCategories(isNextPage = false) {
         }
 
         let constraints = [
-            firebaseModules.collection(db, 'categories'),
-            firebaseModules.orderBy('createdAt', 'desc')
+            firebaseModules.orderBy('createdAt', 'desc'),
+            firebaseModules.limit(CATEGORIES_PER_PAGE)
         ];
 
         if (isNextPage && lastCategoryDoc) {
-            constraints.push(firebaseModules.startAfter(lastCategoryDoc));
+            constraints.unshift(firebaseModules.startAfter(lastCategoryDoc));
         }
         
-        constraints.push(firebaseModules.limit(CATEGORIES_PER_PAGE));
-        
-        const q = firebaseModules.query(...constraints);
+        const q = firebaseModules.query(
+            firebaseModules.collection(db, 'categories'),
+            ...constraints
+        );
         const snapshot = await firebaseModules.getDocs(q);
         
         if (snapshot.empty) {
@@ -65,7 +66,7 @@ async function loadCategories(isNextPage = false) {
             newCategories.push({ id: doc.id, ...doc.data() });
         });
 
-        allCategories = [...allCategories, ...newCategories];
+        allCategories = isNextPage ? [...allCategories, ...newCategories] : newCategories;
         window.allCategories = allCategories;
         
         displayCategories(isNextPage);
@@ -76,6 +77,7 @@ async function loadCategories(isNextPage = false) {
         console.log(`✅ تم تحميل ${newCategories.length} فئة إضافية`);
     } catch (error) {
         console.error('❌ خطأ في تحميل الفئات:', error);
+        ErrorHandler.handle(error, 'loadCategories');
         if (window.adminUtils) {
             window.adminUtils.showToast('فشل تحميل الفئات', 'error');
         }
@@ -105,7 +107,10 @@ function setupCategoriesInfiniteScroll() {
     const sentinel = document.getElementById('categoriesScrollSentinel');
     if (!sentinel) return;
 
-    if (categoriesObserver) categoriesObserver.disconnect();
+    if (categoriesObserver) {
+        categoriesObserver.disconnect();
+        categoriesObserver = null;
+    }
 
     categoriesObserver = new IntersectionObserver((entries) => {
         if (entries[0].isIntersecting && hasMoreCategories && !isLoadingCategories) {
@@ -129,11 +134,11 @@ function displayCategories(append = false) {
     }
 
     const categoriesHtml = allCategories.map(cat => {
-        const safeName = window.SecurityCore?.sanitizeHTML(cat.name) || cat.name;
-        const safeSlug = window.SecurityCore?.sanitizeHTML(cat.slug || '') || '';
+        const safeName = adminUtils.escapeHTML(cat.name || '');
+        const safeSlug = adminUtils.escapeHTML(cat.slug || '');
         const safeImage = cat.image || 'https://via.placeholder.com/50';
         return `
-        <div class="admin-card category-card" data-id="${cat.id}" style="padding: 15px; transition: all 0.3s ease;">
+        <div class="admin-card category-card" data-id="${cat.id}" style="padding: 15px;">
             <div style="display: flex; align-items: center; gap: 15px; margin-bottom: 10px;">
                 <img src="${safeImage}" 
                      style="width: 50px; height: 50px; border-radius: 8px; object-fit: cover; border: 1px solid #eee;"
@@ -172,7 +177,7 @@ function updateCategoryFilters() {
             const currentValue = select.value;
             select.innerHTML = '<option value="">جميع الفئات</option>' + 
                 allCategories.map(cat => 
-                    `<option value="${cat.id}" ${cat.id === currentValue ? 'selected' : ''}>${window.SecurityCore?.sanitizeHTML(cat.name) || cat.name}</option>`
+                    `<option value="${cat.id}" ${cat.id === currentValue ? 'selected' : ''}>${adminUtils.escapeHTML(cat.name)}</option>`
                 ).join('');
         }
     });
@@ -187,7 +192,7 @@ function filterCategories() {
     const searchTerm = searchInput.value.trim().toLowerCase();
     
     if (!searchTerm) {
-        loadCategories(false);
+        displayCategories(false);
         return;
     }
     
@@ -205,13 +210,15 @@ function filterCategories() {
     }
     
     grid.innerHTML = filtered.map(cat => {
-        const safeName = window.SecurityCore?.sanitizeHTML(cat.name) || cat.name;
-        const safeSlug = window.SecurityCore?.sanitizeHTML(cat.slug || '') || '';
+        const safeName = adminUtils.escapeHTML(cat.name || '');
+        const safeSlug = adminUtils.escapeHTML(cat.slug || '');
         const safeImage = cat.image || 'https://via.placeholder.com/50';
         return `
         <div class="admin-card category-card" data-id="${cat.id}" style="padding: 15px;">
             <div style="display: flex; align-items: center; gap: 15px; margin-bottom: 10px;">
-                <img src="${safeImage}" style="width: 50px; height: 50px; border-radius: 8px; object-fit: cover;">
+                <img src="${safeImage}" 
+                     style="width: 50px; height: 50px; border-radius: 8px; object-fit: cover; border: 1px solid #eee;"
+                     onerror="this.src='https://via.placeholder.com/50'">
                 <div style="flex: 1;">
                     <h4 style="margin: 0; font-size: 14px;">${safeName}</h4>
                     <small style="color: #666; font-size: 11px;">${safeSlug}</small>
@@ -220,8 +227,12 @@ function filterCategories() {
             <div style="display: flex; justify-content: space-between; align-items: center; border-top: 1px solid #f0f0f0; padding-top: 10px;">
                 <span style="font-size: 11px; color: #999;">منتجات: ${cat.productsCount || 0}</span>
                 <div class="action-buttons-compact">
-                    <button class="btn btn-sm btn-primary" onclick="editCategory('${cat.id}')"><i class="fas fa-edit"></i></button>
-                    <button class="btn btn-sm btn-danger" onclick="deleteCategory('${cat.id}')"><i class="fas fa-trash"></i></button>
+                    <button class="btn btn-sm btn-primary" onclick="editCategory('${cat.id}')" title="تعديل">
+                        <i class="fas fa-edit"></i>
+                    </button>
+                    <button class="btn btn-sm btn-danger" onclick="deleteCategory('${cat.id}')" title="حذف">
+                        <i class="fas fa-trash"></i>
+                    </button>
                 </div>
             </div>
         </div>
@@ -238,61 +249,78 @@ function resetCategoriesFilter() {
 
 window.openCategoryModal = function(categoryId = null) {
     if (!window.checkAdmin()) return;
-    closeModal('categoryModal');
     
     const category = categoryId ? allCategories.find(c => c.id === categoryId) : null;
     
-    const modalHtml = `
-        <div id="categoryModal" class="modal-overlay active">
-            <div class="modal-content" style="max-width: 500px;">
-                <div class="modal-header">
-                    <h3>${categoryId ? 'تعديل فئة' : 'إضافة فئة جديدة'}</h3>
-                    <button onclick="closeModal('categoryModal')" class="btn-close"><i class="fas fa-times"></i></button>
-                </div>
-                <form id="categoryForm" onsubmit="saveCategory(event)">
-                    <input type="hidden" id="catId" value="${categoryId || ''}">
-                    
-                    <div class="form-group">
-                        <label>اسم الفئة <span style="color: red;">*</span></label>
-                        <input type="text" id="catName" value="${category ? (window.SecurityCore?.sanitizeHTML(category.name) || category.name) : ''}" required 
-                               placeholder="مثال: إلكترونيات" style="width: 100%;">
-                    </div>
-                    
-                    <div class="form-group">
-                        <label>الاسم اللطيف (Slug) <span style="color: red;">*</span></label>
-                        <input type="text" id="catSlug" value="${category ? (window.SecurityCore?.sanitizeHTML(category.slug) || category.slug) : ''}" required 
-                               placeholder="مثال: electronics" style="width: 100%;"
-                               oninput="this.value = this.value.toLowerCase().replace(/[^a-z0-9-]/g, '-')">
-                        <small style="color: #666; font-size: 11px;">يستخدم في الروابط: /category/electronics</small>
-                    </div>
-                    
-                    <div class="form-group">
-                        <label>صورة الفئة</label>
-                        <input type="file" id="catImageFile" accept="image/*" onchange="previewImage(event, 'catImagePreview')">
-                        <div style="margin-top: 10px; text-align: center;">
-                            <img id="catImagePreview" src="${category ? (category.image || '') : ''}" 
-                                 style="max-width: 150px; max-height: 150px; border-radius: 8px; border: 1px solid #ddd; display: ${category && category.image ? 'block' : 'none'};">
-                            ${!category && '<p style="color: #999; font-size: 12px;">سيتم استخدام صورة افتراضية إذا لم يتم رفع صورة</p>'}
-                        </div>
-                    </div>
-                    
-                    <div class="form-group">
-                        <label>
-                            <input type="checkbox" id="catIsActive" ${!category || category.isActive !== false ? 'checked' : ''}> 
-                            فئة نشطة (تظهر في الموقع)
-                        </label>
-                    </div>
-                    
-                    <div style="display: flex; gap: 10px; margin-top: 20px;">
-                        <button type="submit" class="btn btn-primary" style="flex: 1;">حفظ</button>
-                        <button type="button" class="btn btn-secondary" onclick="closeModal('categoryModal')" style="flex: 1;">إلغاء</button>
-                    </div>
-                </form>
+    const content = `
+        <form id="categoryForm" onsubmit="saveCategory(event)">
+            <input type="hidden" id="catId" value="${categoryId || ''}">
+            
+            <div class="form-group">
+                <label>اسم الفئة <span style="color: red;">*</span></label>
+                <input type="text" id="catName" value="${category ? adminUtils.escapeHTML(category.name) : ''}" required 
+                       placeholder="مثال: عطور رجالية" class="form-control">
             </div>
-        </div>
+            
+            <div class="form-group">
+                <label>الاسم اللطيف (Slug) <span style="color: red;">*</span></label>
+                <input type="text" id="catSlug" value="${category ? adminUtils.escapeHTML(category.slug) : ''}" required 
+                       placeholder="مثال: men-perfumes" class="form-control"
+                       oninput="this.value = this.value.toLowerCase().replace(/[^a-z0-9-]/g, '-')">
+                <small style="color: #666; font-size: 11px;">يستخدم في الروابط: /category/men-perfumes</small>
+            </div>
+            
+            <div class="form-group">
+                <label>أيقونة الفئة (Font Awesome)</label>
+                <input type="text" id="catIcon" value="${category ? (category.icon || 'fas fa-tag') : 'fas fa-tag'}" 
+                       placeholder="مثال: fas fa-male" class="form-control">
+                <small style="color: #666; font-size: 11px;">من مكتبة Font Awesome</small>
+            </div>
+            
+            <div class="form-group">
+                <label>لون الفئة</label>
+                <input type="color" id="catColor" value="${category ? (category.color || '#c9a24d') : '#c9a24d'}" class="form-control" style="height: 40px;">
+            </div>
+            
+            <div class="form-group">
+                <label>صورة الفئة</label>
+                <input type="file" id="catImageFile" accept="image/*" onchange="previewImage(event, 'catImagePreview')" class="form-control">
+                <div style="margin-top: 10px; text-align: center;">
+                    <img id="catImagePreview" src="${category ? (category.image || '') : ''}" 
+                         style="max-width: 150px; max-height: 150px; border-radius: 8px; border: 1px solid #ddd; display: ${category && category.image ? 'block' : 'none'}; margin: 0 auto;">
+                </div>
+            </div>
+            
+            <div class="form-group">
+                <label>الوصف</label>
+                <textarea id="catDescription" rows="3" class="form-control">${category ? adminUtils.escapeHTML(category.description || '') : ''}</textarea>
+            </div>
+            
+            <div class="row" style="display: grid; grid-template-columns: 1fr 1fr; gap: 15px;">
+                <div class="form-group">
+                    <label style="display: flex; align-items: center; gap: 8px;">
+                        <input type="checkbox" id="catIsActive" ${!category || category.isActive !== false ? 'checked' : ''}> 
+                        فئة نشطة
+                    </label>
+                </div>
+                <div class="form-group">
+                    <label>الترتيب</label>
+                    <input type="number" id="catOrder" value="${category ? (category.order || 0) : 0}" min="0" class="form-control">
+                </div>
+            </div>
+        </form>
     `;
-    
-    document.body.insertAdjacentHTML('beforeend', modalHtml);
+
+    ModalManager.open({
+        id: 'categoryModal',
+        title: categoryId ? 'تعديل فئة' : 'إضافة فئة جديدة',
+        content: content,
+        size: 'medium',
+        buttons: [
+            { text: 'حفظ', class: 'btn-primary', onClick: () => document.getElementById('categoryForm').dispatchEvent(new Event('submit')) },
+            { text: 'إلغاء', class: 'btn-secondary' }
+        ]
+    });
 };
 
 window.editCategory = function(id) {
@@ -300,9 +328,15 @@ window.editCategory = function(id) {
     window.openCategoryModal(id);
 };
 
-// دالة رفع صورة حقيقية إلى Firebase Storage
+// دالة رفع صورة إلى Firebase Storage
 async function uploadCategoryImage(file) {
     if (!file) return '';
+    
+    // التحقق من نوع الملف (MIME type)
+    const allowedTypes = ['image/jpeg', 'image/jpg', 'image/png', 'image/gif', 'image/webp', 'image/svg+xml'];
+    if (!allowedTypes.includes(file.type)) {
+        throw new Error('نوع الملف غير مدعوم. الأنواع المسموحة: JPEG, PNG, GIF, WEBP, SVG');
+    }
     
     // التحقق من الحجم (2MB)
     if (file.size > 2 * 1024 * 1024) {
@@ -310,7 +344,9 @@ async function uploadCategoryImage(file) {
     }
     
     const { storage, firebaseModules } = window;
-    const fileName = `categories/${Date.now()}_${file.name.replace(/[^a-zA-Z0-9.]/g, '_')}`;
+    // إنشاء اسم ملف آمن وفريد
+    const ext = file.type.split('/')[1] || 'jpg';
+    const fileName = `categories/${Date.now()}_${Math.random().toString(36).substr(2, 9)}.${ext}`;
     const storageRef = firebaseModules.ref(storage, fileName);
     
     try {
@@ -326,25 +362,31 @@ async function uploadCategoryImage(file) {
 window.saveCategory = async function(event) {
     if (!window.checkAdmin()) return;
     event.preventDefault();
-    const btn = event.target.querySelector('button[type="submit"]');
-    const originalText = btn.innerText;
-    btn.disabled = true;
-    btn.innerHTML = '<i class="fas fa-spinner fa-spin"></i> جاري الحفظ...';
+    
+    const submitBtn = event.target.querySelector('button[type="submit"]');
+    if (submitBtn) {
+        submitBtn.disabled = true;
+        submitBtn.innerHTML = '<i class="fas fa-spinner fa-spin"></i> جاري الحفظ...';
+    }
 
     try {
         const categoryId = document.getElementById('catId')?.value;
         const name = document.getElementById('catName').value.trim();
         const slug = document.getElementById('catSlug').value.trim().toLowerCase();
+        const icon = document.getElementById('catIcon').value.trim();
+        const color = document.getElementById('catColor').value;
         const isActive = document.getElementById('catIsActive')?.checked ?? true;
+        const order = parseInt(document.getElementById('catOrder')?.value) || 0;
+        const description = document.getElementById('catDescription')?.value.trim() || '';
         const imageFile = document.getElementById('catImageFile').files[0];
 
         if (!name || !slug) {
-            window.adminUtils.showToast('الرجاء إدخال اسم الفئة والـ Slug', 'warning');
+            adminUtils.showToast('الرجاء إدخال اسم الفئة والـ Slug', 'warning');
             return;
         }
 
         if (!/^[a-z0-9-]+$/.test(slug)) {
-            window.adminUtils.showToast('الـ Slug يجب أن يحتوي على أحرف إنجليزية وأرقام وشرطات فقط', 'warning');
+            adminUtils.showToast('الـ Slug يجب أن يحتوي على أحرف إنجليزية وأرقام وشرطات فقط', 'warning');
             return;
         }
 
@@ -358,9 +400,13 @@ window.saveCategory = async function(event) {
         }
 
         const categoryData = {
-            name: window.SecurityCore?.sanitizeHTML(name) || name,
+            name: SecurityCore.sanitizeHTML(name),
             slug,
+            icon,
+            color,
             isActive,
+            order,
+            description: SecurityCore.sanitizeHTML(description),
             image: imageUrl,
             updatedAt: window.firebaseModules.serverTimestamp()
         };
@@ -372,64 +418,73 @@ window.saveCategory = async function(event) {
                 firebaseModules.doc(db, 'categories', categoryId), 
                 categoryData
             );
-            window.adminUtils.showToast('✅ تم تحديث الفئة بنجاح', 'success');
+            adminUtils.showToast('✅ تم تحديث الفئة بنجاح', 'success');
         } else {
-            categoryData.createdAt = window.firebaseModules.serverTimestamp();
+            categoryData.createdAt = firebaseModules.serverTimestamp();
             await firebaseModules.addDoc(
                 firebaseModules.collection(db, 'categories'), 
                 categoryData
             );
-            window.adminUtils.showToast('✅ تم إضافة الفئة بنجاح', 'success');
+            adminUtils.showToast('✅ تم إضافة الفئة بنجاح', 'success');
         }
 
-        closeModal('categoryModal');
-        loadCategories(false);
+        ModalManager.close('categoryModal');
+        // تحميل الفئات من جديد وتحديث الفلاتر في كل لوحة التحكم
+        await loadCategories(false);
+        if (typeof window.updateCategoryFilters === 'function') {
+            window.updateCategoryFilters();
+        }
         
     } catch (error) {
         console.error('❌ خطأ في حفظ الفئة:', error);
-        window.adminUtils.showToast('حدث خطأ أثناء الحفظ: ' + error.message, 'error');
+        adminUtils.showToast('حدث خطأ أثناء الحفظ: ' + error.message, 'error');
+        ErrorHandler.handle(error, 'saveCategory');
     } finally {
-        btn.disabled = false;
-        btn.innerHTML = originalText;
+        if (submitBtn) {
+            submitBtn.disabled = false;
+            submitBtn.innerHTML = 'حفظ';
+        }
     }
 };
 
 async function deleteCategory(id) {
     if (!window.checkAdmin()) return;
-    if (!confirm('⚠️ هل أنت متأكد من حذف هذه الفئة؟\nتنبيه: سيؤثر حذف الفئة على المنتجات المرتبطة بها.')) return;
     
-    try {
-        const { db, firebaseModules } = window;
-        const productsQuery = firebaseModules.query(
-            firebaseModules.collection(db, 'products'),
-            firebaseModules.where('category', '==', id),
-            firebaseModules.limit(1)
-        );
-        
-        const productsSnapshot = await firebaseModules.getDocs(productsQuery);
-        
-        if (!productsSnapshot.empty) {
-            const confirmDelete = confirm('تحتوي هذه الفئة على منتجات. هل تريد نقلها إلى فئة غير محددة أولاً؟\nاضغط "موافق" للمتابعة مع الحذف (سيتم فقدان الربط)، أو "إلغاء" للإلغاء.');
-            if (!confirmDelete) return;
+    ModalManager.confirm('⚠️ هل أنت متأكد من حذف هذه الفئة؟\nتنبيه: سيؤثر حذف الفئة على المنتجات المرتبطة بها.', 'تأكيد', async () => {
+        try {
+            const { db, firebaseModules } = window;
+            
+            // التحقق من وجود منتجات مرتبطة
+            const productsQuery = firebaseModules.query(
+                firebaseModules.collection(db, 'products'),
+                firebaseModules.where('category', '==', id),
+                firebaseModules.limit(1)
+            );
+            
+            const productsSnapshot = await firebaseModules.getDocs(productsQuery);
+            
+            if (!productsSnapshot.empty) {
+                const confirmDelete = await ModalManager.confirm(
+                    'تحتوي هذه الفئة على منتجات. هل تريد المتابعة مع الحذف؟ (سيتم فقدان الربط)', 
+                    'تأكيد',
+                    async () => true,
+                    () => false
+                );
+                if (!confirmDelete) return;
+            }
+            
+            await firebaseModules.deleteDoc(firebaseModules.doc(db, 'categories', id));
+            adminUtils.showToast('✅ تم حذف الفئة بنجاح', 'success');
+            loadCategories(false);
+        } catch (error) {
+            console.error('❌ خطأ في حذف الفئة:', error);
+            adminUtils.showToast('حدث خطأ أثناء الحذف: ' + error.message, 'error');
+            ErrorHandler.handle(error, 'deleteCategory');
         }
-        
-        await firebaseModules.deleteDoc(firebaseModules.doc(db, 'categories', id));
-        window.adminUtils.showToast('✅ تم حذف الفئة بنجاح', 'success');
-        loadCategories(false);
-    } catch (error) {
-        console.error('❌ خطأ في حذف الفئة:', error);
-        window.adminUtils.showToast('حدث خطأ أثناء الحذف: ' + error.message, 'error');
-    }
+    });
 }
 
 // ==================== دوال مساعدة ====================
-
-window.closeModal = function(modalId) {
-    const modal = document.getElementById(modalId);
-    if (modal) {
-        modal.remove();
-    }
-};
 
 window.previewImage = function(event, previewId) {
     const file = event.target.files[0];
@@ -470,6 +525,7 @@ async function updateCategoriesProductsCount() {
         displayCategories(true);
     } catch (error) {
         console.error('خطأ في تحديث أعداد المنتجات:', error);
+        ErrorHandler.handle(error, 'updateCategoriesProductsCount');
     }
 }
 

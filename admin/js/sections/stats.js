@@ -1,13 +1,10 @@
 /**
- * stats-optimized.js - قسم الإحصائيات المحسّن (باستخدام Firestore Aggregation Queries)
- * 
- * التحسينات:
- * 1. استخدام Firestore Aggregation Queries لحساب الإجماليات مباشرة من السيرفر
- * 2. تقليل عدد Reads من Firebase بشكل كبير
- * 3. تحسين الأداء مع زيادة البيانات
+ * stats.js - قسم الإحصائيات المحسّن (باستخدام Firestore Aggregation Queries)
  */
 
 async function loadStats() {
+    if (!window.checkAdmin()) return;
+    
     try {
         console.log('📊 جاري تحميل الإحصائيات (نسخة محسنة)...');
         const db = window.db;
@@ -29,17 +26,17 @@ async function loadStats() {
             // عدد المستخدمين
             firebaseModules.getAggregateFromServer(
                 firebaseModules.query(firebaseModules.collection(db, 'users')),
-                firebaseModules.count()
+                { count: firebaseModules.count() }
             ),
             // عدد المنتجات
             firebaseModules.getAggregateFromServer(
                 firebaseModules.query(firebaseModules.collection(db, 'products')),
-                firebaseModules.count()
+                { count: firebaseModules.count() }
             ),
             // عدد الطلبات
             firebaseModules.getAggregateFromServer(
                 firebaseModules.query(firebaseModules.collection(db, 'orders')),
-                firebaseModules.count()
+                { count: firebaseModules.count() }
             ),
             // جلب الطلبات المكتملة فقط لحساب الإيرادات
             firebaseModules.getDocs(
@@ -70,6 +67,7 @@ async function loadStats() {
 
     } catch (error) {
         console.error('❌ خطأ في تحميل الإحصائيات:', error);
+        ErrorHandler.handle(error, 'loadStats');
         
         // محاولة استخدام الطريقة القديمة كبديل
         if (error.code === 'unimplemented' || error.message.includes('Aggregation')) {
@@ -80,8 +78,7 @@ async function loadStats() {
 }
 
 /**
- * طريقة بديلة (قديمة) لحساب الإحصائيات في حالة عدم توفر Aggregation Queries
- * مع تحسين الأداء بتقليل البيانات المجلوبة
+ * طريقة بديلة (قديمة) لحساب الإحصائيات
  */
 async function loadStatsLegacy() {
     try {
@@ -127,6 +124,7 @@ async function loadStatsLegacy() {
         console.log('✅ تم تحديث الإحصائيات (الطريقة البديلة)');
     } catch (error) {
         console.error('❌ خطأ في تحميل الإحصائيات (الطريقة البديلة):', error);
+        ErrorHandler.handle(error, 'loadStatsLegacy');
     }
 }
 
@@ -139,8 +137,8 @@ function updateStatsUI(totalUsers, totalProducts, totalOrders, totalRevenue) {
         if (el) {
             el.textContent = typeof value === 'number' 
                 ? (id === 'totalRevenue' 
-                    ? value.toLocaleString('ar-EG') + ' SDG' 
-                    : value.toLocaleString('ar-EG'))
+                    ? adminUtils.formatNumber(value) + ' SDG' 
+                    : adminUtils.formatNumber(value))
                 : value;
         }
     };

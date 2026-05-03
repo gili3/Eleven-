@@ -1,5 +1,5 @@
 /**
- * coupons.js - قسم إدارة الكوبونات (نسخة محسنة مع التحميل بالتمرير والبطاقات المصغرة)
+ * coupons.js - قسم إدارة الكوبونات (نسخة محسنة مع التحميل بالتمرير)
  */
 
 let allCoupons = [];
@@ -10,6 +10,7 @@ const COUPONS_PER_PAGE = 8;
 let couponsObserver = null;
 
 async function loadCoupons(isNextPage = false) {
+    if (!window.checkAdmin()) return;
     if (isLoadingCoupons) return;
     
     if (!isNextPage) {
@@ -27,6 +28,11 @@ async function loadCoupons(isNextPage = false) {
         console.log('🎫 جاري تحميل الكوبونات...');
         const { db, firebaseModules } = window;
         
+        if (!db || !firebaseModules) {
+            console.error('❌ Firebase not initialized');
+            return;
+        }
+
         let constraints = [
             firebaseModules.collection(db, 'coupons'),
             firebaseModules.orderBy('createdAt', 'desc'),
@@ -64,7 +70,10 @@ async function loadCoupons(isNextPage = false) {
         console.log(`✅ تم تحميل ${newCoupons.length} كوبون إضافي`);
     } catch (error) {
         console.error('❌ خطأ في تحميل الكوبونات:', error);
-        if (window.adminUtils) window.adminUtils.showToast('فشل تحميل الكوبونات', 'error');
+        ErrorHandler.handle(error, 'loadCoupons');
+        if (window.adminUtils) {
+            window.adminUtils.showToast('فشل تحميل الكوبونات', 'error');
+        }
     } finally {
         isLoadingCoupons = false;
     }
@@ -74,7 +83,10 @@ function setupCouponsInfiniteScroll() {
     const sentinel = document.getElementById('couponsScrollSentinel');
     if (!sentinel) return;
 
-    if (couponsObserver) couponsObserver.disconnect();
+    if (couponsObserver) {
+        couponsObserver.disconnect();
+        couponsObserver = null;
+    }
 
     couponsObserver = new IntersectionObserver((entries) => {
         if (entries[0].isIntersecting && hasMoreCoupons && !isLoadingCoupons) {
@@ -96,20 +108,22 @@ function displayCoupons(append = false) {
 
     const now = new Date();
     
-    tbody.innerHTML = allCoupons.map(coupon => {
+    const html = allCoupons.map(coupon => {
         const expiryDate = new Date(coupon.expiryDate);
         const isExpired = expiryDate < now;
         const isActive = coupon.isActive !== false && !isExpired;
         
+        const safeCode = adminUtils.escapeHTML(coupon.code || '');
+        
         return `
         <tr class="compact-row">
-            <td data-label="الكود"><strong>${coupon.code}</strong></td>
-            <td data-label="الخصم">${coupon.type === 'percent' ? coupon.value + '%' : window.adminUtils.formatNumber(coupon.value) + ' SDG'}</td>
-            <td data-label="الحد الأدنى">${window.adminUtils.formatNumber(coupon.minOrder || 0)} SDG</td>
+            <td data-label="الكود"><strong>${safeCode}</strong></td>
+            <td data-label="الخصم">${coupon.type === 'percent' ? coupon.value + '%' : adminUtils.formatNumber(coupon.value) + ' SDG'}</td>
+            <td data-label="الحد الأدنى">${adminUtils.formatNumber(coupon.minOrder || 0)} SDG</td>
             <td data-label="الاستخدامات">${coupon.usageCount || 0} / ${coupon.limit || '∞'}</td>
-            <td data-label="تاريخ الانتهاء">${window.adminUtils.formatDate(coupon.expiryDate)}</td>
+            <td data-label="تاريخ الانتهاء">${adminUtils.formatDate(coupon.expiryDate)}</td>
             <td data-label="الحالة">
-                <span class="badge ${isActive ? 'badge-success' : 'badge-danger'}" style="padding: 2px 8px; font-size: 10px;">
+                <span class="badge badge-${isActive ? 'success' : (isExpired ? 'danger' : 'warning')}" style="padding: 2px 8px; font-size: 10px;">
                     ${isActive ? 'نشط' : (isExpired ? 'منتهي' : 'معطل')}
                 </span>
             </td>
@@ -130,144 +144,187 @@ function displayCoupons(append = false) {
             </td>
         </tr>
     `}).join('');
+
+    if (append) {
+        tbody.insertAdjacentHTML('beforeend', html);
+    } else {
+        tbody.innerHTML = html;
+    }
 }
 
 function openCouponModal(couponId = null) {
+    if (!window.checkAdmin()) return;
+    
     const coupon = couponId ? allCoupons.find(c => c.id === couponId) : null;
     
-    const modal = document.createElement('div');
-    modal.className = 'modal-overlay active';
-    modal.id = 'couponModal';
-    modal.innerHTML = `
-        <div class="modal-content">
-            <div class="modal-header">
-                <h2>${couponId ? 'تعديل كوبون' : 'كوبون جديد'}</h2>
-                <button class="modal-close" onclick="window.adminUtils.closeModal('couponModal')">&times;</button>
+    const expiryValue = coupon?.expiryDate ? new Date(coupon.expiryDate).toISOString().split('T')[0] : '';
+    
+    const content = `
+        <form id="couponForm" onsubmit="saveCoupon(event, ${couponId ? `'${couponId}'` : 'null'})">
+            <div class="form-group">
+                <label>كود الكوبون <span style="color: red;">*</span></label>
+                <input type="text" id="couponCode" value="${coupon ? adminUtils.escapeHTML(coupon.code) : ''}" required 
+                       placeholder="مثال: SAVE20" class="form-control" style="text-transform: uppercase;">
             </div>
-            
-            <form id="couponForm" onsubmit="saveCoupon(event, ${couponId ? `'${couponId}'` : 'null'})">
+
+            <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 15px;">
                 <div class="form-group">
-                    <label>كود الكوبون *</label>
-                    <input type="text" id="couponCode" value="${coupon?.code || ''}" required placeholder="مثال: SAVE20">
+                    <label>نوع الخصم</label>
+                    <select id="couponType" class="form-control">
+                        <option value="percent" ${coupon?.type === 'percent' ? 'selected' : ''}>نسبة مئوية (%)</option>
+                        <option value="fixed" ${coupon?.type === 'fixed' ? 'selected' : ''}>مبلغ ثابت (SDG)</option>
+                    </select>
                 </div>
-
-                <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 15px;">
-                    <div class="form-group">
-                        <label>نوع الخصم</label>
-                        <select id="couponType">
-                            <option value="percent" ${coupon?.type === 'percent' ? 'selected' : ''}>نسبة مئوية (%)</option>
-                            <option value="fixed" ${coupon?.type === 'fixed' ? 'selected' : ''}>مبلغ ثابت (SDG)</option>
-                        </select>
-                    </div>
-                    <div class="form-group">
-                        <label>قيمة الخصم *</label>
-                        <input type="number" id="couponValue" value="${coupon?.value || ''}" min="0" step="0.01" required>
-                    </div>
-                </div>
-
-                <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 15px;">
-                    <div class="form-group">
-                        <label>الحد الأدنى للطلب</label>
-                        <input type="number" id="couponMinOrder" value="${coupon?.minOrder || 0}" min="0" step="0.01">
-                    </div>
-                    <div class="form-group">
-                        <label>حد الاستخدام</label>
-                        <input type="number" id="couponLimit" value="${coupon?.limit || 100}" min="1">
-                    </div>
-                </div>
-
                 <div class="form-group">
-                    <label>تاريخ الانتهاء *</label>
-                    <input type="date" id="couponExpiry" value="${coupon?.expiryDate ? new Date(coupon.expiryDate).toISOString().split('T')[0] : ''}" required>
+                    <label>قيمة الخصم <span style="color: red;">*</span></label>
+                    <input type="number" id="couponValue" value="${coupon?.value || ''}" min="0" step="0.01" required class="form-control">
                 </div>
+            </div>
 
+            <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 15px;">
                 <div class="form-group">
-                    <label>
-                        <input type="checkbox" id="couponIsActive" ${coupon?.isActive !== false ? 'checked' : ''}> 
-                        الكوبون نشط
-                    </label>
+                    <label>الحد الأدنى للطلب</label>
+                    <input type="number" id="couponMinOrder" value="${coupon?.minOrder || 0}" min="0" step="0.01" class="form-control">
                 </div>
+                <div class="form-group">
+                    <label>حد الاستخدام</label>
+                    <input type="number" id="couponLimit" value="${coupon?.limit || 100}" min="1" class="form-control">
+                </div>
+            </div>
 
-                <div class="modal-footer">
-                    <button type="submit" class="btn btn-primary">حفظ الكوبون</button>
-                    <button type="button" class="btn btn-secondary" onclick="window.adminUtils.closeModal('couponModal')">إلغاء</button>
-                </div>
-            </form>
-        </div>
+            <div class="form-group">
+                <label>تاريخ الانتهاء <span style="color: red;">*</span></label>
+                <input type="date" id="couponExpiry" value="${expiryValue}" required class="form-control">
+            </div>
+
+            <div class="form-group">
+                <label style="display: flex; align-items: center; gap: 8px;">
+                    <input type="checkbox" id="couponIsActive" ${coupon?.isActive !== false ? 'checked' : ''}> 
+                    الكوبون نشط
+                </label>
+            </div>
+        </form>
     `;
 
-    document.body.appendChild(modal);
+    ModalManager.open({
+        id: 'couponModal',
+        title: couponId ? 'تعديل كوبون' : 'كوبون جديد',
+        content: content,
+        size: 'medium',
+        buttons: [
+            { text: 'حفظ', class: 'btn-primary', onClick: () => document.getElementById('couponForm').dispatchEvent(new Event('submit')) },
+            { text: 'إلغاء', class: 'btn-secondary' }
+        ]
+    });
 }
 
 async function saveCoupon(event, couponId) {
+    if (!window.checkAdmin()) return;
     event.preventDefault();
+    
     const submitBtn = event.target.querySelector('button[type="submit"]');
-    submitBtn.disabled = true;
-    submitBtn.textContent = 'جاري الحفظ...';
+    if (submitBtn) {
+        submitBtn.disabled = true;
+        submitBtn.innerHTML = '<i class="fas fa-spinner fa-spin"></i> جاري الحفظ...';
+    }
     
     try {
         const { db, firebaseModules } = window;
         
+        const expiryDateValue = document.getElementById('couponExpiry').value;
+        
+        // التحقق من صحة التاريخ - منع إضافة كوبون منتهي الصلاحية
+        const today = new Date();
+        today.setHours(0, 0, 0, 0);
+        const expiryDateObj = new Date(expiryDateValue);
+        
+        if (expiryDateObj < today) {
+            adminUtils.showToast('⚠️ لا يمكن إضافة كوبون منتهي الصلاحية. اختر تاريخاً مستقبلياً.', 'warning');
+            if (submitBtn) {
+                submitBtn.disabled = false;
+                submitBtn.innerHTML = 'حفظ الكوبون';
+            }
+            return;
+        }
+        
         const couponData = {
-            code: document.getElementById('couponCode').value.toUpperCase().trim(),
+            code: document.getElementById('couponCode').value.toUpperCase().trim().replace(/[^A-Z0-9]/g, ''),
             type: document.getElementById('couponType').value,
-            value: parseFloat(document.getElementById('couponValue').value),
-            minOrder: parseFloat(document.getElementById('couponMinOrder').value) || 0,
-            limit: parseInt(document.getElementById('couponLimit').value) || null,
-            expiryDate: document.getElementById('couponExpiry').value,
+            value: Math.max(0, parseFloat(document.getElementById('couponValue').value)),
+            minOrder: Math.max(0, parseFloat(document.getElementById('couponMinOrder').value)) || 0,
+            limit: Math.max(1, parseInt(document.getElementById('couponLimit').value)) || null,
+            expiryDate: expiryDateValue,
             isActive: document.getElementById('couponIsActive').checked,
             updatedAt: firebaseModules.serverTimestamp()
         };
 
+        if (!couponData.code || !couponData.value || !couponData.expiryDate) {
+            adminUtils.showToast('الرجاء ملء جميع الحقول المطلوبة', 'warning');
+            return;
+        }
+
         if (couponId && couponId !== 'null') {
             await firebaseModules.updateDoc(firebaseModules.doc(db, 'coupons', couponId), couponData);
-            window.adminUtils.showToast('✅ تم تحديث الكوبون بنجاح', 'success');
+            adminUtils.showToast('✅ تم تحديث الكوبون بنجاح', 'success');
         } else {
             couponData.createdAt = firebaseModules.serverTimestamp();
             couponData.usageCount = 0;
             await firebaseModules.addDoc(firebaseModules.collection(db, 'coupons'), couponData);
-            window.adminUtils.showToast('✅ تم إضافة الكوبون بنجاح', 'success');
+            adminUtils.showToast('✅ تم إضافة الكوبون بنجاح', 'success');
         }
         
-        window.adminUtils.closeModal('couponModal');
+        ModalManager.close('couponModal');
         loadCoupons();
     } catch (error) {
         console.error('❌ خطأ في حفظ الكوبون:', error);
-        window.adminUtils.showToast('حدث خطأ في حفظ الكوبون', 'error');
+        adminUtils.showToast('حدث خطأ في حفظ الكوبون', 'error');
+        ErrorHandler.handle(error, 'saveCoupon');
     } finally {
-        submitBtn.disabled = false;
-        submitBtn.textContent = 'حفظ الكوبون';
+        if (submitBtn) {
+            submitBtn.disabled = false;
+            submitBtn.innerHTML = 'حفظ الكوبون';
+        }
     }
 }
 
 async function toggleCouponStatus(couponId, currentStatus) {
+    if (!window.checkAdmin()) return;
+    
     try {
         const { db, firebaseModules } = window;
         await firebaseModules.updateDoc(firebaseModules.doc(db, 'coupons', couponId), {
             isActive: !currentStatus
         });
         
-        window.adminUtils.showToast(`✅ تم ${!currentStatus ? 'تفعيل' : 'تعطيل'} الكوبون`, 'success');
-        loadCoupons();
+        adminUtils.showToast(`✅ تم ${!currentStatus ? 'تفعيل' : 'تعطيل'} الكوبون`, 'success');
+        
+        const coupon = allCoupons.find(c => c.id === couponId);
+        if (coupon) coupon.isActive = !currentStatus;
+        displayCoupons();
     } catch (error) {
         console.error('❌ خطأ في تحديث حالة الكوبون:', error);
-        window.adminUtils.showToast('حدث خطأ', 'error');
+        adminUtils.showToast('حدث خطأ', 'error');
+        ErrorHandler.handle(error, 'toggleCouponStatus');
     }
 }
 
 async function deleteCoupon(id) {
-    if (!confirm('هل أنت متأكد من حذف هذا الكوبون؟')) return;
+    if (!window.checkAdmin()) return;
     
-    try {
-        const { db, firebaseModules } = window;
-        await firebaseModules.deleteDoc(firebaseModules.doc(db, 'coupons', id));
-        
-        window.adminUtils.showToast('✅ تم حذف الكوبون بنجاح', 'success');
-        loadCoupons();
-    } catch (error) {
-        console.error('❌ خطأ في حذف الكوبون:', error);
-        window.adminUtils.showToast('حدث خطأ في الحذف', 'error');
-    }
+    ModalManager.confirm('هل أنت متأكد من حذف هذا الكوبون؟', 'تأكيد', async () => {
+        try {
+            const { db, firebaseModules } = window;
+            await firebaseModules.deleteDoc(firebaseModules.doc(db, 'coupons', id));
+            
+            adminUtils.showToast('✅ تم حذف الكوبون بنجاح', 'success');
+            allCoupons = allCoupons.filter(c => c.id !== id);
+            displayCoupons();
+        } catch (error) {
+            console.error('❌ خطأ في حذف الكوبون:', error);
+            adminUtils.showToast('حدث خطأ في الحذف', 'error');
+            ErrorHandler.handle(error, 'deleteCoupon');
+        }
+    });
 }
 
 function editCoupon(id) {

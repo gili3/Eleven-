@@ -1,13 +1,14 @@
 /**
- * orders.js - قسم إدارة الطلبات (نسخة محسنة مع التحميل بالتمرير وتحقق الصلاحيات)
+ * orders.js - قسم إدارة الطلبات
+ * تم تحديثه لتحسين البحث واستخدام المعاملات عند إلغاء الطلب.
  */
 
 let allOrders = [];
 let lastOrderDoc = null;
 let hasMoreOrders = true;
 let isLoadingOrders = false;
-const ORDERS_PER_PAGE = 8;
-let ordersObserver = ffnull;
+const ORDERS_PER_PAGE = 10;
+let ordersObserver = null;
 
 async function loadOrders(isNextPage = false) {
     if (!window.checkAdmin()) return;
@@ -15,8 +16,7 @@ async function loadOrders(isNextPage = false) {
     
     const searchInput = document.getElementById('ordersSearchInput');
     const statusFilter = document.getElementById('ordersStatusFilter');
-    
-    const searchTerm = searchInput ? searchInput.value.trim().toLowerCase() : '';
+    const searchTerm = searchInput ? searchInput.value.trim() : '';
     const filterStatus = statusFilter ? statusFilter.value : '';
 
     if (!isNextPage) {
@@ -24,46 +24,36 @@ async function loadOrders(isNextPage = false) {
         lastOrderDoc = null;
         hasMoreOrders = true;
         const tbody = document.getElementById('ordersBody');
-        if (tbody) {
-            tbody.innerHTML = Array(5).fill(0).map(() => `
-                <tr class="skeleton-row">
-                    <td><div class="skeleton skeleton-text" style="width: 50px;"></div></td>
-                    <td><div class="skeleton skeleton-text"></div></td>
-                    <td><div class="skeleton skeleton-text" style="width: 80px;"></div></td>
-                    <td><div class="skeleton skeleton-text" style="width: 60px;"></div></td>
-                    <td><div class="skeleton skeleton-text" style="width: 40px;"></div></td>
-                    <td><div class="skeleton skeleton-text" style="width: 100px;"></div></td>
-                    <td><div class="skeleton skeleton-text" style="width: 80px;"></div></td>
-                </tr>
-            `).join('');
-        }
+        if (tbody) tbody.innerHTML = '<tr><td colspan="7" style="text-align: center; padding: 40px;">جاري التحميل...</td></tr>';
     }
-
-    if (!hasMoreOrders && isNextPage) return;
 
     isLoadingOrders = true;
     try {
-        console.log('📦 جاري تحميل الطلبات...');
-        const { db, firebaseModules } = window;
+        const { db } = window.firebaseInstance;
+        const { collection, query, where, orderBy, startAfter, limit, getDocs } = window.firebaseModules;
         
-        let constraints = [
-            firebaseModules.collection(db, 'orders')
-        ];
-
-        if (filterStatus) {
-            constraints.push(firebaseModules.where('status', '==', filterStatus));
+        let constraints = [];
+        if (filterStatus) constraints.push(where('status', '==', filterStatus));
+        
+        // تحسين البحث: إذا كان رقم الطلب، نبحث عنه مباشرة
+        if (searchTerm) {
+            if (searchTerm.startsWith('NO:')) {
+                constraints.push(where('orderId', '==', searchTerm));
+            } else if (!isNaN(searchTerm)) {
+                constraints.push(where('orderNumber', '==', Number(searchTerm)));
+            } else {
+                // بحث بالاسم (يتطلب فهرس مركب)
+                constraints.push(where('userName', '>=', searchTerm));
+                constraints.push(where('userName', '<=', searchTerm + '\uf8ff'));
+            }
         }
 
-        constraints.push(firebaseModules.orderBy('createdAt', 'desc'));
-
-        if (isNextPage && lastOrderDoc) {
-            constraints.push(firebaseModules.startAfter(lastOrderDoc));
-        }
+        constraints.push(orderBy('createdAt', 'desc'));
+        if (isNextPage && lastOrderDoc) constraints.push(startAfter(lastOrderDoc));
+        constraints.push(limit(ORDERS_PER_PAGE));
         
-        constraints.push(firebaseModules.limit(ORDERS_PER_PAGE));
-        
-        const q = firebaseModules.query(...constraints);
-        const snapshot = await firebaseModules.getDocs(q);
+        const q = query(collection(db, 'orders'), ...constraints);
+        const snapshot = await getDocs(q);
         
         if (snapshot.empty) {
             hasMoreOrders = false;
@@ -74,316 +64,117 @@ async function loadOrders(isNextPage = false) {
         lastOrderDoc = snapshot.docs[snapshot.docs.length - 1];
         hasMoreOrders = snapshot.docs.length === ORDERS_PER_PAGE;
 
-        const newOrders = [];
-        snapshot.forEach(doc => {
-            newOrders.push({ id: doc.id, ...doc.data() });
-        });
-
-        allOrders = [...allOrders, ...newOrders];
+        const newOrders = snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() }));
+        allOrders = isNextPage ? [...allOrders, ...newOrders] : newOrders;
         window.allOrders = allOrders;
         
-        displayOrders(isNextPage);
-        if (window.updateStats) window.updateStats();
-        
+        displayOrders();
         if (!isNextPage) setupOrdersInfiniteScroll();
-        
-        console.log(`✅ تم تحميل ${newOrders.length} طلب إضافي`);
     } catch (error) {
-        console.error('❌ خطأ في تحميل الطلبات:', error);
-        if (window.adminUtils) window.adminUtils.showToast('فشل تحميل الطلبات', 'error');
+        console.error('❌ Load Orders Error:', error);
+        window.adminUtils.showToast('فشل تحميل الطلبات', 'error');
     } finally {
         isLoadingOrders = false;
     }
 }
 
-function setupOrdersInfiniteScroll() {
-    const sentinel = document.getElementById('ordersScrollSentinel');
-    if (!sentinel) return;
-
-    if (ordersObserver) ordersObserver.disconnect();
-
-    ordersObserver = new IntersectionObserver((entries) => {
-        if (entries[0].isIntersecting && hasMoreOrders && !isLoadingOrders) {
-            sentinel.innerHTML = '<div class="loading-indicator"><div class="spinner"></div><span style="margin-right: 10px; font-size: 13px;">جاري تحميل المزيد...</span></div>';
-            loadOrders(true).then(() => {
-                sentinel.innerHTML = '';
-            });
-        }
-    }, { threshold: 0.1 });
-
-    ordersObserver.observe(sentinel);
-}
-
-function displayOrders(append = false) {
+function displayOrders() {
     const tbody = document.getElementById('ordersBody');
     if (!tbody) return;
     
-    if (allOrders.length === 0 && !append) {
-        tbody.innerHTML = '<tr><td colspan="7" style="text-align: center; padding: 40px;">لا توجد طلبات تطابق البحث</td></tr>';
+    if (allOrders.length === 0) {
+        tbody.innerHTML = '<tr><td colspan="7" style="text-align: center; padding: 40px;">لا توجد طلبات</td></tr>';
         return;
     }
 
-    tbody.innerHTML = allOrders.map(order => {
-        const safeName = window.SecurityCore?.sanitizeHTML(order.userName || 'عميل') || 'عميل';
-        const safePhone = window.SecurityCore?.sanitizeHTML(order.phone || '---') || '---';
-        const safeOrderId = window.SecurityCore?.sanitizeHTML(order.orderId || order.id.substring(0, 6)) || order.id.substring(0, 6);
-        return `
+    tbody.innerHTML = allOrders.map(order => `
         <tr class="compact-row" onclick="viewOrder('${order.id}')" style="cursor: pointer;">
-            <td data-label="رقم الطلب" style="font-weight: 600; font-size: 12px;">#${safeOrderId}</td>
-            <td data-label="العميل" style="font-size: 12px;">${safeName}</td>
-            <td data-label="الهاتف" style="font-size: 11px;">${safePhone}</td>
-            <td data-label="الإجمالي" style="font-weight: bold; color: var(--primary-color);">${window.adminUtils.formatNumber(order.total)}</td>
+            <td data-label="رقم الطلب">#${order.orderId || order.orderNumber}</td>
+            <td data-label="العميل">${order.userName}</td>
+            <td data-label="الهاتف">${order.phone}</td>
+            <td data-label="الإجمالي">${order.total} SDG</td>
             <td data-label="الحالة">
-                <span class="badge badge-${window.adminUtils.getStatusColor(order.status)}" style="padding: 1px 6px; font-size: 9px; border-radius: 4px;">
+                <span class="badge badge-${window.adminUtils.getStatusColor(order.status)}">
                     ${window.adminUtils.getStatusText(order.status)}
                 </span>
             </td>
-            <td data-label="التاريخ" style="font-size: 10px; color: #666;">${window.adminUtils.formatDate(order.createdAt)}</td>
+            <td data-label="التاريخ">${window.adminUtils.formatDate(order.createdAt)}</td>
             <td data-label="الإجراءات" onclick="event.stopPropagation()">
-                <div class="action-buttons-compact">
-                    <button class="btn btn-sm btn-primary" onclick="editOrderStatus('${order.id}')" title="تحديث الحالة">
-                        <i class="fas fa-edit"></i>
-                    </button>
-                    <button class="btn btn-sm btn-success" onclick="printInvoice('${order.id}')" title="طباعة">
-                        <i class="fas fa-print"></i>
-                    </button>
-                </div>
+                <button class="btn btn-sm btn-primary" onclick="editOrderStatus('${order.id}')"><i class="fas fa-edit"></i></button>
+                <button class="btn btn-sm btn-success" onclick="printInvoice('${order.id}')"><i class="fas fa-print"></i></button>
             </td>
         </tr>
-    `}).join('');
-}
-
-function applyOrdersFilter() {
-    loadOrders(false);
-}
-
-function resetOrdersFilter() {
-    const searchInput = document.getElementById('ordersSearchInput');
-    const statusFilter = document.getElementById('ordersStatusFilter');
-    
-    if (searchInput) searchInput.value = '';
-    if (statusFilter) statusFilter.value = '';
-    
-    loadOrders(false);
-}
-
-function viewOrder(orderId) {
-    if (!window.checkAdmin()) return;
-    const order = allOrders.find(o => o.id === orderId);
-    if (!order) return;
-
-    // تنظيف البيانات للعرض
-    const safeName = window.SecurityCore?.sanitizeHTML(order.userName || '---') || '---';
-    const safePhone = window.SecurityCore?.sanitizeHTML(order.phone || '---') || '---';
-    const safeAddress = window.SecurityCore?.sanitizeHTML(order.address || '---') || '---';
-    const safeOrderId = window.SecurityCore?.sanitizeHTML(order.orderId || order.id.substring(0, 8)) || order.id.substring(0, 8);
-
-    const modal = document.createElement('div');
-    modal.className = 'modal-overlay active';
-    modal.id = 'orderModal';
-    modal.innerHTML = `
-        <div class="modal-content" style="max-width: 600px;">
-            <div class="modal-header">
-                <h2>تفاصيل الطلب: #${safeOrderId}</h2>
-                <button class="modal-close" onclick="window.adminUtils.closeModal('orderModal')">&times;</button>
-            </div>
-            
-            <div style="padding: 15px;">
-                <div style="background: #f8f9fa; padding: 15px; border-radius: 10px; margin-bottom: 15px; display: grid; grid-template-columns: 1fr 1fr; gap: 10px; font-size: 14px;">
-                    <p><strong>الاسم:</strong> ${safeName}</p>
-                    <p><strong>الهاتف:</strong> ${safePhone}</p>
-                    <p><strong>العنوان:</strong> ${safeAddress}</p>
-                    <p><strong>السعر الإجمالي:</strong> ${window.adminUtils.formatNumber(order.total)} SDG</p>
-                    <p><strong>الحالة:</strong> <span class="badge badge-${window.adminUtils.getStatusColor(order.status)}">${window.adminUtils.getStatusText(order.status)}</span></p>
-                    <p><strong>التاريخ:</strong> ${window.adminUtils.formatDate(order.createdAt)}</p>
-                </div>
-
-                <h4 style="margin-bottom: 10px; border-bottom: 1px solid #eee; padding-bottom: 5px;">المنتجات</h4>
-                <div style="max-height: 200px; overflow-y: auto; margin-bottom: 15px;">
-                    ${(order.items || []).map(item => {
-                        const safeItemName = window.SecurityCore?.sanitizeHTML(item.name) || item.name;
-                        return `
-                        <div style="display: flex; align-items: center; gap: 10px; padding: 8px; border-bottom: 1px solid #f1f1f1;">
-                            <img src="${item.image || 'https://via.placeholder.com/30'}" style="width: 35px; height: 35px; border-radius: 4px; object-fit: cover;">
-                            <div style="flex: 1;">
-                                <p style="font-size: 13px; margin: 0;">${safeItemName}</p>
-                                <p style="font-size: 11px; color: #666; margin: 0;">${item.quantity} × ${window.adminUtils.formatNumber(item.price)} SDG</p>
-                            </div>
-                        </div>
-                    `}).join('')}
-                </div>
-
-                ${order.receiptUrl ? `
-                    <div style="text-align: center; margin-top: 10px;">
-                        <p style="font-size: 13px; margin-bottom: 5px;"><strong>إيصال الدفع:</strong></p>
-                        <a href="${order.receiptUrl}" target="_blank">
-                            <img src="${order.receiptUrl}" style="max-width: 100%; max-height: 150px; border-radius: 8px; border: 1px solid #ddd;">
-                        </a>
-                    </div>
-                ` : ''}
-            </div>
-            <div class="modal-footer" style="display: flex; justify-content: center; gap: 10px; padding: 15px;">
-                <button class="btn btn-primary" onclick="editOrderStatus('${order.id}')">تحديث الحالة</button>
-                <button class="btn btn-success" onclick="printInvoice('${order.id}')">طباعة</button>
-                <button class="btn btn-secondary" onclick="window.adminUtils.closeModal('orderModal')">إغلاق</button>
-            </div>
-        </div>
-    `;
-    document.body.appendChild(modal);
+    `).join('');
 }
 
 async function editOrderStatus(orderId) {
-    if (!window.checkAdmin()) return;
     const order = allOrders.find(o => o.id === orderId);
     if (!order) return;
 
-    const statuses = {
-        'pending': 'قيد الانتظار',
-        'processing': 'جاري التجهيز',
-        'shipped': 'تم الشحن',
-        'delivered': 'تم التوصيل',
-        'cancelled': 'ملغي'
-    };
+    const statuses = { 'pending': 'قيد الانتظار', 'processing': 'جاري التجهيز', 'shipped': 'تم الشحن', 'delivered': 'تم التوصيل', 'cancelled': 'ملغي' };
+    const options = Object.entries(statuses).map(([k, v]) => `<option value="${k}" ${order.status === k ? 'selected' : ''}>${v}</option>`).join('');
 
-    const modal = document.createElement('div');
-    modal.className = 'modal-overlay active';
-    modal.id = 'statusUpdateModal';
-    modal.innerHTML = `
-        <div class="modal-content" style="max-width: 400px;">
-            <div class="modal-header">
-                <h2>تحديث حالة الطلب</h2>
-                <button class="modal-close" onclick="window.adminUtils.closeModal('statusUpdateModal')">&times;</button>
-            </div>
-            <div style="padding: 20px;">
-                <div class="form-group">
-                    <label>اختر الحالة الجديدة:</label>
-                    <select id="newStatusSelect" style="width: 100%; padding: 10px; border-radius: 8px; border: 1px solid #ddd; font-family: 'Cairo';">
-                        ${Object.entries(statuses).map(([key, val]) => `
-                            <option value="${key}" ${order.status === key ? 'selected' : ''}>${val}</option>
-                        `).join('')}
-                    </select>
-                </div>
-                <div style="display: flex; gap: 10px; margin-top: 20px;">
-                    <button id="saveStatusBtn" class="btn btn-primary" style="flex: 1;">حفظ التغيير</button>
-                    <button class="btn btn-secondary" onclick="window.adminUtils.closeModal('statusUpdateModal')" style="flex: 1;">إلغاء</button>
-                </div>
-            </div>
-        </div>
-    `;
-    document.body.appendChild(modal);
+    ModalManager.open({
+        id: 'statusModal',
+        title: 'تحديث حالة الطلب',
+        content: `<div class="form-group"><label>الحالة الجديدة:</label><select id="newOrderStatus" class="form-control">${options}</select></div>`,
+        buttons: [{
+            text: 'حفظ', class: 'btn-primary', onClick: async () => {
+                const newStatus = document.getElementById('newOrderStatus').value;
+                if (newStatus === order.status) { ModalManager.close('statusModal'); return; }
 
-    document.getElementById('saveStatusBtn').onclick = async () => {
-        const newStatus = document.getElementById('newStatusSelect').value;
-        if (newStatus === order.status) {
-            window.adminUtils.closeModal('statusUpdateModal');
-            return;
-        }
+                try {
+                    const { db } = window.firebaseInstance;
+                    const { runTransaction, doc, serverTimestamp } = window.firebaseModules;
 
-        try {
-            const saveBtn = document.getElementById('saveStatusBtn');
-            saveBtn.disabled = true;
-            saveBtn.innerHTML = '<i class="fas fa-spinner fa-spin"></i> جاري الحفظ...';
+                    await runTransaction(db, async (transaction) => {
+                        const orderRef = doc(db, 'orders', orderId);
+                        
+                        // إذا تم الإلغاء، نعيد المخزون باستخدام Transaction لضمان الدقة
+                        if (newStatus === 'cancelled' && order.status !== 'cancelled') {
+                            for (const item of (order.items || [])) {
+                                const pRef = doc(db, 'products', item.id);
+                                const pSnap = await transaction.get(pRef);
+                                if (pSnap.exists()) {
+                                    transaction.update(pRef, { stock: pSnap.data().stock + item.quantity });
+                                }
+                            }
+                        }
+                        
+                        transaction.update(orderRef, { status: newStatus, updatedAt: serverTimestamp() });
+                    });
 
-            const { db, firebaseModules } = window;
-            await firebaseModules.updateDoc(firebaseModules.doc(db, 'orders', orderId), {
-                status: newStatus,
-                updatedAt: firebaseModules.serverTimestamp()
-            });
-
-            window.adminUtils.showToast('✅ تم تحديث حالة الطلب بنجاح', 'success');
-            order.status = newStatus;
-            displayOrders();
-            
-            window.adminUtils.closeModal('statusUpdateModal');
-            
-            if (document.getElementById('orderModal')) {
-                window.adminUtils.closeModal('orderModal');
-                viewOrder(orderId);
+                    window.adminUtils.showToast('تم التحديث بنجاح', 'success');
+                    order.status = newStatus;
+                    displayOrders();
+                    ModalManager.close('statusModal');
+                    
+                    // إرسال إشعار (إذا كان النظام مفعلاً)
+                    if (window.NotificationSystem && window.NotificationSystem.sendToUser) {
+                        window.NotificationSystem.sendToUser(order.userId, `تحديث الطلب #${order.orderId}`, `حالة طلبك الآن: ${statuses[newStatus]}`);
+                    }
+                } catch (e) {
+                    window.adminUtils.showToast('فشل التحديث', 'error');
+                }
             }
-        } catch (error) {
-            console.error('❌ خطأ في تحديث الحالة:', error);
-            window.adminUtils.showToast('حدث خطأ أثناء تحديث الحالة', 'error');
-        }
-    };
+        }, { text: 'إلغاء', class: 'btn-secondary' }]
+    });
 }
 
-function printInvoice(orderId) {
-    if (!window.checkAdmin()) return;
-    const order = allOrders.find(o => o.id === orderId);
-    if (!order) return;
-    
-    const printWindow = window.open('', '_blank');
-    // تنظيف البيانات للطباعة
-    const safeName = window.SecurityCore?.sanitizeHTML(order.userName || '---') || '---';
-    const safePhone = window.SecurityCore?.sanitizeHTML(order.phone || '---') || '---';
-    const safeAddress = window.SecurityCore?.sanitizeHTML(order.address || '---') || '---';
-    const safeOrderId = window.SecurityCore?.sanitizeHTML(order.orderId || order.id.substring(0, 8)) || order.id.substring(0, 8);
-    
-    printWindow.document.write(`
-        <html dir="rtl">
-        <head>
-            <title>فاتورة طلب #${safeOrderId}</title>
-            <style>
-                body { font-family: 'Cairo', sans-serif; padding: 20px; }
-                .header { text-align: center; margin-bottom: 30px; border-bottom: 2px solid #333; padding-bottom: 10px; }
-                .info { display: flex; justify-content: space-between; margin-bottom: 20px; }
-                table { width: 100%; border-collapse: collapse; margin-bottom: 20px; }
-                th, td { border: 1px solid #ddd; padding: 10px; text-align: right; }
-                th { background: #f4f4f4; }
-                .total { text-align: left; font-size: 1.2em; font-weight: bold; }
-            </style>
-        </head>
-        <body>
-            <div class="header">
-                <h1>فاتورة شراء</h1>
-                <p>رقم الطلب: #${safeOrderId}</p>
-            </div>
-            <div class="info">
-                <div>
-                    <p><strong>العميل:</strong> ${safeName}</p>
-                    <p><strong>الهاتف:</strong> ${safePhone}</p>
-                    <p><strong>العنوان:</strong> ${safeAddress}</p>
-                </div>
-                <div>
-                    <p><strong>التاريخ:</strong> ${window.adminUtils.formatDate(order.createdAt)}</p>
-                    <p><strong>الحالة:</strong> ${window.adminUtils.getStatusText(order.status)}</p>
-                </div>
-            </div>
-            <table>
-                <thead>
-                    <tr>
-                        <th>المنتج</th>
-                        <th>السعر</th>
-                        <th>الكمية</th>
-                        <th>الإجمالي</th>
-                    </tr>
-                </thead>
-                <tbody>
-                    ${(order.items || []).map(item => {
-                        const safeItemName = window.SecurityCore?.sanitizeHTML(item.name) || item.name;
-                        return `
-                        <tr>
-                            <td>${safeItemName}</td>
-                            <td>${window.adminUtils.formatNumber(item.price)} SDG</td>
-                            <td>${item.quantity}</td>
-                            <td>${window.adminUtils.formatNumber(item.price * item.quantity)} SDG</td>
-                        </tr>
-                    `}).join('')}
-                </tbody>
-            </table>
-            <div class="total">
-                <p>الإجمالي الكلي: ${window.adminUtils.formatNumber(order.total)} SDG</p>
-            </div>
-            <script>window.onload = () => { window.print(); window.close(); }</script>
-        </body>
-        </html>
-    `);
-    printWindow.document.close();
+function setupOrdersInfiniteScroll() {
+    const sentinel = document.getElementById('ordersScrollSentinel');
+    if (!sentinel) return;
+    if (ordersObserver) ordersObserver.disconnect();
+    ordersObserver = new IntersectionObserver(e => { if (e[0].isIntersecting && hasMoreOrders && !isLoadingOrders) loadOrders(true); });
+    ordersObserver.observe(sentinel);
 }
 
+// تصدير الدوال
 window.loadOrders = loadOrders;
-window.viewOrder = viewOrder;
 window.editOrderStatus = editOrderStatus;
-window.printInvoice = printInvoice;
-window.applyOrdersFilter = applyOrdersFilter;
-window.resetOrdersFilter = resetOrdersFilter;
+window.applyOrdersFilter = () => loadOrders(false);
+window.resetOrdersFilter = () => {
+    document.getElementById('ordersSearchInput').value = '';
+    document.getElementById('ordersStatusFilter').value = '';
+    loadOrders(false);
+};

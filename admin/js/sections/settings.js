@@ -8,6 +8,8 @@ let siteSettings = {};
  * دالة تحميل الإعدادات من Firestore
  */
 async function loadSettings() {
+    if (!window.checkAdmin()) return;
+    
     try {
         console.log('⚙️ جاري تحميل الإعدادات...');
         
@@ -44,6 +46,8 @@ async function loadSettings() {
         
     } catch (error) {
         console.error('❌ خطأ في تحميل الإعدادات:', error);
+        ErrorHandler.handle(error, 'loadSettings');
+        
         if (window.adminUtils && window.adminUtils.showToast) {
             window.adminUtils.showToast('فشل تحميل الإعدادات من الخادم', 'error');
         }
@@ -160,11 +164,9 @@ function renderSettingsForm() {
                         <label>شعار المتجر</label>
                         <div style="margin-bottom: 10px; text-align: center;">
                             <img id="logoPreview" src="" alt="Logo" style="max-width: 150px; display: none; margin: 0 auto 10px; border: 1px solid #ddd; padding: 5px; border-radius: 5px;">
-                            <div class="image-placeholder" style="width: 100px; height: 100px; background: #f5f5f5; border: 2px dashed #ddd; border-radius: 50%; display: flex; align-items: center; justify-content: center; margin: 0 auto;">
-                                <i class="fas fa-image" style="color: #ccc; font-size: 30px;"></i>
-                            </div>
                         </div>
                         <input type="file" id="logoFile" accept="image/*" onchange="previewLogo(event)" class="form-control">
+                        <p style="font-size: 12px; color: #666; margin-top: 5px;">اتركه فارغاً إذا لم ترد تغيير الشعار</p>
                     </div>
                 </div>
 
@@ -178,7 +180,7 @@ function renderSettingsForm() {
                     </div>
                     <div class="form-group">
                         <label for="maintenanceMessage">رسالة الصيانة</label>
-                        <textarea id="maintenanceMessage" rows="3" class="form-control"></textarea>
+                        <textarea id="maintenanceMessage" rows="3" class="form-control" placeholder="الموقع تحت الصيانة حالياً..."></textarea>
                     </div>
                 </div>
             </div>
@@ -222,8 +224,6 @@ function fillSettingsForm() {
     if (logoPreview && siteSettings.logo) {
         logoPreview.src = siteSettings.logo;
         logoPreview.style.display = 'block';
-        const placeholder = document.querySelector('.image-placeholder');
-        if (placeholder) placeholder.style.display = 'none';
     }
 }
 
@@ -231,7 +231,9 @@ function fillSettingsForm() {
  * دالة حفظ الإعدادات
  */
 async function saveSettings(event) {
+    if (!window.checkAdmin()) return;
     event.preventDefault();
+    
     const submitBtn = event.target.querySelector('button[type="submit"]');
     const originalText = submitBtn.innerHTML;
     submitBtn.disabled = true;
@@ -245,7 +247,20 @@ async function saveSettings(event) {
         let logoUrl = siteSettings.logo;
 
         if (logoFile) {
-            const fileName = `settings/logo_${Date.now()}_${logoFile.name.replace(/[^a-zA-Z0-9.]/g, '_')}`;
+            // التحقق من حجم الملف
+            if (logoFile.size > 2 * 1024 * 1024) {
+                adminUtils.showToast('حجم الشعار يجب أن يكون أقل من 2 ميجابايت', 'warning');
+                return;
+            }
+            
+            // التحقق من نوع الملف قبل الرفع
+            const allowedLogoTypes = ['image/jpeg', 'image/jpg', 'image/png', 'image/gif', 'image/webp', 'image/svg+xml'];
+            if (!allowedLogoTypes.includes(logoFile.type)) {
+                adminUtils.showToast('نوع ملف الشعار غير مدعوم', 'warning');
+                return;
+            }
+            const logoExt = logoFile.type.split('/')[1] || 'jpg';
+            const fileName = `settings/logo_${Date.now()}_${Math.random().toString(36).substr(2, 9)}.${logoExt}`;
             const storageRef = firebaseModules.ref(storage, fileName);
             await firebaseModules.uploadBytes(storageRef, logoFile);
             logoUrl = await firebaseModules.getDownloadURL(storageRef);
@@ -256,7 +271,7 @@ async function saveSettings(event) {
         const getCheck = (id) => document.getElementById(id)?.checked || false;
 
         const settingsData = {
-            storeName: getValue('storeName'),
+            storeName: SecurityCore.sanitizeHTML(getValue('storeName')),
             storeEmail: getValue('storeEmail'),
             storePhone: getValue('storePhone'),
             storeCurrency: getValue('storeCurrency'),
@@ -264,18 +279,18 @@ async function saveSettings(event) {
             freeShippingLimit: getFloat('freeShippingLimit'),
             shippingEstimatedDays: getValue('shippingEstimatedDays'),
             enableCashOnDelivery: getCheck('enableCashOnDelivery'),
-            bankName: getValue('bankName'),
+            bankName: SecurityCore.sanitizeHTML(getValue('bankName')),
             bankAccount: getValue('bankAccount'),
-            bankAccountName: getValue('bankAccountName'),
+            bankAccountName: SecurityCore.sanitizeHTML(getValue('bankAccountName')),
             facebook: getValue('facebook'),
             instagram: getValue('instagram'),
             whatsapp: getValue('whatsapp'),
             tiktok: getValue('tiktok'),
             maintenanceMode: getCheck('maintenanceMode'),
-            maintenanceMessage: getValue('maintenanceMessage'),
+            maintenanceMessage: SecurityCore.sanitizeHTML(getValue('maintenanceMessage')),
             logo: logoUrl,
             updatedAt: firebaseModules.serverTimestamp(),
-            updatedBy: window.currentUser?.uid || 'admin'
+            updatedBy: AppState.user?.uid || 'admin'
         };
 
         await firebaseModules.setDoc(
@@ -284,18 +299,15 @@ async function saveSettings(event) {
             { merge: true }
         );
         
-        if (window.adminUtils && window.adminUtils.showToast) {
-            window.adminUtils.showToast('✅ تم حفظ الإعدادات بنجاح', 'success');
-        } else {
-            alert('تم حفظ الإعدادات بنجاح');
-        }
+        adminUtils.showToast('✅ تم حفظ الإعدادات بنجاح', 'success');
         
         siteSettings = settingsData;
+        AppState.setSettings(settingsData);
+        
     } catch (error) {
         console.error('❌ خطأ في حفظ الإعدادات:', error);
-        if (window.adminUtils && window.adminUtils.showToast) {
-            window.adminUtils.showToast('حدث خطأ في حفظ الإعدادات', 'error');
-        }
+        adminUtils.showToast('حدث خطأ في حفظ الإعدادات', 'error');
+        ErrorHandler.handle(error, 'saveSettings');
     } finally {
         submitBtn.disabled = false;
         submitBtn.innerHTML = originalText;
@@ -308,17 +320,19 @@ async function saveSettings(event) {
 function previewLogo(event) {
     const file = event.target.files[0];
     if (file) {
+        // التحقق من الحجم
+        if (file.size > 2 * 1024 * 1024) {
+            adminUtils.showToast('حجم الشعار كبير جداً. الحد الأقصى 2 ميجابايت', 'warning');
+            event.target.value = '';
+            return;
+        }
+        
         const reader = new FileReader();
         reader.onload = (e) => {
             const preview = document.getElementById('logoPreview');
-            const placeholder = document.querySelector('.image-placeholder');
-            
             if (preview) {
                 preview.src = e.target.result;
                 preview.style.display = 'block';
-            }
-            if (placeholder) {
-                placeholder.style.display = 'none';
             }
         };
         reader.readAsDataURL(file);
@@ -337,6 +351,7 @@ function exportSettings() {
     a.download = 'settings_backup.json';
     a.click();
     URL.revokeObjectURL(url);
+    adminUtils.showToast('✅ تم تصدير الإعدادات', 'success');
 }
 
 // تصدير الدوال للنافذة العامة
