@@ -61,13 +61,14 @@ async function initializeFirebase() {
             return null;
         }
 
-        const config = {
-            apiKey: "AIzaSyB1vNmCapPK0MI4H_Q0ilO7OnOgZa02jx0",
-            authDomain: "queen-beauty-b811b.firebaseapp.com",
-            projectId: "queen-beauty-b811b",
-            storageBucket: "queen-beauty-b811b.firebasestorage.app",
-            messagingSenderId: "418964206430",
-            appId: "1:418964206430:web:8c9451fc56ca7f956bd5cf"
+        // استخدام إعدادات Firebase الموحدة من window.FIREBASE_CONFIG إذا كانت متاحة
+        const config = window.FIREBASE_CONFIG || {
+            apiKey: window.FIREBASE_API_KEY || '',
+            authDomain: window.FIREBASE_AUTH_DOMAIN || '',
+            projectId: window.FIREBASE_PROJECT_ID || '',
+            storageBucket: window.FIREBASE_STORAGE_BUCKET || '',
+            messagingSenderId: window.FIREBASE_MESSAGING_SENDER_ID || '',
+            appId: window.FIREBASE_APP_ID || ''
         };
 
         // الحصول على التطبيق الموجود أو إنشاء جديد

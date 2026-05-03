@@ -3,7 +3,7 @@
 
 /**
  * نظام الحماية من هجمات XSS, CSRF, وتأمين البيانات
- * الإصدار: 2.0 (نهائي وكامل)
+ * الإصدار: 2.1 (نهائي مع تحسينات أمنية إضافية)
  */
 window.SecurityCore = {
     
@@ -15,7 +15,27 @@ window.SecurityCore = {
         this.secureLocalStorage();
         this.addSecurityHeaders();
         this.protectConsole();
+        this.monitorOffline();
         console.log('✅ نظام الأمان الشامل جاهز');
+    },
+    
+    /**
+     * مراقبة حالة الاتصال بالإنترنت
+     */
+    monitorOffline: function() {
+        window.addEventListener('offline', () => {
+            console.warn('📡 انقطع الاتصال بالإنترنت');
+            if (window.CoreUtils && window.CoreUtils.showToast) {
+                window.CoreUtils.showToast('انقطع الاتصال بالإنترنت. بعض الخدمات قد لا تعمل.', 'warning');
+            }
+        });
+        
+        window.addEventListener('online', () => {
+            console.log('📡 تم استعادة الاتصال بالإنترنت');
+            if (window.CoreUtils && window.CoreUtils.showToast) {
+                window.CoreUtils.showToast('تم استعادة الاتصال بالإنترنت', 'success');
+            }
+        });
     },
     
     /**
@@ -42,7 +62,7 @@ window.SecurityCore = {
 
         const defaults = {
             ALLOWED_TAGS: ['b', 'strong', 'i', 'em', 'u', 'br', 'p', 'div', 'span', 'ul', 'ol', 'li', 'h1', 'h2', 'h3', 'h4', 'h5', 'h6', 'a', 'img'],
-            ALLOWED_ATTR: ['href', 'title', 'target', 'src', 'alt', 'class', 'id', 'style', 'width', 'height'],
+            ALLOWED_ATTR: ['href', 'title', 'target', 'src', 'alt', 'class', 'id', 'width', 'height'],
         };
         const config = {...defaults, ...options};
 
@@ -106,14 +126,28 @@ window.SecurityCore = {
                                 node.removeAttribute(attr.name);
                             }
                         }
-                        // تنظيف أنماط CSS الخطرة
+                        // تنظيف أنماط CSS الخطرة بشكل صارم
                         else if (attrName === 'style' && node.style) {
                             try {
+                                let cssText = node.style.cssText;
+                                
                                 // إزالة أي تعابير JavaScript
-                                node.style.cssText = node.style.cssText
+                                cssText = cssText
                                     .replace(/expression\([^)]*\)/gi, '')
                                     .replace(/javascript:/gi, '')
-                                    .replace(/vbscript:/gi, '');
+                                    .replace(/vbscript:/gi, '')
+                                    .replace(/url\(['"]?javascript:[^)]*['"]?\)/gi, 'url()') // إزالة javascript: في url()
+                                    .replace(/behavior\s*:/gi, '')
+                                    .replace(/-moz-binding\s*:/gi, '');
+                                
+                                // إذا بقي أي شيء مشبوه، قم بإزالة السمة بالكامل
+                                if (cssText.includes('javascript:') || 
+                                    cssText.includes('expression(') || 
+                                    cssText.includes('vbscript:')) {
+                                    node.removeAttribute('style');
+                                } else {
+                                    node.style.cssText = cssText;
+                                }
                             } catch (e) {
                                 node.removeAttribute('style');
                             }
@@ -280,15 +314,21 @@ window.SecurityCore = {
      */
     secureLocalStorage: function() {
         try {
-            // تشفير البيانات الحساسة (إذا كانت موجودة)
+            // تنبيه: btoa ليس تشفيراً حقيقياً بل ترميز Base64 فقط
+            // للتشفير الحقيقي استخدم Web Crypto API أو مكتبة CryptoJS
+            // البيانات الحساسة يجب ألا تُخزن في localStorage مطلقاً
+            // بدلاً من ذلك استخدم sessionStorage للبيانات المؤقتة
             const sensitiveKeys = ['userPhone', 'userAddress', 'userEmail', 'token'];
             
             sensitiveKeys.forEach(key => {
                 const value = localStorage.getItem(key);
-                if (value && !value.startsWith('enc_')) {
-                    // تشفير بسيط (يمكن استبداله بـ CryptoJS)
-                    const encrypted = 'enc_' + btoa(value);
-                    localStorage.setItem(key, encrypted);
+                if (value) {
+                    // إزالة البيانات الحساسة من localStorage للحماية
+                    localStorage.removeItem(key);
+                    // تخزين مؤقت في sessionStorage فقط
+                    if (!sessionStorage.getItem(key)) {
+                        sessionStorage.setItem(key, value);
+                    }
                 }
             });
             
@@ -305,7 +345,10 @@ window.SecurityCore = {
             // Content Security Policy (CSP)
             const csp = document.createElement('meta');
             csp.httpEquiv = 'Content-Security-Policy';
-            csp.content = "default-src 'self'; script-src 'self' 'unsafe-inline' https://www.gstatic.com https://cdnjs.cloudflare.com; style-src 'self' 'unsafe-inline' https://fonts.googleapis.com https://cdnjs.cloudflare.com; font-src 'self' https://fonts.gstatic.com; img-src 'self' data: https:; connect-src 'self' https://*.firebaseio.com https://*.googleapis.com;";
+            // تنبيه: 'unsafe-inline' في script-src يضعف الحماية من XSS
+            // يُنصح باستخدام nonce أو hash بدلاً من 'unsafe-inline'
+            // لكن لأسباب التوافق مع الكود الحالي نحتفظ به مع إضافة connect-src لـ Firebase Storage
+            csp.content = "default-src 'self'; script-src 'self' 'unsafe-inline' https://www.gstatic.com https://cdnjs.cloudflare.com; style-src 'self' 'unsafe-inline' https://fonts.googleapis.com https://cdnjs.cloudflare.com; font-src 'self' https://fonts.gstatic.com; img-src 'self' data: blob: https:; connect-src 'self' https://*.firebaseio.com https://*.googleapis.com https://*.firebasestorage.googleapis.com wss://*.firebaseio.com; frame-ancestors 'none';";
             document.getElementsByTagName('head')[0].appendChild(csp);
             
             // Referrer Policy
@@ -436,4 +479,4 @@ if (typeof module !== 'undefined' && module.exports) {
     module.exports = window.SecurityCore;
 }
 
-console.log('✅ security-core.js (نسخة نهائية كاملة)');
+console.log('✅ security-core.js (نسخة نهائية كاملة مع تحسينات أمنية)');
