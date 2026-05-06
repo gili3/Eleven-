@@ -1,5 +1,5 @@
 /**
- * firebase-unified.js - Firebase موحد مع جلسة دائمة
+ * firebase-unified.js - Firebase موحد مع جلسة دائمة (نسخة محسنة الأداء)
  */
 
 (function() {
@@ -7,16 +7,7 @@
 
     if (window.firebaseInstance) return;
 
-    // يُفضل تحميل الإعدادات من متغير خارجي (window.FIREBASE_CONFIG) لتجنب كشف المفاتيح في الكود
-    // مثال: ضع الإعدادات في ملف config.js منفصل غير مدرج في git
-    const FIREBASE_CONFIG = window.FIREBASE_CONFIG || {
-        apiKey: window.FIREBASE_API_KEY || '',
-        authDomain: window.FIREBASE_AUTH_DOMAIN || '',
-        projectId: window.FIREBASE_PROJECT_ID || '',
-        storageBucket: window.FIREBASE_STORAGE_BUCKET || '',
-        messagingSenderId: window.FIREBASE_MESSAGING_SENDER_ID || '',
-        appId: window.FIREBASE_APP_ID || ''
-    };
+    const FIREBASE_CONFIG = window.FIREBASE_CONFIG || {};
 
     window.firebaseInstance = null;
     window.firebaseInitialized = false;
@@ -30,31 +21,36 @@
             try {
                 // انتظار تحميل وحدات Firebase
                 if (!window.firebaseModules) {
+                    console.log("⏳ بانتظار تحميل وحدات Firebase...");
                     await new Promise(resolve => {
-                        const check = () => {
-                            if (window.firebaseModules) resolve();
-                            else setTimeout(check, 100);
-                        };
-                        check();
+                        window.addEventListener('firebase-ready', () => resolve(), { once: true });
+                        if (window.firebaseModules) resolve();
                     });
                 }
 
-                const { initializeApp, getAuth, getFirestore, getStorage, setPersistence, browserLocalPersistence } = window.firebaseModules;
+                const modules = window.firebaseModules;
 
                 let app;
                 try {
-                    app = window.firebaseModules.getApp();
+                    // ✅ استخدام getApp لتجنب إنشاء تطبيق مكرر
+                    app = modules.getApp();
+                    console.log("✅ تم استخدام تطبيق Firebase موجود");
                 } catch (e) {
-                    app = initializeApp(FIREBASE_CONFIG);
+                    // التطبيق غير موجود، إنشاء جديد
+                    if (!FIREBASE_CONFIG.apiKey) {
+                        console.warn("⚠️ إعدادات Firebase غير مكتملة");
+                    }
+                    app = modules.initializeApp(FIREBASE_CONFIG);
+                    console.log("✅ تم إنشاء تطبيق Firebase جديد");
                 }
 
-                const auth = getAuth(app);
-                const db = getFirestore(app);
-                const storage = getStorage(app);
+                const auth = modules.getAuth(app);
+                const db = modules.getFirestore(app);
+                const storage = modules.getStorage(app);
 
-                if (setPersistence && browserLocalPersistence) {
+                if (modules.setPersistence && modules.browserLocalPersistence) {
                     try {
-                        await setPersistence(auth, browserLocalPersistence);
+                        await modules.setPersistence(auth, modules.browserLocalPersistence);
                         console.log("✅ جلسة Firebase: LOCAL (دائمة)");
                     } catch (err) {
                         console.warn("⚠️ تعذر ضبط persistence:", err);
@@ -67,8 +63,8 @@
                 window.storage = storage;
                 window.firebaseInitialized = true;
 
-                window.dispatchEvent(new CustomEvent('firebase-ready'));
-                console.log("✅ Firebase Unified مهيأ");
+                window.dispatchEvent(new CustomEvent('firebase-unified-ready'));
+                console.log("✅ Firebase Unified مهيأ بنجاح");
 
                 return window.firebaseInstance;
             } catch (error) {
@@ -87,5 +83,10 @@
         return await initializeFirebaseUnified();
     };
 
-    console.log("✅ firebase-unified.js loaded");
+    // بدء التهيئة تلقائياً إذا كانت الإعدادات متوفرة
+    if (window.FIREBASE_CONFIG && window.FIREBASE_CONFIG.apiKey) {
+        initializeFirebaseUnified();
+    }
+
+    console.log("✅ firebase-unified.js (نسخة محسنة مع getApp) جاهز");
 })();

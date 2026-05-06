@@ -9,7 +9,7 @@
     <meta property="og:title" content="Eleven Store | متجر إليفن">
     <meta property="og:description" content="تسوق أفضل المنتجات من متجر إليفن. جودة، سرعة، وأمان.">
     <meta property="og:type" content="website">
-    <meta http-equiv="Content-Security-Policy" content="default-src 'self' https://*.gstatic.com https://*.firebaseio.com https://*.googleapis.com; script-src 'self' 'unsafe-inline' https://*.gstatic.com https://cdnjs.cloudflare.com https://*.firebaseio.com https://www.gstatic.com/firebasejs/; style-src 'self' 'unsafe-inline' https://cdnjs.cloudflare.com https://fonts.googleapis.com; font-src 'self' https://cdnjs.cloudflare.com https://fonts.gstatic.com; img-src 'self' data: https:; connect-src 'self' https://*.googleapis.com https://*.firebaseio.com https://*.gstatic.com;">
+    <meta http-equiv="Content-Security-Policy" content="default-src 'self'; script-src 'self' 'unsafe-inline' https://www.gstatic.com https://cdnjs.cloudflare.com; style-src 'self' 'unsafe-inline' https://cdnjs.cloudflare.com https://fonts.googleapis.com; font-src 'self' https://cdnjs.cloudflare.com https://fonts.gstatic.com; img-src 'self' data: blob: https:; connect-src 'self' https://*.firebaseio.com https://*.googleapis.com https://*.firebasestorage.googleapis.com wss://*.firebaseio.com; frame-ancestors 'none';">
     <link rel="manifest" href="manifest.json">
     <meta name="theme-color" content="#c9a24d">
     <meta name="apple-mobile-web-app-capable" content="yes">
@@ -20,7 +20,7 @@
     
     <!-- Firebase Modular SDK -->
     <script type="module">
-        import { initializeApp } from "https://www.gstatic.com/firebasejs/10.7.1/firebase-app.js";
+        import { initializeApp, getApp } from "https://www.gstatic.com/firebasejs/10.7.1/firebase-app.js";
         import { getAuth, onAuthStateChanged, GoogleAuthProvider, signInWithPopup, signInWithEmailAndPassword, createUserWithEmailAndPassword, signOut, updateProfile, setPersistence, browserLocalPersistence } from "https://www.gstatic.com/firebasejs/10.7.1/firebase-auth.js";
         import { getFirestore, doc, collection, getDoc, getDocs, setDoc, updateDoc, query, where, orderBy, serverTimestamp, deleteDoc, addDoc, increment, limit, startAfter, onSnapshot, runTransaction } from "https://www.gstatic.com/firebasejs/10.7.1/firebase-firestore.js";
         import { getStorage, ref, uploadBytes, getDownloadURL, uploadBytesResumable } from "https://www.gstatic.com/firebasejs/10.7.1/firebase-storage.js";
@@ -76,25 +76,28 @@
     <link rel="stylesheet" href="shared/css/css-security.css?v=112">
     
     <!-- الملفات الأساسية الجديدة (shared) -->
-    <script src="shared/js/security-core.js?v=112"></script>
-    <script src="shared/js/core-utils.js?v=112"></script>
-    <script src="shared/js/config.js?v=112"></script>
-    <script src="shared/js/firebase-unified.js?v=112"></script>
-    <script src="shared/js/state-manager.js?v=112"></script>
-    <script src="shared/js/error-handler.js?v=112"></script>
-    <script src="shared/js/modal-manager.js?v=112"></script>
-    <script src="shared/js/firebase-messaging.js?v=112"></script>
+    <!-- السكربتات الأساسية مع تحسين الأداء (defer) -->
+    <script src="shared/js/env-config.js?v=112"></script>
+    <script src="shared/js/security-core.js?v=112" defer></script>
+    <script src="shared/js/core-utils.js?v=112" defer></script>
+    <script src="shared/js/config.js?v=112" defer></script>
+    <script src="shared/js/firebase-unified.js?v=112" defer></script>
+    <script src="shared/js/state-manager.js?v=112" defer></script>
+    <script src="shared/js/error-handler.js?v=112" defer></script>
+    <script src="shared/js/modal-manager.js?v=112" defer></script>
+    <script src="shared/js/firebase-messaging.js?v=112" defer></script>
     
-    <!-- ملفات public -->
-    <script src="public/js/notifications-system.js?v=112"></script>
-    <script src="public/js/image-viewer.js?v=112"></script>
-    <script src="public/js/sections/products-system.js?v=112"></script>
-    <script src="public/js/sections/categories-system.js?v=112"></script>
-    <script src="public/js/sections/cart-system.js?v=112"></script>
-    <script src="public/js/sections/orders-system.js?v=112"></script>
-    <script src="public/js/sections/checkout-system.js?v=112"></script>
-    <script src="public/js/sections/profile-system.js?v=112"></script>
-    <script src="public/js/main.js?v=112"></script>
+    <!-- ملفات public (defer لتحسين سرعة العرض الأولي) -->
+    <script src="public/js/notifications-system.js?v=112" defer></script>
+    <script src="public/js/image-viewer.js?v=112" defer></script>
+    <script src="public/js/sections/products-system.js?v=112" defer></script>
+    <script src="public/js/sections/categories-system.js?v=112" defer></script>
+    <script src="public/js/sections/categories-filter.js?v=112" defer></script>
+    <script src="public/js/sections/cart-system.js?v=112" defer></script>
+    <script src="public/js/sections/orders-system.js?v=112" defer></script>
+    <script src="public/js/sections/checkout-system.js?v=112" defer></script>
+    <script src="public/js/sections/profile-system.js?v=112" defer></script>
+    <script src="public/js/main.js?v=112" defer></script>
     
     <style>
         /* شاشة التحميل الأولية */
@@ -664,31 +667,12 @@
                 <div class="products-header">
                     <h2 class="section-title">جميع المنتجات</h2>
                     
-                    <!-- الفلاتر -->
+                    <!-- الفلاتر المبسطة -->
                     <div class="filters-container">
                         <select id="categoryFilter" class="filter-select">
                             <option value="">جميع الفئات</option>
                             <!-- سيتم تعبئتها ديناميكياً من Firebase -->
                         </select>
-                        
-                        <select id="sortFilter" class="filter-select">
-                            <option value="newest">الأحدث أولاً</option>
-                            <option value="price-low">السعر: من الأقل للأعلى</option>
-                            <option value="price-high">السعر: من الأعلى للأقل</option>
-                            <option value="popular">الأكثر شيوعاً</option>
-                        </select>
-                        
-                        <div class="filter-buttons">
-                            <button class="filter-btn" data-filter="isNew">
-                                <i class="fas fa-tag"></i> جديد
-                            </button>
-                            <button class="filter-btn" data-filter="isSale">
-                                <i class="fas fa-percentage"></i> عروض
-                            </button>
-                            <button class="filter-btn" data-filter="isBest">
-                                <i class="fas fa-crown"></i> الأفضل
-                            </button>
-                        </div>
                     </div>
                 </div>
                 

@@ -1,4 +1,42 @@
-// products-system.js - نظام إدارة المنتجات والتحميل اللانهائي (نسخة تعتمد على Firebase مباشرة)
+// products-system.js - نظام إدارة المنتجات والتحميل اللانهائي (نسخة آمنة ومكتملة)
+// ======================== دالة التعقيم الافتراضية (أمان ضد XSS) ========================
+
+const secureHTML = (function() {
+    if (typeof DOMParser !== 'undefined') {
+        return function(str) {
+            if (!str) return '';
+            try {
+                const doc = new DOMParser().parseFromString(String(str), 'text/html');
+                return doc.body.textContent || '';
+            } catch (e) {
+                return String(str).replace(/[<>\"']/g, '');
+            }
+        };
+    }
+    return function(str) {
+        if (!str) return '';
+        return String(str)
+            .replace(/&/g, '&amp;')
+            .replace(/</g, '&lt;')
+            .replace(/>/g, '&gt;')
+            .replace(/"/g, '&quot;')
+            .replace(/'/g, '&#039;');
+    };
+})();
+
+function getSafeHTML(str) {
+    if (window.SecurityCore && typeof window.SecurityCore.sanitizeHTML === 'function') {
+        return window.SecurityCore.sanitizeHTML(str);
+    }
+    if (window.safeHTML && typeof window.safeHTML === 'function') {
+        return window.safeHTML(str);
+    }
+    return secureHTML(str);
+}
+
+window.safeHTML = window.safeHTML || getSafeHTML;
+window.getSafeHTML = getSafeHTML;
+
 // ======================== إدارة المنتجات ==========================
 
 // ------------------------ متغيرات عامة ------------------------
@@ -43,8 +81,6 @@ function getFirebaseReference() {
 
 /**
  * جلب منتج واحد من Firebase مباشرة باستخدام معرفه
- * @param {string} productId - معرف المنتج
- * @returns {Promise<Object|null>} - بيانات المنتج أو null
  */
 async function fetchProductFromFirebase(productId) {
     if (!productId) return null;
@@ -180,17 +216,11 @@ async function loadProducts(isNextPage = false) {
             window.firebaseModules.where("isActive", "==", true)
         ];
 
-        // في Firebase، لا يمكن الجمع بين فلتر النطاق (stock > 0) وفلتر آخر على حقل مختلف (مثل categoryId) بسهولة دون فهارس مركبة
-        // لذا سنكتفي بـ isActive حالياً ونقوم بفلترة stock برمجياً إذا لزم الأمر أو نعتمد على isActive فقط
-        // constraints.push(window.firebaseModules.where("stock", ">", 0));
-
         if (currentFilters.categoryId) {
             constraints.push(window.firebaseModules.where("categoryId", "==", currentFilters.categoryId));
         }
 
         // دعم الفلاتر المتعددة (isNew, isSale, isBest)
-        // ملاحظة: Firebase يدعم استعلام "==" واحد فقط على حقول مختلفة في الاستعلامات البسيطة
-        // سنستخدم أول فلتر نشط للاستعلام من الخادم
         if (currentFilters.activeFilters.length > 0) {
             const firstFilter = currentFilters.activeFilters[0];
             let field = firstFilter;
@@ -202,14 +232,12 @@ async function loadProducts(isNextPage = false) {
 
         const hasSearch = currentFilters.search && currentFilters.search.length > 0;
         if (hasSearch) {
-            // البحث يتطلب الترتيب حسب الحقل المبحوث عنه أولاً
             constraints.push(
                 window.firebaseModules.where("name_lowercase", ">=", currentFilters.search),
                 window.firebaseModules.where("name_lowercase", "<=", currentFilters.search + '\uf8ff')
             );
             constraints.push(window.firebaseModules.orderBy("name_lowercase", "asc"));
         } else {
-            // الترتيب العادي في حالة عدم وجود بحث
             if (currentFilters.sort === 'price-low') {
                 constraints.push(window.firebaseModules.orderBy("price", "asc"));
             } else if (currentFilters.sort === 'price-high') {
@@ -219,8 +247,7 @@ async function loadProducts(isNextPage = false) {
             }
         }
         
-        // إضافة الترتيب الثانوي لضمان ثبات النتائج والتحميل اللانهائي
-        constraints.push(window.firebaseModules.orderBy("__name__", hasSearch ? "asc" : (currentFilters.sort === 'price-high' || currentFilters.sort === 'newest' ? "desc" : "asc")));
+        constraints.push(window.firebaseModules.orderBy("__name__", hasSearch ? "asc" : "desc"));
 
         if (isNextPage && window.lastProductDoc) {
             constraints.push(window.firebaseModules.startAfter(window.lastProductDoc));
@@ -253,12 +280,9 @@ async function loadProducts(isNextPage = false) {
             };
         });
 
-        // تصفية إضافية برمجياً للتعامل مع قيود Firebase (مثل stock > 0 والفلاتر المتعددة)
+        // تصفية إضافية برمجياً للتعامل مع قيود Firebase
         newProducts = newProducts.filter(p => {
-            // فلتر المخزون
             if (p.stock <= 0) return false;
-            
-            // فلتر الفئات المتعددة (إذا كان هناك أكثر من فلتر نشط)
             if (currentFilters.activeFilters.length > 1) {
                 for (let i = 1; i < currentFilters.activeFilters.length; i++) {
                     const filter = currentFilters.activeFilters[i];
@@ -266,14 +290,12 @@ async function loadProducts(isNextPage = false) {
                     if (filter === 'isNew' || filter === 'new') field = 'isNew';
                     else if (filter === 'isSale' || filter === 'sale') field = 'isSale';
                     else if (filter === 'isBest' || filter === 'best') field = 'isBest';
-                    
                     if (p[field] !== true) return false;
                 }
             }
             return true;
         });
 
-        // تحديث allProducts (للاستخدام في العروض فقط، وليس للجلب)
         if (typeof window.allProducts !== 'undefined') {
             if (!isNextPage) window.allProducts = newProducts;
             else newProducts.forEach(p => { if (!window.allProducts.find(ex => ex.id === p.id)) window.allProducts.push(p); });
@@ -298,7 +320,7 @@ async function loadProducts(isNextPage = false) {
     }
 }
 
-// تحميل منتجات الصفحة الرئيسية (مشابه)
+// تحميل منتجات الصفحة الرئيسية
 async function loadHomeProducts(isNextPage = false) {
     if (window.homeIsLoadingProducts) return;
     if (!isNextPage) {
@@ -364,7 +386,7 @@ async function loadHomeProducts(isNextPage = false) {
     }
 }
 
-// عرض المنتجات (نفس الكود السابق لكن مع safeHTML)
+// عرض المنتجات
 function displayProducts(productsToDisplay, append = false) {
     const productsGrid = document.getElementById('productsGrid');
     if (!productsGrid) return;
@@ -389,13 +411,15 @@ function generateProductCardHTML(product, currency) {
     const hasSale = product.originalPrice && product.originalPrice > product.price;
     const discount = hasSale ? Math.round(((product.originalPrice - product.price) / product.originalPrice) * 100) : 0;
     const imageUrl = product.image || 'https://i.ibb.co/fVn1SghC/file-00000000cf8071f498fc71b66e09f615.png';
+    
     let categoryName = 'منتجات';
     if (window.getCategoryName) categoryName = window.getCategoryName(product.categoryId) || 'منتجات';
     else if (product.category) categoryName = product.category;
 
-    const safeName = window.safeHTML ? window.safeHTML(product.name) : product.name;
-    const safeCategory = window.safeHTML ? window.safeHTML(categoryName) : categoryName;
-    const safeId = product.id.replace(/[^a-zA-Z0-9_-]/g, '');
+    const safeName = getSafeHTML(product.name || 'منتج بدون اسم');
+    const safeCategory = getSafeHTML(categoryName);
+    const safeId = String(product.id || '').replace(/[^a-zA-Z0-9_-]/g, '');
+    
     return `
         <div class="product-card" data-id="${safeId}">
             ${hasSale ? `<div class="badge sale">-${discount}%</div>` : ''}
@@ -423,8 +447,8 @@ function generateProductCardHTML(product, currency) {
 function displayNoProductsMessage(message) {
     const productsGrid = document.getElementById('productsGrid');
     if (!productsGrid) return;
-    const safeMsg = window.safeHTML ? window.safeHTML(message) : message;
-    productsGrid.innerHTML = `<div class="no-products-container" style="text-align:center; padding:60px;"><i class="fas fa-search fa-3x"></i><h3>${safeMsg}</h3><button onclick="resetAllFilters()" class="btn-secondary">إعادة تعيين الفلاتر</button></div>`;
+    const safeMsg = getSafeHTML(message);
+    productsGrid.innerHTML = `<div class="no-products-container" style="text-align:center; padding:60px; grid-column:1/-1;"><i class="fas fa-search fa-3x" style="color:#ccc;margin-bottom:15px;"></i><h3 style="color:#666;">${safeMsg}</h3><button onclick="resetAllFilters()" class="btn-secondary" style="margin-top:15px;padding:10px 20px;background:var(--primary-color);color:white;border:none;border-radius:8px;cursor:pointer;font-family:'Cairo';">إعادة تعيين الفلاتر</button></div>`;
 }
 
 function resetAllFilters() {
@@ -439,16 +463,18 @@ function resetAllFilters() {
     else { window.lastProductDoc = null; window.hasMoreProducts = true; loadProducts(false); }
 }
 
-// ======================== دوال تفاصيل المنتج والكمية (جلب مباشر من Firebase) ========================
+// ======================== دوال تفاصيل المنتج والكمية ========================
 
 async function openProductDetails(productId) {
     console.log(`🔍 فتح تفاصيل المنتج: ${productId}`);
-    if (!productId) { showToast('بيانات المنتج غير صالحة', 'error'); return; }
+    if (!productId) { 
+        if (typeof showToast === 'function') showToast('بيانات المنتج غير صالحة', 'error'); 
+        return; 
+    }
 
-    // جلب المنتج مباشرة من Firebase
     let product = await fetchProductFromFirebase(productId);
     if (!product) {
-        showToast('المنتج غير موجود', 'error');
+        if (typeof showToast === 'function') showToast('المنتج غير موجود', 'error');
         return;
     }
 
@@ -466,13 +492,13 @@ async function openProductDetails(productId) {
     if (window.getCategoryName) categoryName = window.getCategoryName(product.categoryId) || 'منتجات';
     else if (product.category) categoryName = product.category;
 
-    const safeName = window.safeHTML ? window.safeHTML(product.name) : product.name;
-    const safeDesc = window.safeHTML ? window.safeHTML(product.description) : product.description;
-    const safeCategory = window.safeHTML ? window.safeHTML(categoryName) : categoryName;
+    const safeName = getSafeHTML(product.name);
+    const safeDesc = getSafeHTML(product.description || 'لا يوجد وصف');
+    const safeCategory = getSafeHTML(categoryName);
 
     if (titleEl) titleEl.textContent = safeName;
     if (imageEl) {
-        imageEl.src = product.image;
+        imageEl.src = product.image || 'https://i.ibb.co/fVn1SghC/file-00000000cf8071f498fc71b66e09f615.png';
         imageEl.onerror = () => { imageEl.src = 'https://i.ibb.co/fVn1SghC/file-00000000cf8071f498fc71b66e09f615.png'; };
     }
     const currency = window.siteCurrency || 'SDG';
@@ -491,46 +517,48 @@ async function openProductDetails(productId) {
     }
     if (categoryEl) categoryEl.textContent = safeCategory;
 
-    // زر الشراء المباشر
     const buyBtn = document.getElementById('modalBuyBtn');
     if (buyBtn) {
         const newBtn = buyBtn.cloneNode(true);
         buyBtn.parentNode.replaceChild(newBtn, buyBtn);
+        const safeId = String(productId).replace(/[^a-zA-Z0-9_-]/g, '');
         newBtn.onclick = () => {
             modal.classList.remove('active');
             setTimeout(() => openQuantityModal(productId), 100);
         };
     }
-    modal.setAttribute('data-product-id', productId);
     modal.classList.add('active');
-}
-
-async function openQuantityModal(productId) {
-    console.log(`🔢 فتح نافذة الكمية: ${productId}`);
-    if (!productId) { showToast('بيانات المنتج غير صالحة', 'error'); return; }
-
-    let product = await fetchProductFromFirebase(productId);
-    if (!product) {
-        showToast('المنتج غير موجود', 'error');
-        return;
-    }
-    if (product.stock <= 0) {
-        showToast('المنتج غير متوفر حالياً', 'warning');
-        return;
-    }
-
-    window.selectedProductForQuantity = product;
-    const nameEl = document.getElementById('quantityModalProductName');
-    if (nameEl) nameEl.textContent = window.safeHTML ? window.safeHTML(product.name) : product.name;
-    const displayEl = document.getElementById('modalQuantityDisplay');
-    if (displayEl) displayEl.textContent = '1';
-    const modal = document.getElementById('quantityModal');
-    if (modal) modal.classList.add('active');
 }
 
 function closeProductDetailsModal() {
     const modal = document.getElementById('productDetailsModal');
     if (modal) modal.classList.remove('active');
+}
+
+async function openQuantityModal(productId) {
+    console.log(`🔢 فتح نافذة الكمية: ${productId}`);
+    if (!productId) { 
+        if (typeof showToast === 'function') showToast('بيانات المنتج غير صالحة', 'error');
+        return; 
+    }
+
+    let product = await fetchProductFromFirebase(productId);
+    if (!product) {
+        if (typeof showToast === 'function') showToast('المنتج غير موجود', 'error');
+        return;
+    }
+    if (product.stock <= 0) {
+        if (typeof showToast === 'function') showToast('المنتج غير متوفر حالياً', 'warning');
+        return;
+    }
+
+    window.selectedProductForQuantity = product;
+    const nameEl = document.getElementById('quantityModalProductName');
+    if (nameEl) nameEl.textContent = getSafeHTML(product.name);
+    const displayEl = document.getElementById('modalQuantityDisplay');
+    if (displayEl) displayEl.textContent = '1';
+    const modal = document.getElementById('quantityModal');
+    if (modal) modal.classList.add('active');
 }
 
 function closeQuantityModal() {
@@ -550,7 +578,7 @@ function changeModalQuantity(change) {
     if (window.selectedProductForQuantity) {
         const maxStock = window.selectedProductForQuantity.stock || 99;
         if (newQty > maxStock) {
-            showToast(`الكمية المتوفرة: ${maxStock}`, 'warning');
+            if (typeof showToast === 'function') showToast(`الكمية المتوفرة: ${maxStock}`, 'warning');
             return;
         }
     }
@@ -613,7 +641,9 @@ function toggleFavorite(productId) {
             id: product.id, name: product.name, price: product.price, image: product.image
         });
         updateFavoriteButtons();
-        showToast(window.AppState.favorites.some(f => f.id === productId) ? 'تمت الإضافة للمفضلة' : 'تم الحذف من المفضلة', 'info');
+        if (typeof showToast === 'function') {
+            showToast(window.AppState.favorites.some(f => f.id === productId) ? 'تمت الإضافة للمفضلة' : 'تم الحذف من المفضلة', 'info');
+        }
     });
 }
 
@@ -621,7 +651,8 @@ function updateFavoriteButtons() {
     const favorites = window.AppState?.favorites || [];
     const favIds = favorites.map(f => f.id);
     document.querySelectorAll('.favorite-btn').forEach(btn => {
-        const pid = btn.getAttribute('data-id');
+        const card = btn.closest('.product-card');
+        const pid = card ? card.getAttribute('data-id') : btn.getAttribute('data-id');
         if (favIds.includes(pid)) {
             btn.classList.add('active');
             const icon = btn.querySelector('i');
@@ -647,21 +678,25 @@ function updateFavoritesDisplay() {
     if (emptyMessage) emptyMessage.style.display = 'none';
     const currency = window.siteCurrency || 'SDG';
     const formatNum = window.formatNumber || localFormatNumber;
-    favoritesList.innerHTML = favorites.map(product => `
-        <div class="product-card" data-id="${product.id}">
+    favoritesList.innerHTML = favorites.map(product => {
+        const safeName = getSafeHTML(product.name || '');
+        const safeId = String(product.id).replace(/[^a-zA-Z0-9_-]/g, '');
+        return `
+        <div class="product-card" data-id="${safeId}">
             <div class="product-image-container" style="position:relative;">
-                <img src="${product.image || 'https://via.placeholder.com/200'}" alt="${window.safeHTML ? window.safeHTML(product.name) : product.name}" style="width:100%; cursor:pointer;" onclick="openProductDetails('${product.id}')">
-                <button class="favorite-btn active" data-id="${product.id}" onclick="toggleFavorite('${product.id}')" style="position:absolute; top:10px; right:10px; background:white; border-radius:50%; width:40px; height:40px;"><i class="fas fa-heart" style="color:#e74c3c;"></i></button>
+                <img src="${product.image || 'https://i.ibb.co/fVn1SghC/file-00000000cf8071f498fc71b66e09f615.png'}" alt="${safeName}" style="width:100%; cursor:pointer;" onclick="openProductDetails('${safeId}')">
+                <button class="favorite-btn active" data-id="${safeId}" onclick="toggleFavorite('${safeId}')" style="position:absolute; top:10px; right:10px; background:white; border-radius:50%; width:40px; height:40px;"><i class="fas fa-heart" style="color:#e74c3c;"></i></button>
             </div>
             <div style="padding:12px;">
-                <h3 style="font-size:14px;">${window.safeHTML ? window.safeHTML(product.name) : product.name}</h3>
+                <h3 style="font-size:14px;">${safeName}</h3>
                 <span style="font-size:16px; font-weight:700;">${formatNum(product.price)} ${currency}</span>
             </div>
         </div>
-    `).join('');
+    `}).join('');
 }
 
-// تصدير الدوال
+// ======================== تصدير الدوال العامة ========================
+
 window.resetProductsState = resetProductsState;
 window.loadProducts = loadProducts;
 window.loadHomeProducts = loadHomeProducts;
@@ -680,8 +715,10 @@ window.setupHomeInfiniteScroll = setupHomeInfiniteScroll;
 window.toggleFavorite = toggleFavorite;
 window.updateFavoriteButtons = updateFavoriteButtons;
 window.updateFavoritesDisplay = updateFavoritesDisplay;
+window.getSafeHTML = getSafeHTML;
 
-// تهيئة
+// ======================== التهيئة ========================
+
 document.addEventListener('DOMContentLoaded', () => {
     setTimeout(() => {
         watchSectionChanges();
@@ -690,13 +727,17 @@ document.addEventListener('DOMContentLoaded', () => {
         const productsSection = document.getElementById('products');
         if (productsSection?.classList.contains('active')) {
             setupProductsInfiniteScroll();
-            if (document.getElementById('productsGrid')?.children.length === 0) loadProducts(false);
+            const grid = document.getElementById('productsGrid');
+            if (grid && grid.children.length === 0) loadProducts(false);
         }
     }, 500);
 });
 
 if (window.AppState) {
-    window.AppState.subscribe('favorites', () => { updateFavoriteButtons(); updateFavoritesDisplay(); });
+    window.AppState.subscribe('favorites', () => {
+        updateFavoriteButtons();
+        updateFavoritesDisplay();
+    });
 }
 
-console.log('✅ products-system.js (نسخة تعتمد على Firebase مباشرة)');
+console.log('✅ products-system.js (نسخة آمنة ومكتملة)');

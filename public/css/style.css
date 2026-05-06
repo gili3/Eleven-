@@ -1027,31 +1027,41 @@ body.menu-open {
     display: flex;
     flex-direction: row;
     flex-wrap: wrap;
-    gap: 8px;
-    margin-bottom: 20px;
+    gap: 12px;
+    margin-bottom: 25px;
     align-items: center;
-    background: #f9f9f9;
-    padding: 10px;
+    background: linear-gradient(135deg, #f9f9f9 0%, #ffffff 100%);
+    padding: 15px 20px;
     border-radius: 12px;
+    border: 1px solid var(--border-color);
+    box-shadow: 0 2px 8px rgba(0, 0, 0, 0.04);
 }
 
 .filter-select {
-    padding: 6px 10px;
-    border: 1px solid var(--border-color);
+    padding: 10px 15px;
+    border: 2px solid var(--border-color);
     border-radius: 8px;
     font-family: 'Cairo', sans-serif;
-    font-size: 13px;
+    font-size: 14px;
+    font-weight: 500;
     background: white;
     cursor: pointer;
     color: var(--dark-color);
-    min-width: 120px;
-    transition: var(--transition);
+    min-width: 200px;
+    transition: all 0.3s ease;
+    box-shadow: 0 2px 6px rgba(0, 0, 0, 0.05);
+}
+
+.filter-select:hover {
+    border-color: var(--secondary-color);
+    box-shadow: 0 4px 12px rgba(85, 85, 85, 0.1);
 }
 
 .filter-select:focus {
     outline: none;
     border-color: var(--secondary-color);
-    box-shadow: 0 0 0 2px rgba(85, 85, 85, 0.1);
+    box-shadow: 0 0 0 3px rgba(85, 85, 85, 0.15);
+    background: #fafafa;
 }
 
 .filter-buttons {

@@ -6,19 +6,7 @@ window.cartItems = window.cartItems || [];
 
 // ======================== دوال مساعدة ========================
 
-/**
- * تنسيق الأرقام
- */
-function formatNumber(num) {
-    if (typeof num !== 'number') num = parseFloat(num) || 0;
-    return num.toLocaleString('ar-SD', {
-        minimumFractionDigits: 0,
-        maximumFractionDigits: 0
-    });
-}
-
-// تصديرها للاستخدام العام
-window.formatNumber = formatNumber;
+// تم توحيد formatNumber في core-utils.js لتقليل تكرار الكود وتحسين الأداء
 
 /**
  * تحديث عداد السلة

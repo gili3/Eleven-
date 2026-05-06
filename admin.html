@@ -3,21 +3,23 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+    <meta http-equiv="Content-Security-Policy" content="default-src 'self'; script-src 'self' 'unsafe-inline' https://www.gstatic.com https://cdnjs.cloudflare.com; style-src 'self' 'unsafe-inline' https://cdnjs.cloudflare.com https://fonts.googleapis.com; font-src 'self' https://cdnjs.cloudflare.com https://fonts.gstatic.com; img-src 'self' data: blob: https:; connect-src 'self' https://*.firebaseio.com https://*.googleapis.com https://*.firebasestorage.googleapis.com wss://*.firebaseio.com; frame-ancestors 'none';">
     <title>لوحة التحكم الشاملة - Eleven Store</title>
     <link rel="icon" type="image/png" href="https://i.ibb.co/fVn1SghC/file-00000000cf8071f498fc71b66e09f615.png">
     
     <!-- Firebase Modular SDK -->
     <script type="module" id="firebase-sdk-module">
-        import { initializeApp } from "https://www.gstatic.com/firebasejs/10.7.1/firebase-app.js";
+        import { initializeApp, getApp } from "https://www.gstatic.com/firebasejs/10.7.1/firebase-app.js";
         import { getAuth, onAuthStateChanged, signOut, setPersistence, browserLocalPersistence } from "https://www.gstatic.com/firebasejs/10.7.1/firebase-auth.js";
-        import { getFirestore, doc, collection, getDoc, getDocs, setDoc, updateDoc, deleteDoc, query, where, orderBy, onSnapshot, serverTimestamp, addDoc, increment, limit, startAfter } from "https://www.gstatic.com/firebasejs/10.7.1/firebase-firestore.js";
-        import { getStorage, ref, uploadBytes, getDownloadURL, uploadBytesResumable } from "https://www.gstatic.com/firebasejs/10.7.1/firebase-storage.js";
+        import { getFirestore, doc, collection, getDoc, getDocs, setDoc, updateDoc, deleteDoc, query, where, orderBy, onSnapshot, serverTimestamp, addDoc, increment, limit, startAfter, getAggregateFromServer, sum, average, count } from "https://www.gstatic.com/firebasejs/10.7.1/firebase-firestore.js";
+        import { getStorage, ref, uploadBytes, getDownloadURL, uploadBytesResumable, deleteObject } from "https://www.gstatic.com/firebasejs/10.7.1/firebase-storage.js";
         
         window.firebaseModules = {
-            initializeApp, getAuth, onAuthStateChanged, signOut, setPersistence, browserLocalPersistence,
+            initializeApp, getApp, getAuth, onAuthStateChanged, signOut, setPersistence, browserLocalPersistence,
             getFirestore, doc, collection, getDoc, getDocs, setDoc, updateDoc, deleteDoc, addDoc,
             query, where, orderBy, onSnapshot, serverTimestamp, increment, limit, startAfter,
-            getStorage, ref, uploadBytes, getDownloadURL, uploadBytesResumable
+            getStorage, ref, uploadBytes, getDownloadURL, uploadBytesResumable, deleteObject,
+            getAggregateFromServer, sum, average, count
         };
         console.log("✅ Firebase Modules Loaded");
         window.dispatchEvent(new CustomEvent('firebase-ready'));
@@ -34,6 +36,7 @@
     <link rel="stylesheet" href="shared/css/css-security.css?v=112">
     
     <!-- الملفات الأساسية الجديدة (shared) -->
+    <script src="shared/js/env-config.js?v=112"></script>
     <script src="shared/js/security-core.js?v=112"></script>
     <script src="shared/js/core-utils.js?v=112"></script>
     <script src="shared/js/config.js?v=112"></script>
@@ -43,8 +46,9 @@
     <script src="shared/js/modal-manager.js?v=112"></script>
     <script src="shared/js/firebase-messaging.js?v=112"></script>
     
-    <!-- ملفات admin -->
+    <!-- ملفات admin - تم تعديل ترتيب التحميل فقط -->
     <script src="admin/js/admin-utils.js?v=112"></script>
+    <script src="admin/js/admin-new-core.js?v=112"></script>
     <script src="admin/js/sections/stats.js?v=112"></script>
     <script src="admin/js/sections/products.js?v=112"></script>
     <script src="admin/js/sections/categories.js?v=112"></script>
@@ -53,7 +57,6 @@
     <script src="admin/js/sections/messages.js?v=112"></script>
     <script src="admin/js/sections/settings.js?v=112"></script>
     <script src="admin/js/sections/coupons.js?v=112"></script>
-    <script src="admin/js/admin-new-core.js?v=112"></script>
     
     <style>
         .admin-container { 

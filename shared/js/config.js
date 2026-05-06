@@ -1,14 +1,13 @@
 /**
  * config.js - ملف الإعدادات المحدث (نسخة مؤمنة)
- * تم إزالة مفاتيح API المباشرة لمنع التسريب.
- * يرجى تعريف هذه القيم في ملف env-config.js أو عبر متغيرات البيئة.
+ * تم نقل المفاتيح إلى env-config.js لسهولة الإدارة والأمان.
  */
 
-// محاولة تحميل الإعدادات من مصدر خارجي مؤمن
+// التأكد من وجود APP_ENV
 const SECURE_CONFIG = window.APP_ENV || {};
 
 window.FIREBASE_CONFIG = {
-    apiKey: "AIzaSyB1vNmCapPK0MI4H_Q0ilO7OnOgZa02jx0",
+    apiKey: SECURE_CONFIG.FIREBASE_API_KEY || "",
     authDomain: "queen-beauty-b811b.firebaseapp.com",
     projectId: "queen-beauty-b811b",
     storageBucket: "queen-beauty-b811b.firebasestorage.app",
@@ -17,6 +16,6 @@ window.FIREBASE_CONFIG = {
 };
 
 // مفتاح VAPID لـ Firebase Cloud Messaging
-window.FCM_VAPID_KEY = SECURE_CONFIG.FCM_VAPID_KEY || "BOx1ydjk5Cv9pIzuACGmP4on1cBPaa9stLtOzJNNoq2akYpCvSYrqAdXt-SwoCoTOrrCHrbp2t9AcFhFj1wSdRI";
+window.FCM_VAPID_KEY = SECURE_CONFIG.FCM_VAPID_KEY || "";
 
-console.log("🔐 تم تحميل إعدادات الأمان بنجاح (تم إخفاء المفاتيح الحساسة)");
+console.log("🔐 تم تحميل إعدادات الأمان بنجاح من مصدر خارجي");

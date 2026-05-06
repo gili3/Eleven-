@@ -1,0 +1,139 @@
+🔹 الفهرس 1
+
+Collection: products
+
+isActive → Ascending
+
+createdAt → Descending
+
+
+
+---
+
+🔹 الفهرس 2
+
+Collection: products
+
+isActive → Ascending
+
+categoryId → Ascending
+
+createdAt → Descending
+
+
+
+---
+
+🔹 الفهرس 3
+
+Collection: products
+
+isActive → Ascending
+
+name_lowercase → Ascending
+
+
+
+---
+
+🔹 الفهرس 4
+
+Collection: products
+
+isActive → Ascending
+
+categoryId → Ascending
+
+price → Ascending
+
+
+
+---
+
+🔹 الفهرس 5
+
+Collection: products
+
+isActive → Ascending
+
+price → Descending
+
+createdAt → Descending
+
+
+
+---
+
+🔹 الفهرس 6
+
+Collection: orders
+
+userId → Ascending
+
+createdAt → Descending
+
+
+
+---
+
+🔹 الفهرس 7
+
+Collection: orders
+
+status → Ascending
+
+createdAt → Descending
+
+
+
+---
+
+🔹 الفهرس 8
+
+Collection: products
+
+isActive → Ascending
+
+price → Ascending
+
+
+
+---
+
+🔹 الفهرس 9
+
+Collection: products
+
+isActive → Ascending
+
+isNew → Ascending
+
+createdAt → Descending
+
+
+
+---
+
+🔹 الفهرس 10
+
+Collection: products
+
+isActive → Ascending
+
+isSale → Ascending
+
+createdAt → Descending
+
+
+
+---
+
+🔹 الفهرس 11
+
+Collection: products
+
+isActive → Ascending
+
+isBest → Ascending
+
+createdAt → Descending

@@ -151,10 +151,10 @@ function displayCategories(append = false) {
             <div style="display: flex; justify-content: space-between; align-items: center; border-top: 1px solid #f0f0f0; padding-top: 10px;">
                 <span style="font-size: 11px; color: #999;">منتجات: ${cat.productsCount || 0}</span>
                 <div class="action-buttons-compact">
-                    <button class="btn btn-sm btn-primary" onclick="editCategory('${cat.id}')" title="تعديل">
+                    <button class="btn btn-sm btn-primary" onclick="window.editCategory('${cat.id}')" title="تعديل">
                         <i class="fas fa-edit"></i>
                     </button>
-                    <button class="btn btn-sm btn-danger" onclick="deleteCategory('${cat.id}')" title="حذف">
+                    <button class="btn btn-sm btn-danger" onclick="window.deleteCategory('${cat.id}')" title="حذف">
                         <i class="fas fa-trash"></i>
                     </button>
                 </div>
@@ -227,10 +227,10 @@ function filterCategories() {
             <div style="display: flex; justify-content: space-between; align-items: center; border-top: 1px solid #f0f0f0; padding-top: 10px;">
                 <span style="font-size: 11px; color: #999;">منتجات: ${cat.productsCount || 0}</span>
                 <div class="action-buttons-compact">
-                    <button class="btn btn-sm btn-primary" onclick="editCategory('${cat.id}')" title="تعديل">
+                    <button class="btn btn-sm btn-primary" onclick="window.editCategory('${cat.id}')" title="تعديل">
                         <i class="fas fa-edit"></i>
                     </button>
-                    <button class="btn btn-sm btn-danger" onclick="deleteCategory('${cat.id}')" title="حذف">
+                    <button class="btn btn-sm btn-danger" onclick="window.deleteCategory('${cat.id}')" title="حذف">
                         <i class="fas fa-trash"></i>
                     </button>
                 </div>
@@ -253,7 +253,7 @@ window.openCategoryModal = function(categoryId = null) {
     const category = categoryId ? allCategories.find(c => c.id === categoryId) : null;
     
     const content = `
-        <form id="categoryForm" onsubmit="saveCategory(event)">
+        <form id="categoryForm" onsubmit="window.saveCategory(event)">
             <input type="hidden" id="catId" value="${categoryId || ''}">
             
             <div class="form-group">
@@ -284,7 +284,7 @@ window.openCategoryModal = function(categoryId = null) {
             
             <div class="form-group">
                 <label>صورة الفئة</label>
-                <input type="file" id="catImageFile" accept="image/*" onchange="previewImage(event, 'catImagePreview')" class="form-control">
+                <input type="file" id="catImageFile" accept="image/*" onchange="window.previewImage(event, 'catImagePreview')" class="form-control">
                 <div style="margin-top: 10px; text-align: center;">
                     <img id="catImagePreview" src="${category ? (category.image || '') : ''}" 
                          style="max-width: 150px; max-height: 150px; border-radius: 8px; border: 1px solid #ddd; display: ${category && category.image ? 'block' : 'none'}; margin: 0 auto;">
@@ -311,14 +311,30 @@ window.openCategoryModal = function(categoryId = null) {
         </form>
     `;
 
+    // ✅ إصلاح: إضافة معالج إلغاء صريح
     ModalManager.open({
         id: 'categoryModal',
         title: categoryId ? 'تعديل فئة' : 'إضافة فئة جديدة',
         content: content,
         size: 'medium',
         buttons: [
-            { text: 'حفظ', class: 'btn-primary', onClick: () => document.getElementById('categoryForm').dispatchEvent(new Event('submit')) },
-            { text: 'إلغاء', class: 'btn-secondary' }
+            { 
+                text: 'حفظ', 
+                class: 'btn-primary', 
+                onClick: () => {
+                    const form = document.getElementById('categoryForm');
+                    if (form) {
+                        form.dispatchEvent(new Event('submit'));
+                    }
+                }
+            },
+            { 
+                text: 'إلغاء', 
+                class: 'btn-secondary',
+                onClick: () => {
+                    ModalManager.close('categoryModal');
+                }
+            }
         ]
     });
 };
@@ -359,11 +375,20 @@ async function uploadCategoryImage(file) {
     }
 }
 
+// ✅ إصلاح: تحويل saveCategory إلى دالة window
 window.saveCategory = async function(event) {
     if (!window.checkAdmin()) return;
-    event.preventDefault();
+    if (event) event.preventDefault();
     
-    const submitBtn = event.target.querySelector('button[type="submit"]');
+    // ✅ إصلاح: العثور على زر الحفظ بشكل صحيح
+    const modalButtons = document.querySelectorAll('#categoryModal .modal-footer button');
+    let submitBtn = null;
+    modalButtons.forEach(btn => {
+        if (btn.textContent.includes('حفظ') || btn.classList.contains('btn-primary')) {
+            submitBtn = btn;
+        }
+    });
+    
     if (submitBtn) {
         submitBtn.disabled = true;
         submitBtn.innerHTML = '<i class="fas fa-spinner fa-spin"></i> جاري الحفظ...';
@@ -371,22 +396,30 @@ window.saveCategory = async function(event) {
 
     try {
         const categoryId = document.getElementById('catId')?.value;
-        const name = document.getElementById('catName').value.trim();
-        const slug = document.getElementById('catSlug').value.trim().toLowerCase();
-        const icon = document.getElementById('catIcon').value.trim();
-        const color = document.getElementById('catColor').value;
+        const name = document.getElementById('catName')?.value?.trim();
+        const slug = document.getElementById('catSlug')?.value?.trim()?.toLowerCase();
+        const icon = document.getElementById('catIcon')?.value?.trim() || 'fas fa-tag';
+        const color = document.getElementById('catColor')?.value || '#c9a24d';
         const isActive = document.getElementById('catIsActive')?.checked ?? true;
         const order = parseInt(document.getElementById('catOrder')?.value) || 0;
-        const description = document.getElementById('catDescription')?.value.trim() || '';
-        const imageFile = document.getElementById('catImageFile').files[0];
+        const description = document.getElementById('catDescription')?.value?.trim() || '';
+        const imageFile = document.getElementById('catImageFile')?.files[0];
 
         if (!name || !slug) {
             adminUtils.showToast('الرجاء إدخال اسم الفئة والـ Slug', 'warning');
+            if (submitBtn) {
+                submitBtn.disabled = false;
+                submitBtn.innerHTML = 'حفظ';
+            }
             return;
         }
 
         if (!/^[a-z0-9-]+$/.test(slug)) {
             adminUtils.showToast('الـ Slug يجب أن يحتوي على أحرف إنجليزية وأرقام وشرطات فقط', 'warning');
+            if (submitBtn) {
+                submitBtn.disabled = false;
+                submitBtn.innerHTML = 'حفظ';
+            }
             return;
         }
 
@@ -421,6 +454,7 @@ window.saveCategory = async function(event) {
             adminUtils.showToast('✅ تم تحديث الفئة بنجاح', 'success');
         } else {
             categoryData.createdAt = firebaseModules.serverTimestamp();
+            categoryData.productsCount = 0; // ✅ إضافة عدد افتراضي للفئة الجديدة
             await firebaseModules.addDoc(
                 firebaseModules.collection(db, 'categories'), 
                 categoryData
@@ -429,11 +463,8 @@ window.saveCategory = async function(event) {
         }
 
         ModalManager.close('categoryModal');
-        // تحميل الفئات من جديد وتحديث الفلاتر في كل لوحة التحكم
+        // ✅ إصلاح: إعادة تحميل الفئات بشكل صحيح
         await loadCategories(false);
-        if (typeof window.updateCategoryFilters === 'function') {
-            window.updateCategoryFilters();
-        }
         
     } catch (error) {
         console.error('❌ خطأ في حفظ الفئة:', error);
@@ -447,42 +478,61 @@ window.saveCategory = async function(event) {
     }
 };
 
-async function deleteCategory(id) {
+// ✅ إصلاح: جعل deleteCategory متاحة في window
+window.deleteCategory = async function(id) {
     if (!window.checkAdmin()) return;
     
-    ModalManager.confirm('⚠️ هل أنت متأكد من حذف هذه الفئة؟\nتنبيه: سيؤثر حذف الفئة على المنتجات المرتبطة بها.', 'تأكيد', async () => {
-        try {
-            const { db, firebaseModules } = window;
-            
-            // التحقق من وجود منتجات مرتبطة
-            const productsQuery = firebaseModules.query(
-                firebaseModules.collection(db, 'products'),
-                firebaseModules.where('category', '==', id),
-                firebaseModules.limit(1)
-            );
-            
-            const productsSnapshot = await firebaseModules.getDocs(productsQuery);
-            
-            if (!productsSnapshot.empty) {
-                const confirmDelete = await ModalManager.confirm(
-                    'تحتوي هذه الفئة على منتجات. هل تريد المتابعة مع الحذف؟ (سيتم فقدان الربط)', 
-                    'تأكيد',
-                    async () => true,
-                    () => false
+    ModalManager.confirm(
+        '⚠️ هل أنت متأكد من حذف هذه الفئة؟\nتنبيه: سيؤثر حذف الفئة على المنتجات المرتبطة بها.', 
+        'تأكيد الحذف',
+        async () => {
+            try {
+                const { db, firebaseModules } = window;
+                
+                // التحقق من وجود منتجات مرتبطة
+                const productsQuery = firebaseModules.query(
+                    firebaseModules.collection(db, 'products'),
+                    firebaseModules.where('category', '==', id),
+                    firebaseModules.limit(1)
                 );
-                if (!confirmDelete) return;
+                
+                const productsSnapshot = await firebaseModules.getDocs(productsQuery);
+                
+                if (!productsSnapshot.empty) {
+                    // ✅ إصلاح: استخدام confirm متداخل بشكل صحيح
+                    const shouldContinue = await new Promise((resolve) => {
+                        ModalManager.confirm(
+                            'تحتوي هذه الفئة على منتجات. هل تريد المتابعة مع الحذف؟ (سيتم فقدان الربط)', 
+                            'تأكيد الحذف',
+                            () => resolve(true),
+                            () => resolve(false)
+                        );
+                    });
+                    
+                    if (!shouldContinue) return;
+                }
+                
+                await firebaseModules.deleteDoc(firebaseModules.doc(db, 'categories', id));
+                adminUtils.showToast('✅ تم حذف الفئة بنجاح', 'success');
+                
+                // ✅ إصلاح: إزالة الفئة من allCategories وإعادة العرض
+                allCategories = allCategories.filter(cat => cat.id !== id);
+                window.allCategories = allCategories;
+                displayCategories(false);
+                updateCategoryFilters();
+                
+            } catch (error) {
+                console.error('❌ خطأ في حذف الفئة:', error);
+                adminUtils.showToast('حدث خطأ أثناء الحذف: ' + error.message, 'error');
+                ErrorHandler.handle(error, 'deleteCategory');
             }
-            
-            await firebaseModules.deleteDoc(firebaseModules.doc(db, 'categories', id));
-            adminUtils.showToast('✅ تم حذف الفئة بنجاح', 'success');
-            loadCategories(false);
-        } catch (error) {
-            console.error('❌ خطأ في حذف الفئة:', error);
-            adminUtils.showToast('حدث خطأ أثناء الحذف: ' + error.message, 'error');
-            ErrorHandler.handle(error, 'deleteCategory');
+        },
+        () => {
+            // ✅ إلغاء الحذف
+            console.log('تم إلغاء الحذف');
         }
-    });
-}
+    );
+};
 
 // ==================== دوال مساعدة ====================
 
@@ -508,7 +558,7 @@ async function updateCategoriesProductsCount() {
         for (const category of allCategories) {
             const productsQuery = firebaseModules.query(
                 firebaseModules.collection(db, 'products'),
-                firebaseModules.where('category', '==', category.id)
+                firebaseModules.where('categoryId', '==', category.id)  // ✅ تم إصلاح اسم الحقل
             );
             
             const snapshot = await firebaseModules.getDocs(productsQuery);
@@ -522,7 +572,7 @@ async function updateCategoriesProductsCount() {
             category.productsCount = count;
         }
         
-        displayCategories(true);
+        displayCategories(false);
     } catch (error) {
         console.error('خطأ في تحديث أعداد المنتجات:', error);
         ErrorHandler.handle(error, 'updateCategoriesProductsCount');
@@ -537,9 +587,10 @@ document.addEventListener('DOMContentLoaded', () => {
     }
 });
 
+// ✅ إصلاح: تعريض جميع الدوال الضرورية في window
 window.loadCategories = loadCategories;
-window.deleteCategory = deleteCategory;
-window.editCategory = editCategory;
+window.editCategory = window.editCategory; // معرّفة مسبقاً
+window.deleteCategory = window.deleteCategory; // معرّفة مسبقاً
 window.filterCategories = filterCategories;
 window.resetCategoriesFilter = resetCategoriesFilter;
 window.updateCategoriesProductsCount = updateCategoriesProductsCount;

@@ -158,13 +158,14 @@
             spinner.id = 'customLoadingSpinner';
             spinner.style.cssText = `
                 position: fixed; top: 0; left: 0; width: 100%; height: 100%;
-                background: rgba(0,0,0,0.7); display: flex; flex-direction: column;
+                background: rgba(255,255,255,0.85); backdrop-filter: blur(5px);
+                display: flex; flex-direction: column;
                 justify-content: center; align-items: center; z-index: 9999;
-                color: white; font-family: 'Cairo';
+                color: #333; font-family: 'Cairo';
             `;
             spinner.innerHTML = `
-                <div class="loader-spinner" style="width: 50px; height: 50px; border: 5px solid #f3f3f3; border-top: 5px solid var(--primary-color, #c9a24d); border-radius: 50%; animation: spin 1s linear infinite;"></div>
-                <p style="margin-top: 15px;">${message}</p>
+                <div class="loader-spinner" style="width: 40px; height: 40px; border: 3px solid #f3f3f3; border-top: 3px solid var(--secondary-color, #555); border-radius: 50%; animation: spin 0.8s linear infinite;"></div>
+                <p style="margin-top: 15px; font-weight: 600; font-size: 16px;">${message}</p>
             `;
             document.body.appendChild(spinner);
         },
@@ -189,6 +190,11 @@
             if (!container) {
                 container = document.createElement('div');
                 container.id = 'toastContainer';
+                container.style.cssText = `
+                    position: fixed; bottom: 30px; left: 50%; transform: translateX(-50%);
+                    z-index: 10002; display: flex; flex-direction: column; gap: 12px;
+                    width: 90%; max-width: 380px; pointer-events: none;
+                `;
                 document.body.appendChild(container);
             }
 
@@ -196,34 +202,44 @@
             toast.className = `toast toast-${type}`;
             
             let icon = 'fas fa-info-circle';
-            let iconColor = '#3498db';
+            let bgColor = 'rgba(85, 85, 85, 0.95)';
             
             switch(type) {
                 case 'success':
                     icon = 'fas fa-check-circle';
-                    iconColor = '#27ae60';
+                    bgColor = 'rgba(39, 174, 96, 0.95)';
                     break;
                 case 'error':
                     icon = 'fas fa-times-circle';
-                    iconColor = '#e74c3c';
+                    bgColor = 'rgba(231, 76, 60, 0.95)';
                     break;
                 case 'warning':
                     icon = 'fas fa-exclamation-circle';
-                    iconColor = '#f39c12';
+                    bgColor = 'rgba(243, 156, 18, 0.95)';
                     break;
             }
             
+            toast.style.cssText = `
+                padding: 16px 24px; border-radius: 12px; color: white;
+                font-size: 15px; font-weight: 600; box-shadow: 0 8px 24px rgba(0,0,0,0.2);
+                display: flex; align-items: center; gap: 12px;
+                animation: slideInUp 0.4s cubic-bezier(0.175, 0.885, 0.32, 1.275);
+                background: ${bgColor}; backdrop-filter: blur(8px);
+                border-right: 5px solid rgba(0,0,0,0.2); pointer-events: auto;
+                transition: all 0.3s ease;
+            `;
+            
             const safeMessage = window.SecurityCore ? window.SecurityCore.sanitizeHTML(String(message)) : String(message).replace(/</g, '&lt;').replace(/>/g, '&gt;');
             toast.innerHTML = `
-                <i class="${icon}" style="color: ${iconColor}; font-size: 18px;"></i>
-                <span style="color: #333; font-weight: 600; font-size: 14px;">${safeMessage}</span>
+                <i class="${icon}" style="font-size: 18px;"></i>
+                <span>${safeMessage}</span>
             `;
             
             container.appendChild(toast);
             
             setTimeout(() => {
                 toast.style.opacity = '0';
-                toast.style.transform = 'translateY(-20px)';
+                toast.style.transform = 'translateY(-20px) scale(0.9)';
                 setTimeout(() => toast.remove(), 300);
             }, duration);
         }

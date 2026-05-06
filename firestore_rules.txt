@@ -1,0 +1,180 @@
+rules_version = '2';
+
+service cloud.firestore {
+  match /databases/{database}/documents {
+    
+    // ==================== دوال مساعدة ====================
+    
+    // التحقق من أن المستخدم مسجل دخول
+    function isAuthenticated() {
+      return request.auth != null;
+    }
+    
+    // التحقق من أن المستخدم مسؤول (Admin)
+    function isAdmin() {
+      return isAuthenticated() && 
+             exists(/databases/$(database)/documents/users/$(request.auth.uid)) &&
+             get(/databases/$(database)/documents/users/$(request.auth.uid)).data.isAdmin == true;
+    }
+    
+    // التحقق من أن المستخدم هو صاحب المستند
+    function isOwner(userId) {
+      return isAuthenticated() && request.auth.uid == userId;
+    }
+    
+    // التحقق من أن المستخدم لم يعدل حقولاً محظورة
+    function isUpdatingOnlyAllowedUserFields() {
+      let affectedKeys = request.resource.data.diff(resource.data).affectedKeys();
+      // الحقول المسموح للمستخدم العادي بتعديلها
+      let allowedKeys = ['name', 'displayName', 'phone', 'address', 'favorites', 'cart', 'photoURL', 'lastLogin', 'fcmToken', 'fcmTokenUpdatedAt', 'updatedAt'];
+      // أي مفتاح يتأثر يجب أن يكون في القائمة المسموحة
+      return affectedKeys.hasOnly(allowedKeys);
+    }
+    
+    // ==================== المنتجات ====================
+    match /products/{productId} {
+      // أي شخص يمكنه قراءة المنتجات النشطة
+      allow read: if resource == null || resource.data.isActive == true || isAdmin();
+      
+      // المسؤول فقط يمكنه إنشاء منتج جديد
+      allow create: if isAdmin() && 
+                      request.resource.data.keys().hasAll(['name', 'price']) &&
+                      request.resource.data.name is string &&
+                      request.resource.data.price is number &&
+                      request.resource.data.price >= 0;
+      
+      // المسؤول فقط يمكنه تعديل المنتج
+      allow update: if isAdmin();
+      
+      // المسؤول فقط يمكنه حذف المنتج
+      allow delete: if isAdmin();
+    }
+    
+    // ==================== الفئات ====================
+    match /categories/{categoryId} {
+      // قراءة عامة
+      allow read: if true;
+      
+      // المسؤول فقط يمكنه الكتابة
+      allow create: if isAdmin() && 
+                      request.resource.data.keys().hasAll(['name']) &&
+                      request.resource.data.name is string;
+      
+      allow update, delete: if isAdmin();
+    }
+    
+    // ==================== المستخدمين ====================
+    match /users/{userId} {
+      // المستخدم يمكنه قراءة بياناته فقط، والمسؤول يمكنه قراءة الجميع
+      allow read: if isOwner(userId) || isAdmin();
+      
+      // إنشاء حساب جديد - المستخدم ينشئ حسابه بنفسه
+      allow create: if isAuthenticated() && 
+                      request.auth.uid == userId &&
+                      request.resource.data.keys().hasAll(['email', 'name']) &&
+                      // منع المستخدم من تعيين نفسه كمسؤول
+                      (!('isAdmin' in request.resource.data) ||
+                       request.resource.data.isAdmin == false) &&
+                      (!('role' in request.resource.data) ||
+                       request.resource.data.role == 'user');
+      
+      // تحديث - المستخدم لنفسه (حقول محددة فقط) أو المسؤول للجميع
+      allow update: if (isOwner(userId) && isUpdatingOnlyAllowedUserFields()) || 
+                        isAdmin();
+      
+      // المسؤول فقط يمكنه حذف المستخدمين
+      allow delete: if isAdmin();
+    }
+    
+    // ==================== الطلبات ====================
+    match /orders/{orderId} {
+      // المسؤول يمكنه قراءة جميع الطلبات، والمستخدم يقرأ طلباته فقط
+      allow read: if isAdmin() || 
+                  (isAuthenticated() && resource.data.userId == request.auth.uid) ||
+                  // السماح بقراءة الطلب عبر رقم الطلب (للضيوف أيضاً)
+                  true;
+      
+      // أي شخص (حتى الضيوف) يمكنه إنشاء طلب
+      allow create: if request.resource.data.keys().hasAll(['items', 'total', 'phone', 'address']) &&
+                      request.resource.data.items is list &&
+                      request.resource.data.total is number &&
+                      request.resource.data.phone is string &&
+                      request.resource.data.address is string;
+      
+      // المسؤول يمكنه تحديث الطلب (مثلاً تغيير الحالة)
+      allow update: if isAdmin();
+      
+      // المسؤول فقط يمكنه حذف طلب
+      allow delete: if isAdmin();
+    }
+    
+    // ==================== الرسائل ====================
+    match /messages/{messageId} {
+      // أي شخص يمكنه إرسال رسالة
+      allow create: if request.resource.data.keys().hasAll(['name', 'email', 'subject', 'message']) &&
+                      request.resource.data.name is string &&
+                      request.resource.data.email is string;
+      
+      // المسؤول فقط يمكنه قراءة وتعديل وحذف الرسائل
+      allow read, update, delete: if isAdmin();
+    }
+    
+    // ==================== التقييمات ====================
+    match /reviews/{reviewId} {
+      // قراءة عامة للتقييمات المقبولة فقط
+      allow read: if true;
+      
+      // المستخدم المسجل فقط يمكنه إضافة تقييم
+      allow create: if isAuthenticated() && 
+                      request.resource.data.keys().hasAll(['productId', 'rating', 'comment']) &&
+                      request.resource.data.rating is number &&
+                      request.resource.data.rating >= 1 &&
+                      request.resource.data.rating <= 5;
+      
+      // المسؤول يمكنه الموافقة على التقييم أو رفضه
+      allow update: if isAdmin();
+      
+      // المسؤول فقط يمكنه حذف تقييم
+      allow delete: if isAdmin();
+    }
+    
+    // ==================== الكوبونات ====================
+    match /coupons/{couponId} {
+      // المستخدم المسجل يمكنه رؤية الكوبونات النشطة
+      allow read: if isAuthenticated();
+      
+      // المسؤول فقط يمكنه إدارة الكوبونات
+      allow create: if isAdmin() && 
+                      request.resource.data.keys().hasAll(['code', 'type', 'value', 'expiryDate']) &&
+                      request.resource.data.code is string &&
+                      request.resource.data.value is number &&
+                      request.resource.data.value > 0;
+      
+      allow update, delete: if isAdmin();
+    }
+    
+    // ==================== الإعدادات ====================
+    match /settings/{document} {
+      // قراءة عامة للإعدادات
+      allow read: if true;
+      
+      // المسؤول فقط يمكنه تعديل الإعدادات
+      allow write: if isAdmin();
+    }
+    
+    // ==================== الإشعارات العامة ====================
+    match /global_notifications/{notificationId} {
+      // قراءة عامة
+      allow read: if true;
+      
+      // المسؤول فقط يمكنه إنشاء وإدارة الإشعارات
+      allow create, update, delete: if isAdmin();
+    }
+    
+    // ==================== قاعدة افتراضية ====================
+    // منع الوصول لأي مجموعة غير معرفة
+    match /{document=**} {
+      allow read, write: if false;
+    }
+  }
+}

@@ -1,5 +1,5 @@
 /**
- * users.js - قسم إدارة المستخدمين (نسخة محسنة مع التحميل بالتمرير)
+ * users.js - قسم إدارة المستخدمين (نسخة مصلحة)
  */
 
 let allUsers = [];
@@ -8,6 +8,8 @@ let hasMoreUsers = true;
 let isLoadingUsers = false;
 const USERS_PER_PAGE = 8;
 let usersObserver = null;
+
+// ==================== تحميل المستخدمين ====================
 
 async function loadUsers(isNextPage = false) {
     if (!window.checkAdmin()) return;
@@ -41,9 +43,7 @@ async function loadUsers(isNextPage = false) {
             return;
         }
 
-        let constraints = [
-            firebaseModules.collection(db, 'users')
-        ];
+        let constraints = [firebaseModules.collection(db, 'users')];
 
         if (filterStatus) {
             constraints.push(firebaseModules.where('isActive', '==', filterStatus === 'active'));
@@ -77,6 +77,7 @@ async function loadUsers(isNextPage = false) {
         allUsers = [...allUsers, ...newUsers];
         window.allUsers = allUsers;
         
+        // ✅ إصلاح: تمرير isNextPage لدعم التحميل الإضافي
         displayUsers(isNextPage);
         
         if (!isNextPage) setupUsersInfiniteScroll();
@@ -111,6 +112,7 @@ function setupUsersInfiniteScroll() {
     usersObserver.observe(sentinel);
 }
 
+// ✅ إصلاح: دعم التحميل الإضافي
 function displayUsers(append = false) {
     const tbody = document.getElementById('usersBody');
     if (!tbody) return;
@@ -120,10 +122,10 @@ function displayUsers(append = false) {
         return;
     }
 
-    tbody.innerHTML = allUsers.map(user => {
-        const safeName = adminUtils.escapeHTML(user.displayName || user.name || 'بدون اسم');
-        const safeEmail = adminUtils.escapeHTML(user.email || '---');
-        const safePhone = adminUtils.escapeHTML(user.phone || '---');
+    const html = allUsers.map(user => {
+        const safeName = window.adminUtils.escapeHTML(user.displayName || user.name || 'بدون اسم');
+        const safeEmail = window.adminUtils.escapeHTML(user.email || '---');
+        const safePhone = window.adminUtils.escapeHTML(user.phone || '---');
         const totalOrders = user.totalOrders || 0;
         const totalSpent = user.totalSpent || 0;
 
@@ -133,28 +135,35 @@ function displayUsers(append = false) {
             <td data-label="البريد" style="font-size: 11px; max-width: 150px; overflow: hidden; text-overflow: ellipsis;">${safeEmail}</td>
             <td data-label="الهاتف" style="font-size: 11px;">${safePhone}</td>
             <td data-label="الطلبات" style="font-size: 11px;">${totalOrders}</td>
-            <td data-label="الإنفاق" style="font-weight: bold; color: var(--primary-color);">${adminUtils.formatNumber(totalSpent)}</td>
+            <td data-label="الإنفاق" style="font-weight: bold; color: var(--primary-color);">${window.adminUtils.formatNumber(totalSpent)}</td>
             <td data-label="الحالة">
                 <span class="badge badge-${user.isActive !== false ? 'success' : 'danger'}" style="padding: 1px 6px; font-size: 9px; border-radius: 4px;">
                     ${user.isActive !== false ? 'نشط' : 'معطل'}
                 </span>
             </td>
-            <td data-label="التاريخ" style="font-size: 10px; color: #666;">${adminUtils.formatDate(user.createdAt)}</td>
+            <td data-label="التاريخ" style="font-size: 10px; color: #666;">${window.adminUtils.formatDate(user.createdAt)}</td>
             <td data-label="الإجراءات">
                 <div class="action-buttons-compact">
-                    <button class="btn btn-sm ${user.isActive !== false ? 'btn-danger' : 'btn-success'}" onclick="toggleUserStatus('${user.id}', ${user.isActive !== false})" title="${user.isActive !== false ? 'تعطيل' : 'تفعيل'}">
+                    <button class="btn btn-sm ${user.isActive !== false ? 'btn-danger' : 'btn-success'}" onclick="window.toggleUserStatus('${user.id}', ${user.isActive !== false})" title="${user.isActive !== false ? 'تعطيل' : 'تفعيل'}">
                         <i class="fas fa-${user.isActive !== false ? 'user-slash' : 'user-check'}"></i>
                     </button>
-                    <button class="btn btn-sm btn-primary" onclick="makeAdmin('${user.id}')" title="ترقية لأدمن">
+                    <button class="btn btn-sm btn-primary" onclick="window.makeAdmin('${user.id}')" title="ترقية لأدمن">
                         <i class="fas fa-user-shield"></i>
                     </button>
-                    <button class="btn btn-sm btn-info" onclick="viewUser('${user.id}')" title="عرض التفاصيل">
+                    <button class="btn btn-sm btn-info" onclick="window.viewUser('${user.id}')" title="عرض التفاصيل">
                         <i class="fas fa-eye"></i>
                     </button>
                 </div>
             </td>
         </tr>
     `}).join('');
+
+    // ✅ إصلاح: دعم الإضافة للتحميل اللانهائي
+    if (append) {
+        tbody.insertAdjacentHTML('beforeend', html);
+    } else {
+        tbody.innerHTML = html;
+    }
 }
 
 function applyUsersFilter() {
@@ -171,7 +180,8 @@ function resetUsersFilter() {
     loadUsers(false);
 }
 
-async function toggleUserStatus(userId, currentStatus) {
+// ✅ تبديل حالة المستخدم
+window.toggleUserStatus = async function(userId, currentStatus) {
     if (!window.checkAdmin()) return;
     
     ModalManager.confirm(`هل أنت متأكد من ${currentStatus ? 'تعطيل' : 'تفعيل'} هذا المستخدم؟`, 'تأكيد', async () => {
@@ -180,36 +190,31 @@ async function toggleUserStatus(userId, currentStatus) {
             await firebaseModules.updateDoc(firebaseModules.doc(db, 'users', userId), {
                 isActive: !currentStatus
             });
-            adminUtils.showToast('✅ تم تحديث حالة المستخدم', 'success');
+            window.adminUtils.showToast('✅ تم تحديث حالة المستخدم', 'success');
             
             const user = allUsers.find(u => u.id === userId);
             if (user) user.isActive = !currentStatus;
-            displayUsers();
+            displayUsers(false);
         } catch (error) {
             console.error('❌ خطأ في تحديث حالة المستخدم:', error);
-            adminUtils.showToast('حدث خطأ في تحديث الحالة', 'error');
+            window.adminUtils.showToast('حدث خطأ في تحديث الحالة', 'error');
             ErrorHandler.handle(error, 'toggleUserStatus');
         }
     });
-}
+};
 
-/**
- * ترقية مستخدم لمسؤول
- * تنبيه أمني: هذه العملية يجب أن تكون محمية بقواعد أمان Firestore (Server-side)
- * بحيث لا يمكن تنفيذها إلا من قبل مسؤول مسجل فعلياً.
- */
-async function makeAdmin(userId) {
+// ✅ ترقية مستخدم لمسؤول
+window.makeAdmin = async function(userId) {
     if (!window.checkAdmin()) {
         if (window.SecurityCore) window.SecurityCore.logSecurityEvent('unauthorized_admin_promotion_attempt', { targetUserId: userId });
         return;
     }
     
-    ModalManager.confirm('هل أنت متأكد من ترقية هذا المستخدم ليكون مسؤولاً (Admin)؟ ستحتاج لقواعد أمان Firestore لتنفيذ هذا الإجراء بأمان.', 'تأكيد أمني', async () => {
+    ModalManager.confirm('هل أنت متأكد من ترقية هذا المستخدم ليكون مسؤولاً (Admin)؟', 'تأكيد أمني', async () => {
         try {
             const { db, firebaseModules } = window;
             
-            // التحقق الإضافي من الصلاحية قبل الإرسال
-            const currentUser = window.auth.currentUser;
+            const currentUser = window.auth?.currentUser;
             if (!currentUser) throw new Error('يجب تسجيل الدخول');
 
             await firebaseModules.updateDoc(firebaseModules.doc(db, 'users', userId), {
@@ -219,26 +224,22 @@ async function makeAdmin(userId) {
                 promotedAt: firebaseModules.serverTimestamp()
             });
             
-            adminUtils.showToast('✅ تمت الترقية بنجاح', 'success');
+            window.adminUtils.showToast('✅ تمت الترقية بنجاح', 'success');
             if (window.SecurityCore) window.SecurityCore.logSecurityEvent('admin_promotion_success', { targetUserId: userId, by: currentUser.uid });
-            await loadUsers();
+            await loadUsers(false);
         } catch (error) {
             console.error('❌ خطأ في ترقية المستخدم:', error);
-            const errorMsg = error.code === 'permission-denied' ? 'ليس لديك صلاحية لتنفيذ هذا الإجراء (Server-side Error)' : 'حدث خطأ في الترقية';
-            adminUtils.showToast(errorMsg, 'error');
+            const errorMsg = error.code === 'permission-denied' ? 'ليس لديك صلاحية لتنفيذ هذا الإجراء' : 'حدث خطأ في الترقية';
+            window.adminUtils.showToast(errorMsg, 'error');
             ErrorHandler.handle(error, 'makeAdmin');
         }
     });
-}
+};
 
-function viewUser(userId) {
+// ✅ عرض تفاصيل المستخدم
+window.viewUser = function(userId) {
     const user = allUsers.find(u => u.id === userId);
     if (!user) return;
-
-    const safeName = adminUtils.escapeHTML(user.displayName || user.name || '---');
-    const safeEmail = adminUtils.escapeHTML(user.email || '---');
-    const safePhone = adminUtils.escapeHTML(user.phone || '---');
-    const safeAddress = adminUtils.escapeHTML(user.address || '---');
 
     const content = `
         <div style="text-align: center; margin-bottom: 20px;">
@@ -246,31 +247,32 @@ function viewUser(userId) {
                  style="width: 100px; height: 100px; border-radius: 50%; border: 3px solid var(--primary-color);">
         </div>
         <table class="details-table" style="width: 100%;">
-            <tr><th>الاسم:</th><td>${safeName}</td></tr>
-            <tr><th>البريد:</th><td>${safeEmail}</td></tr>
-            <tr><th>الهاتف:</th><td>${safePhone}</td></tr>
-            <tr><th>العنوان:</th><td>${safeAddress}</td></tr>
+            <tr><th>الاسم:</th><td>${window.adminUtils.escapeHTML(user.displayName || user.name || '---')}</td></tr>
+            <tr><th>البريد:</th><td>${window.adminUtils.escapeHTML(user.email || '---')}</td></tr>
+            <tr><th>الهاتف:</th><td>${window.adminUtils.escapeHTML(user.phone || '---')}</td></tr>
+            <tr><th>العنوان:</th><td>${window.adminUtils.escapeHTML(user.address || '---')}</td></tr>
             <tr><th>عدد الطلبات:</th><td>${user.totalOrders || 0}</td></tr>
-            <tr><th>إجمالي المشتريات:</th><td>${adminUtils.formatNumber(user.totalSpent || 0)} SDG</td></tr>
+            <tr><th>إجمالي المشتريات:</th><td>${window.adminUtils.formatNumber(user.totalSpent || 0)} SDG</td></tr>
             <tr><th>الحالة:</th><td><span class="badge badge-${user.isActive !== false ? 'success' : 'danger'}">${user.isActive !== false ? 'نشط' : 'معطل'}</span></td></tr>
             <tr><th>الدور:</th><td>${user.isAdmin ? 'مدير' : 'مستخدم'}</td></tr>
-            <tr><th>تاريخ التسجيل:</th><td>${adminUtils.formatDate(user.createdAt)}</td></tr>
-            <tr><th>آخر تحديث:</th><td>${adminUtils.formatDate(user.updatedAt)}</td></tr>
+            <tr><th>تاريخ التسجيل:</th><td>${window.adminUtils.formatDate(user.createdAt)}</td></tr>
+            <tr><th>آخر تحديث:</th><td>${window.adminUtils.formatDate(user.updatedAt)}</td></tr>
         </table>
     `;
 
     ModalManager.open({
         id: 'viewUserModal',
-        title: `بيانات المستخدم: ${safeName}`,
+        title: `بيانات المستخدم: ${window.adminUtils.escapeHTML(user.displayName || user.name || '---')}`,
         content: content,
         size: 'medium',
         buttons: [
-            { text: 'إغلاق', class: 'btn-secondary' }
+            { text: 'إغلاق', class: 'btn-secondary', onClick: () => ModalManager.close('viewUserModal') }
         ]
     });
-}
+};
 
-function filterUsers() {
+// ✅ البحث المباشر
+window.filterUsers = function() {
     const searchTerm = document.getElementById('userSearch')?.value.toLowerCase() || '';
     const filtered = allUsers.filter(user => 
         (user.displayName || user.name || '').toLowerCase().includes(searchTerm) || 
@@ -286,37 +288,26 @@ function filterUsers() {
         return;
     }
 
-    tbody.innerHTML = filtered.map(user => {
-        const safeName = adminUtils.escapeHTML(user.displayName || user.name || 'بدون اسم');
-        const safeEmail = adminUtils.escapeHTML(user.email || '---');
-        const safePhone = adminUtils.escapeHTML(user.phone || '---');
-        return `
-        <tr class="compact-row">
-            <td data-label="الاسم">${safeName}</td>
-            <td data-label="البريد">${safeEmail}</td>
-            <td data-label="الهاتف">${safePhone}</td>
-            <td data-label="الطلبات">${user.totalOrders || 0}</td>
-            <td data-label="الإنفاق">${adminUtils.formatNumber(user.totalSpent || 0)} SDG</td>
-            <td data-label="الحالة"><span class="badge badge-${user.isActive !== false ? 'success' : 'danger'}">${user.isActive !== false ? 'نشط' : 'معطل'}</span></td>
-            <td data-label="التاريخ">${adminUtils.formatDate(user.createdAt)}</td>
-            <td data-label="الإجراءات">
-                <div class="action-buttons-compact">
-                    <button class="btn btn-sm ${user.isActive !== false ? 'btn-danger' : 'btn-success'}" onclick="toggleUserStatus('${user.id}', ${user.isActive !== false})">
-                        <i class="fas fa-${user.isActive !== false ? 'user-slash' : 'user-check'}"></i>
-                    </button>
-                    <button class="btn btn-sm btn-primary" onclick="makeAdmin('${user.id}')">
-                        <i class="fas fa-user-shield"></i>
-                    </button>
-                </div>
-            </td>
-        </tr>
-    `}).join('');
-}
+    // استخدام filtered بدلاً من allUsers للعرض المؤقت
+    const tempAllUsers = allUsers;
+    allUsers = filtered;
+    displayUsers(false);
+    allUsers = tempAllUsers;
+};
 
+// ==================== التهيئة ====================
+
+document.addEventListener('DOMContentLoaded', () => {
+    if (document.getElementById('usersBody')) {
+        loadUsers();
+    }
+});
+
+// ✅ تعريض الدوال
 window.loadUsers = loadUsers;
-window.toggleUserStatus = toggleUserStatus;
-window.makeAdmin = makeAdmin;
-window.viewUser = viewUser;
-window.filterUsers = filterUsers;
+window.toggleUserStatus = window.toggleUserStatus;
+window.makeAdmin = window.makeAdmin;
+window.viewUser = window.viewUser;
+window.filterUsers = window.filterUsers;
 window.applyUsersFilter = applyUsersFilter;
 window.resetUsersFilter = resetUsersFilter;
