@@ -46,7 +46,7 @@
     <script src="shared/js/modal-manager.js?v=112"></script>
     <script src="shared/js/firebase-messaging.js?v=112"></script>
     
-    <!-- ملفات admin - تم تعديل ترتيب التحميل فقط -->
+    <!-- ملفات admin -->
     <script src="admin/js/admin-utils.js?v=112"></script>
     <script src="admin/js/admin-new-core.js?v=112"></script>
     <script src="admin/js/sections/stats.js?v=112"></script>
@@ -213,6 +213,10 @@
             background: #dc3545; 
             color: white; 
         }
+        .btn-info {
+            background: #17a2b8;
+            color: white;
+        }
         .btn-sm { 
             padding: 4px 8px; 
             font-size: 12px; 
@@ -223,6 +227,27 @@
             font-size: 20px; 
             cursor: pointer; 
             color: #666; 
+        }
+        
+        /* زر نسخ الرابط */
+        .btn-copy-link {
+            background: transparent;
+            border: 1px solid #ddd;
+            padding: 8px 12px;
+            border-radius: 6px;
+            cursor: pointer;
+            font-family: 'Cairo';
+            font-size: 13px;
+            color: #555;
+            transition: 0.3s;
+            display: flex;
+            align-items: center;
+            gap: 5px;
+        }
+        .btn-copy-link:hover {
+            background: #f5f5f5;
+            border-color: var(--primary-color);
+            color: var(--primary-color);
         }
         
         /* التنبيهات (Toasts) */
@@ -262,6 +287,10 @@
             .search-filter-bar, .action-buttons { 
                 flex-direction: column; 
             }
+            .btn-copy-link {
+                font-size: 11px;
+                padding: 6px 10px;
+            }
         }
     </style>
 </head>
@@ -276,22 +305,46 @@
             <img src="https://i.ibb.co/fVn1SghC/file-00000000cf8071f498fc71b66e09f615.png" alt="Logo" loading="lazy">
             <span>لوحة التحكم الشاملة</span>
         </div>
-        <div class="header-actions">
-            <button class="admin-tab" onclick="window.location.href='index.html'"><i class="fas fa-external-link-alt"></i> عرض المتجر</button>
-            <button onclick="logoutAdmin()" class="logout-admin-btn"><i class="fas fa-sign-out-alt"></i> خروج</button>
+        <div class="header-actions" style="display: flex; align-items: center; gap: 10px;">
+            <button class="btn-copy-link" onclick="copyCurrentAdminLink()" title="نسخ رابط القسم الحالي">
+                <i class="fas fa-link"></i> نسخ الرابط
+            </button>
+            <button class="admin-tab" onclick="window.location.href='index.html'">
+                <i class="fas fa-external-link-alt"></i> عرض المتجر
+            </button>
+            <button onclick="logoutAdmin()" class="logout-admin-btn">
+                <i class="fas fa-sign-out-alt"></i> خروج
+            </button>
         </div>
     </header>
 
     <div class="admin-container">
+        <!-- ✅ أزرار التبويب بعد التحديث - تستخدم navigateToAdmin -->
         <div class="admin-tabs">
-            <button class="admin-tab active" data-tab="dashboard" onclick="switchTab('dashboard')"><i class="fas fa-chart-line"></i> الإحصائيات</button>
-            <button class="admin-tab" data-tab="products" onclick="switchTab('products')"><i class="fas fa-box"></i> المنتجات</button>
-            <button class="admin-tab" data-tab="categories" onclick="switchTab('categories')"><i class="fas fa-list"></i> الفئات</button>
-            <button class="admin-tab" data-tab="orders" onclick="switchTab('orders')"><i class="fas fa-shopping-cart"></i> الطلبات</button>
-            <button class="admin-tab" data-tab="users" onclick="switchTab('users')"><i class="fas fa-users"></i> المستخدمين</button>
-            <button class="admin-tab" data-tab="messages" onclick="switchTab('messages')"><i class="fas fa-envelope"></i> الرسائل</button>
-            <button class="admin-tab" data-tab="coupons" onclick="switchTab('coupons')"><i class="fas fa-ticket-alt"></i> الكوبونات</button>
-            <button class="admin-tab" data-tab="settings" onclick="switchTab('settings')"><i class="fas fa-cog"></i> الإعدادات</button>
+            <button class="admin-tab active" data-tab="dashboard" onclick="navigateToAdmin('dashboard')">
+                <i class="fas fa-chart-line"></i> الإحصائيات
+            </button>
+            <button class="admin-tab" data-tab="products" onclick="navigateToAdmin('products')">
+                <i class="fas fa-box"></i> المنتجات
+            </button>
+            <button class="admin-tab" data-tab="categories" onclick="navigateToAdmin('categories')">
+                <i class="fas fa-list"></i> الفئات
+            </button>
+            <button class="admin-tab" data-tab="orders" onclick="navigateToAdmin('orders')">
+                <i class="fas fa-shopping-cart"></i> الطلبات
+            </button>
+            <button class="admin-tab" data-tab="users" onclick="navigateToAdmin('users')">
+                <i class="fas fa-users"></i> المستخدمين
+            </button>
+            <button class="admin-tab" data-tab="messages" onclick="navigateToAdmin('messages')">
+                <i class="fas fa-envelope"></i> الرسائل
+            </button>
+            <button class="admin-tab" data-tab="coupons" onclick="navigateToAdmin('coupons')">
+                <i class="fas fa-ticket-alt"></i> الكوبونات
+            </button>
+            <button class="admin-tab" data-tab="settings" onclick="navigateToAdmin('settings')">
+                <i class="fas fa-cog"></i> الإعدادات
+            </button>
         </div>
 
         <!-- Dashboard -->

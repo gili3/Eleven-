@@ -18,57 +18,9 @@ function resetOrdersState() {
 }
 
 /**
- * تهيئة مراقب التمرير لصفحة الطلبات
- */
-function setupOrdersInfiniteScroll() {
-    const ordersList = document.getElementById('myOrdersList');
-    if (!ordersList) return;
-
-    // إزالة الحارس القديم إذا وجد
-    const oldSentinel = document.getElementById('ordersScrollSentinel');
-    if (oldSentinel) {
-        oldSentinel.remove();
-    }
-
-    // إنشاء حارس جديد
-    const sentinel = document.createElement('div');
-    sentinel.id = 'ordersScrollSentinel';
-    sentinel.style.height = '20px';
-    sentinel.style.width = '100%';
-    sentinel.style.marginTop = '10px';
-    sentinel.style.marginBottom = '10px';
-    sentinel.style.background = 'transparent';
-    sentinel.style.pointerEvents = 'none';
-    
-    ordersList.parentNode?.appendChild(sentinel);
-
-    // إيقاف المراقب القديم
-    if (ordersObserver) {
-        ordersObserver.disconnect();
-    }
-
-    // إنشاء مراقب جديد
-    ordersObserver = new IntersectionObserver((entries) => {
-        entries.forEach(entry => {
-            if (entry.isIntersecting && hasMoreOrders && !isOrdersLoading) {
-                console.log('📦 [Observer] تحميل المزيد من الطلبات');
-                loadMyOrders(true);
-            }
-        });
-    }, {
-        root: null,
-        rootMargin: '300px',
-        threshold: 0.01
-    });
-
-    ordersObserver.observe(sentinel);
-    console.log('✅ Infinite scroll initialized for orders');
-}
-
-/**
  * إنشاء شريط تتبع المراحل الأفقي (مع تنظيف البيانات)
  */
-function renderOrderStages(status) {
+window.renderOrderStages = function(status) {
     const stages = [
         { key: 'pending', label: 'قيد الانتظار', icon: 'fa-clock' },
         { key: 'paid', label: 'تم الدفع', icon: 'fa-check-double' },
@@ -144,6 +96,54 @@ function renderOrderStages(status) {
             </div>
         </div>
     `;
+};
+
+/**
+ * تهيئة مراقب التمرير لصفحة الطلبات
+ */
+function setupOrdersInfiniteScroll() {
+    const ordersList = document.getElementById('myOrdersList');
+    if (!ordersList) return;
+
+    // إزالة الحارس القديم إذا وجد
+    const oldSentinel = document.getElementById('ordersScrollSentinel');
+    if (oldSentinel) {
+        oldSentinel.remove();
+    }
+
+    // إنشاء حارس جديد
+    const sentinel = document.createElement('div');
+    sentinel.id = 'ordersScrollSentinel';
+    sentinel.style.height = '20px';
+    sentinel.style.width = '100%';
+    sentinel.style.marginTop = '10px';
+    sentinel.style.marginBottom = '10px';
+    sentinel.style.background = 'transparent';
+    sentinel.style.pointerEvents = 'none';
+    
+    ordersList.parentNode?.appendChild(sentinel);
+
+    // إيقاف المراقب القديم
+    if (ordersObserver) {
+        ordersObserver.disconnect();
+    }
+
+    // إنشاء مراقب جديد
+    ordersObserver = new IntersectionObserver((entries) => {
+        entries.forEach(entry => {
+            if (entry.isIntersecting && hasMoreOrders && !isOrdersLoading) {
+                console.log('📦 [Observer] تحميل المزيد من الطلبات');
+                loadMyOrders(true);
+            }
+        });
+    }, {
+        root: null,
+        rootMargin: '300px',
+        threshold: 0.01
+    });
+
+    ordersObserver.observe(sentinel);
+    console.log('✅ Infinite scroll initialized for orders');
 }
 
 /**
@@ -406,7 +406,7 @@ function renderOrdersList(ordersToRender, append = false) {
                 </div>
 
                 <!-- مراحل الطلب -->
-                ${renderOrderStages(order.status)}
+                ${window.renderOrderStages(order.status)}
 
                 <!-- محتوى الطلب -->
                 <div class="order-body" style="margin-bottom: 15px;">
@@ -768,6 +768,7 @@ window.viewOrderReceipt = viewOrderReceipt;
 window.downloadOrderReceipt = downloadOrderReceipt;
 window.showOrdersSection = showOrdersSection;
 window.checkAndLoadOrders = checkAndLoadOrders;
+window.renderOrderStages = window.renderOrderStages;
 
 // الاستماع لحدث عرض القسم
 document.addEventListener('sectionChanged', function(e) {

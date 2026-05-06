@@ -1,7 +1,7 @@
 /**
  * admin-new-core.js
- * المحرك الأساسي لوحة التحكم - النسخة المصلحة (مع جلسة موحدة وتحقق من الصلاحيات)
- * تم الإصلاح: 2026-05-03
+ * المحرك الأساسي لوحة التحكم - النسخة المصلحة (مع Hash Routing متكامل)
+ * تم الإصلاح: 2026-05-03 | تم التحديث: إضافة نظام التوجيه بالروابط
  */
 
 // المتغيرات العامة
@@ -45,6 +45,76 @@ function disconnectAllObservers() {
     }
     console.log('✅ تم قطع اتصال جميع المراقبين');
 }
+
+// ==================== نظام التوجيه (Hash Routing) ====================
+
+/**
+ * التنقل إلى قسم معين مع تحديث الرابط
+ */
+window.navigateToAdmin = function(sectionId) {
+    window.location.hash = sectionId;
+};
+
+/**
+ * التبديل بين التبويبات (دون تغيير الرابط - للاستخدام الداخلي)
+ */
+window.switchTab = async function(tabId, updateHash = true) {
+    console.log(`🔄 التبديل إلى تبويب: ${tabId}`);
+    
+    // التحقق من الصلاحية
+    if (typeof window.checkAdmin === 'function' && !window.checkAdmin()) {
+        console.warn('⚠️ فشل التحقق من الصلاحية');
+        return;
+    }
+
+    // تحديث الرابط إذا طلب ذلك
+    if (updateHash) {
+        window.navigateToAdmin(tabId);
+    }
+
+    // قطع اتصال جميع المراقبين قبل تغيير التبويب
+    disconnectAllObservers();
+
+    // تحديث الأزرار النشطة
+    document.querySelectorAll('.admin-tab').forEach(tab => {
+        tab.classList.remove('active');
+        if (tab.getAttribute('data-tab') === tabId) {
+            tab.classList.add('active');
+        }
+    });
+
+    // إخفاء جميع الأقسام وإظهار المستهدف
+    document.querySelectorAll('.admin-tab-content').forEach(content => {
+        content.classList.remove('active');
+    });
+    
+    const targetContent = document.getElementById(tabId);
+    if (targetContent) {
+        targetContent.classList.add('active');
+    } else {
+        console.warn(`⚠️ القسم ${tabId} غير موجود في DOM`);
+    }
+
+    // التمرير للأعلى
+    window.scrollTo({ top: 0, behavior: 'smooth' });
+
+    // تحميل بيانات القسم المختار
+    await loadCurrentSection(tabId);
+};
+
+/**
+ * نسخ رابط القسم الحالي
+ */
+window.copyCurrentAdminLink = function() {
+    const url = window.location.href;
+    navigator.clipboard.writeText(url).then(() => {
+        if (window.adminUtils && window.adminUtils.showToast) {
+            window.adminUtils.showToast('✅ تم نسخ الرابط: ' + url, 'success');
+        }
+    }).catch(() => {
+        prompt('انسخ الرابط:', url);
+    });
+};
 
 // الدالة المفقودة: تحميل البيانات الأولية
 async function loadInitialData() {
@@ -93,12 +163,31 @@ async function loadInitialData() {
         
     } catch (error) {
         console.error('❌ خطأ في تحميل البيانات الأولية:', error);
-        ErrorHandler.handle(error, 'loadInitialData');
+        if (typeof ErrorHandler !== 'undefined') {
+            ErrorHandler.handle(error, 'loadInitialData');
+        }
     }
 }
 
+// ==================== معالج تغيير الرابط ====================
+
+window.addEventListener('hashchange', function() {
+    const hash = window.location.hash.substring(1) || 'dashboard';
+    
+    // قائمة الأقسام الصالحة
+    const validSections = ['dashboard', 'products', 'categories', 'orders', 
+                          'users', 'messages', 'coupons', 'settings'];
+    
+    if (validSections.includes(hash)) {
+        console.log(`🔗 التنقل عبر الرابط إلى: ${hash}`);
+        switchTab(hash, false); // لا تقم بتحديث الرابط مرة أخرى
+    }
+});
+
+// ==================== التهيئة عند تحميل الصفحة ====================
+
 document.addEventListener('DOMContentLoaded', async () => {
-    console.log('🚀 بدء تشغيل لوحة التحكم...');
+    console.log('🚀 بدء تشغيل لوحة التحكم (مع Hash Routing)...');
     
     try {
         // استخدام Firebase الموحد (مع جلسة دائمة)
@@ -166,11 +255,38 @@ document.addEventListener('DOMContentLoaded', async () => {
                         // المستخدم مسؤول، تحميل البيانات
                         console.log('✅ مستخدم مسؤول، جاري تحميل لوحة التحكم...');
                         
-                        // تحميل البيانات الأولية والقسم الحالي بالتوازي
+                        // تحميل البيانات الأولية
                         await loadInitialData();
-                        await loadCurrentSection('dashboard');
                         
-                        console.log('✅ تم تحميل لوحة التحكم بالكامل');
+                        // ✅ تحديد القسم المطلوب من الرابط
+                        const hash = window.location.hash.substring(1) || 'dashboard';
+                        const validSections = ['dashboard', 'products', 'categories', 'orders', 
+                                              'users', 'messages', 'coupons', 'settings'];
+                        
+                        const targetSection = validSections.includes(hash) ? hash : 'dashboard';
+                        console.log(`🎯 القسم المستهدف من الرابط: ${targetSection}`);
+                        
+                        // تحميل القسم المطلوب
+                        await loadCurrentSection(targetSection);
+                        
+                        // تفعيل القسم في الواجهة
+                        document.querySelectorAll('.admin-tab').forEach(tab => {
+                            tab.classList.remove('active');
+                            if (tab.getAttribute('data-tab') === targetSection) {
+                                tab.classList.add('active');
+                            }
+                        });
+                        
+                        document.querySelectorAll('.admin-tab-content').forEach(content => {
+                            content.classList.remove('active');
+                        });
+                        
+                        const targetContent = document.getElementById(targetSection);
+                        if (targetContent) {
+                            targetContent.classList.add('active');
+                        }
+                        
+                        console.log(`✅ تم تحميل لوحة التحكم بالكامل - القسم: ${targetSection}`);
                         
                     } else {
                         // مستخدم غير موجود في قاعدة البيانات
@@ -200,48 +316,6 @@ document.addEventListener('DOMContentLoaded', async () => {
         window.location.href = 'login.html';
     }
 });
-
-/**
- * التبديل بين التبويبات
- */
-window.switchTab = async function(tabId) {
-    console.log(`🔄 التبديل إلى تبويب: ${tabId}`);
-    
-    // التحقق من الصلاحية
-    if (typeof window.checkAdmin === 'function' && !window.checkAdmin()) {
-        console.warn('⚠️ فشل التحقق من الصلاحية');
-        return;
-    }
-
-    // قطع اتصال جميع المراقبين قبل تغيير التبويب
-    disconnectAllObservers();
-
-    // تحديث الأزرار النشطة
-    document.querySelectorAll('.admin-tab').forEach(tab => {
-        tab.classList.remove('active');
-        if (tab.getAttribute('data-tab') === tabId) {
-            tab.classList.add('active');
-        }
-    });
-
-    // إخفاء جميع الأقسام وإظهار المستهدف
-    document.querySelectorAll('.admin-tab-content').forEach(content => {
-        content.classList.remove('active');
-    });
-    
-    const targetContent = document.getElementById(tabId);
-    if (targetContent) {
-        targetContent.classList.add('active');
-    } else {
-        console.warn(`⚠️ القسم ${tabId} غير موجود في DOM`);
-    }
-
-    // التمرير للأعلى
-    window.scrollTo({ top: 0, behavior: 'smooth' });
-
-    // تحميل بيانات القسم المختار
-    await loadCurrentSection(tabId);
-};
 
 // تحميل بيانات القسم الحالي
 async function loadCurrentSection(sectionId) {
@@ -274,7 +348,7 @@ async function loadCurrentSection(sectionId) {
             case 'categories':
                 if (typeof window.loadCategories === 'function') {
                     console.log('🔄 جاري تحميل الفئات...');
-                    await window.loadCategories();
+                    await window.loadCategories(false);
                     console.log('✅ تم تحميل الفئات بنجاح');
                 } else {
                     console.error('❌ دالة loadCategories غير معرفة');
@@ -427,4 +501,4 @@ window.checkRequiredFunctions = function() {
 };
 
 // تسجيل رسالة نجاح التحميل
-console.log('✅ تم تحميل admin-new-core.js بنجاح (نسخة مصلحة)');
+console.log('✅ تم تحميل admin-new-core.js بنجاح (نسخة مصلحة مع Hash Routing)');

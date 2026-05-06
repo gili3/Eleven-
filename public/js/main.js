@@ -1,4 +1,97 @@
 // main.js - نظام التطبيق الرئيسي (نسخة محسنة ومؤمنة)
+// ======================== نظام التوجيه والمشاركة ========================
+
+window.navigateTo = function(sectionId, queryParams = {}) {
+    let hash = sectionId;
+    const params = new URLSearchParams(queryParams).toString();
+    if (params) hash += '?' + params;
+    window.location.hash = hash;
+};
+
+window.shareProduct = function(productId) {
+    const url = `${window.location.origin}${window.location.pathname}#products?id=${productId}`;
+    if (navigator.share) {
+        navigator.share({ title: 'منتج من متجر إليفن', url }).catch(() => {});
+    } else {
+        navigator.clipboard.writeText(url).then(() => {
+            if (typeof showToast === 'function') showToast('تم نسخ رابط المنتج', 'success');
+        }).catch(() => prompt('انسخ الرابط:', url));
+    }
+};
+
+window.addEventListener('hashchange', function() {
+    const hash = window.location.hash.substring(1) || 'home';
+    const [base, queryString] = hash.split('?');
+    const params = new URLSearchParams(queryString || '');
+
+    // دعم جميع الأقسام الصالحة
+    const validSections = ['home', 'products', 'favorites', 'cart', 'checkout', 
+                          'profile', 'about', 'contact', 'my-orders', 'orderTracking'];
+    
+    if (validSections.includes(base) && document.getElementById(base)) {
+        showSection(base);
+        
+        // معالجة خاصة لكل قسم مع المعلمات
+        switch(base) {
+            case 'products':
+                if (params.get('id')) {
+                    setTimeout(() => {
+                        if (typeof window.openProductDetails === 'function') {
+                            window.openProductDetails(params.get('id'));
+                        }
+                    }, 800);
+                } else if (params.get('q')) {
+                    setTimeout(() => {
+                        if (typeof window.executeSearch === 'function') {
+                            window.executeSearch(params.get('q'));
+                        }
+                    }, 500);
+                }
+                break;
+                
+            case 'checkout':
+                setTimeout(() => {
+                    if (typeof window.updateCheckoutSummary === 'function') {
+                        window.updateCheckoutSummary();
+                    }
+                }, 300);
+                break;
+                
+            case 'profile':
+                setTimeout(() => {
+                    if (typeof window.updateUserProfile === 'function') {
+                        window.updateUserProfile();
+                    }
+                }, 300);
+                break;
+                
+            case 'my-orders':
+                setTimeout(() => {
+                    if (typeof window.checkAndLoadOrders === 'function') {
+                        window.checkAndLoadOrders();
+                    }
+                }, 300);
+                break;
+                
+            case 'cart':
+                setTimeout(() => {
+                    if (typeof window.forceUpdateCartDisplay === 'function') {
+                        window.forceUpdateCartDisplay();
+                    }
+                }, 200);
+                break;
+                
+            case 'favorites':
+                setTimeout(() => {
+                    if (typeof window.updateFavoritesDisplay === 'function') {
+                        window.updateFavoritesDisplay();
+                    }
+                }, 200);
+                break;
+        }
+    }
+});
+
 // ======================== تهيئة التطبيق ================================
 
 async function initializeAppSafely() {
@@ -7,7 +100,6 @@ async function initializeAppSafely() {
         return;
     }
     
-    // الانتظار حتى يتم تحميل وحدات Firebase
     if (!window.firebaseModules) {
         console.log('⏳ بانتظار تحميل وحدات Firebase...');
         window.addEventListener('firebase-ready', () => initializeAppSafely(), { once: true });
@@ -17,7 +109,6 @@ async function initializeAppSafely() {
     console.log('🚀 بدء تهيئة التطبيق (الإصدار المحسن)...');
     window.appInitialized = true;
 
-    // تهيئة نظام الأمان الشامل
     if (window.SecurityCore && typeof window.SecurityCore.init === 'function') {
         try {
             window.SecurityCore.init();
@@ -27,7 +118,6 @@ async function initializeAppSafely() {
         }
     }
     
-    // تهيئة Firebase بشكل غير متزامن
     const firebaseReady = await window.initializeFirebaseUnified();
     if (!firebaseReady) {
         CoreUtils.hideLoadingSpinner();
@@ -35,7 +125,6 @@ async function initializeAppSafely() {
         return;
     }
 
-    // ✅ إرسال إعدادات Firebase للـ Service Worker (للإشعارات)
     if ('serviceWorker' in navigator && navigator.serviceWorker.controller) {
         navigator.serviceWorker.controller.postMessage({
             type: 'FIREBASE_CONFIG',
@@ -45,13 +134,11 @@ async function initializeAppSafely() {
     }
     
     try {
-        // تحميل البيانات الأساسية والتهيئة الأولية بالتوازي
         const initialTasks = [
             loadSiteConfig(),
             loadThemeColors()
         ];
         
-        // إضافة تحميل الفئات للمهام المتوازية
         if (typeof window.loadCategoriesFromFirebase === 'function') {
             initialTasks.push(window.loadCategoriesFromFirebase());
         }
@@ -61,16 +148,17 @@ async function initializeAppSafely() {
         setupAllEventListeners();
         setupSmartHeader();
         
-        // التحقق من حالة المستخدم
+        if (typeof window.initSearchSystem === 'function') {
+            window.initSearchSystem();
+        }
+        
         window.firebaseModules.onAuthStateChanged(window.auth, async (user) => {
             try {
                 console.log('🔄 تغيرت حالة المصادقة:', user ? 'مستخدم مسجل' : 'لا يوجد مستخدم');
                 
                 if (user) {
-                    // مستخدم مسجل دخول
                     await checkAdminPermissions(user.uid);
                     
-                    // جلب بيانات المستخدم الإضافية من Firestore
                     const userDoc = await window.firebaseModules.getDoc(
                         window.firebaseModules.doc(window.db, 'users', user.uid)
                     );
@@ -87,16 +175,13 @@ async function initializeAppSafely() {
                         ...userData
                     }, false);
                     
-                    // تحميل البيانات من Firestore
                     await syncUserDataFromFirestore();
                     
-                    // تحديث الواجهة
                     if (typeof updateUserProfile === 'function') updateUserProfile();
                     if (typeof updateCartCount === 'function') updateCartCount();
                     if (typeof updateAdminButton === 'function') updateAdminButton();
                     
                 } else {
-                    // لا يوجد مستخدم - التحقق من وجود ضيف
                     const guestUser = sessionStorage.getItem('guest_user');
                     if (guestUser) {
                         try {
@@ -112,8 +197,11 @@ async function initializeAppSafely() {
                     if (typeof updateAdminButton === 'function') updateAdminButton();
                 }
                 
-                // إخفاء شاشة التحميل
                 if (typeof hideLoader === 'function') hideLoader();
+                
+                if (window.location.hash) {
+                    window.dispatchEvent(new Event('hashchange'));
+                }
                 
             } catch (error) {
                 ErrorHandler.handle(error, 'onAuthStateChanged');
@@ -121,7 +209,6 @@ async function initializeAppSafely() {
             }
         });
         
-        // تهيئة الصفحة الرئيسية
         setTimeout(() => {
             try {
                 if (typeof initializeHomePage === 'function') {
@@ -165,7 +252,6 @@ function forceHideLoader() {
     window.isLoading = false;
 }
 
-// إخفاء التحميل بعد 8 ثوان كحد أقصى
 setTimeout(forceHideLoader, 8000);
 
 // ======================== تحميل إعدادات الموقع ========================
@@ -593,10 +679,17 @@ function updateAdminButton() {
 function showSection(sectionId) {
     console.log(`📱 التبديل إلى: ${sectionId}`);
     
+    // تحديث الرابط بدون إعادة تحميل
+    if (window.location.hash.substring(1) !== sectionId) {
+        history.pushState(null, '', `#${sectionId}`);
+    }
+    
+    // إعادة تعيين المراقبين
     if (typeof window.resetObservers === 'function') {
         window.resetObservers();
     }
     
+    // التمرير للأعلى
     window.scrollTo({ top: 0, behavior: 'smooth' });
     
     const activeSection = document.getElementById(sectionId);
@@ -604,76 +697,99 @@ function showSection(sectionId) {
         activeSection.scrollTop = 0;
     }
 
+    // تحديث التنقل النشط
     document.querySelectorAll('.nav-item, .mobile-nav-links a').forEach(item => {
-        if (item.getAttribute('data-section') === sectionId) {
+        const itemSection = item.getAttribute('data-section');
+        if (itemSection === sectionId || 
+            (sectionId === 'my-orders' && itemSection === 'orders')) {
             item.classList.add('active');
         } else {
             item.classList.remove('active');
         }
     });
     
-    if (sectionId === 'cart') {
-        if (typeof window.updateCartDisplay === 'function') window.updateCartDisplay();
-    } else if (sectionId === 'favorites') {
-        if (typeof window.updateFavoritesDisplay === 'function') window.updateFavoritesDisplay();
-    } else if (sectionId === 'home') {
-        if (typeof window.initializeHomePage === 'function') {
-            setTimeout(() => window.initializeHomePage(), 100);
-        }
-    } else if (sectionId === 'products') {
-        const productsGrid = document.getElementById('productsGrid');
-        if (productsGrid && productsGrid.children.length === 0) {
-            if (typeof window.loadProducts === 'function') {
-                window.loadProducts(false);
+    // معالجة خاصة لكل قسم
+    const sectionHandlers = {
+        'cart': () => {
+            if (typeof window.forceUpdateCartDisplay === 'function') {
+                window.forceUpdateCartDisplay();
             }
-        } else {
-            if (typeof window.resetObservers === 'function') {
-                window.resetObservers();
+        },
+        'favorites': () => {
+            if (typeof window.updateFavoritesDisplay === 'function') {
+                window.updateFavoritesDisplay();
             }
-        }
-    } else if (sectionId === 'orders' || sectionId === 'my-orders') {
-        console.log('📦 التبديل إلى قسم الطلبات');
-        
-        setTimeout(() => {
-            if (typeof window.checkAndLoadOrders === 'function') {
-                window.checkAndLoadOrders();
-            } 
-            else if (typeof window.loadMyOrders === 'function') {
-                if (window.resetOrdersState) {
-                    window.resetOrdersState();
-                } else {
-                    if (window.lastOrderDoc !== undefined) window.lastOrderDoc = null;
-                    if (window.hasMoreOrders !== undefined) window.hasMoreOrders = true;
-                    if (window.isOrdersLoading !== undefined) window.isOrdersLoading = false;
+        },
+        'checkout': () => {
+            setTimeout(() => {
+                if (typeof window.updateCheckoutSummary === 'function') {
+                    window.updateCheckoutSummary();
                 }
-                window.loadMyOrders(false);
+            }, 200);
+        },
+        'profile': () => {
+            setTimeout(() => {
+                if (typeof window.updateUserProfile === 'function') {
+                    window.updateUserProfile();
+                }
+            }, 200);
+        },
+        'home': () => {
+            if (typeof window.initializeHomePage === 'function') {
+                setTimeout(() => window.initializeHomePage(), 100);
             }
-        }, 100);
-    }
-
+        },
+        'products': () => {
+            setTimeout(() => {
+                if (typeof window.initializeProductsPage === 'function') {
+                    window.initializeProductsPage();
+                } else if (typeof window.loadProducts === 'function') {
+                    window.loadProducts(false);
+                }
+            }, 100);
+        },
+        'my-orders': () => {
+            setTimeout(() => {
+                if (typeof window.checkAndLoadOrders === 'function') {
+                    window.checkAndLoadOrders();
+                } else if (typeof window.loadMyOrders === 'function') {
+                    if (typeof window.resetOrdersState === 'function') {
+                        window.resetOrdersState();
+                    }
+                    window.loadMyOrders(false);
+                }
+            }, 100);
+        }
+    };
+    
+    // تنفيذ المعالج المناسب
+    const handler = sectionHandlers[sectionId];
+    if (handler) handler();
+    
+    // تحديث سجل التنقل
     if (!AppState.navigationHistory.includes(sectionId)) {
         AppState.navigationHistory.push(sectionId);
     }
-
+    
+    // تحديث حالة الهيدر
     updateHeaderState(sectionId);
-
+    
+    // تبديل الأقسام
     document.querySelectorAll('.section').forEach(sec => {
         if (sec) sec.classList.remove('active');
     });
-
+    
     const targetSection = document.getElementById(sectionId);
     if (targetSection) {
         targetSection.classList.add('active');
-        
-        window.scrollTo({ top: 0, behavior: 'instant' });
-        document.documentElement.scrollTop = 0;
-        document.body.scrollTop = 0;
     }
     
+    // إطلاق حدث تغيير القسم
     document.dispatchEvent(new CustomEvent('sectionChanged', { 
         detail: { section: sectionId } 
     }));
     
+    // إعادة إعداد المراقبين
     setTimeout(() => {
         if (typeof window.resetObservers === 'function') {
             window.resetObservers();
@@ -738,6 +854,82 @@ async function signOutUser() {
     }
 }
 
+// ======================== نظام البحث ========================
+
+function initSearchSystem() {
+    console.log('🔍 تهيئة نظام البحث...');
+    
+    const searchInput = document.getElementById('searchInput');
+    const searchBtn = document.getElementById('searchBtn');
+    
+    if (searchInput) {
+        searchInput.addEventListener('keypress', function(e) {
+            if (e.key === 'Enter') {
+                e.preventDefault();
+                const query = this.value.trim();
+                if (query.length >= 2) {
+                    executeSearch(query);
+                }
+            }
+        });
+    }
+    
+    if (searchBtn) {
+        searchBtn.addEventListener('click', function() {
+            const query = searchInput ? searchInput.value.trim() : '';
+            if (query.length >= 2) {
+                executeSearch(query);
+            }
+        });
+    }
+    
+    console.log('✅ نظام البحث جاهز (يبحث فقط عند Enter أو زر البحث)');
+}
+
+function executeSearch(query) {
+    console.log('🔍 تنفيذ البحث:', query);
+    
+    // تنظيف البحث
+    const cleanQuery = query.trim();
+    if (!cleanQuery || cleanQuery.length < 2) {
+        if (typeof showToast === 'function') showToast('اكتب كلمتين على الأقل للبحث', 'info');
+        return;
+    }
+    
+    // التأكد من وجود allProducts
+    if (!window.allProducts || window.allProducts.length === 0) {
+        if (typeof showToast === 'function') showToast('جاري تحميل المنتجات...', 'info');
+        // محاولة تحميل المنتجات أولاً
+        if (typeof window.fetchAllActiveProducts === 'function') {
+            window.fetchAllActiveProducts().then(products => {
+                window.allProducts = products;
+                if (typeof window.dispatchProductsLoaded === 'function') {
+                    window.dispatchProductsLoaded(products);
+                }
+                if (typeof window.performSearchWithProducts === 'function') {
+                    window.performSearchWithProducts(cleanQuery);
+                }
+            });
+        }
+        return;
+    }
+    
+    if (typeof window.performSearchWithProducts === 'function') {
+        window.performSearchWithProducts(cleanQuery);
+    }
+}
+
+function performSearch() {
+    const searchInput = document.getElementById('searchInput');
+    if (!searchInput) return;
+    
+    const searchTerm = searchInput.value.trim();
+    
+    if (searchTerm.length >= 2) {
+        executeSearch(searchTerm);
+    }
+}
+
 // ======================== إعداد الأحداث ========================
 
 function setupAllEventListeners() {
@@ -777,7 +969,7 @@ function setupNavigationEventListeners() {
         link.addEventListener('click', function(e) {
             e.preventDefault();
             const sectionId = this.getAttribute('data-section');
-            if(document.querySelector(".section.active")?.id !== sectionId) showSection(sectionId);
+            navigateTo(sectionId);
             closeMenuFunc();
         });
     });
@@ -794,12 +986,12 @@ function setupNavigationEventListeners() {
 
 function setupAppEventListeners() {
     const buttons = {
-        'continueShoppingBtn': () => showSection('products'),
-        'browseProductsBtn': () => showSection('products'),
-        'homeBtn': () => showSection('home'),
-        'cartBtn': () => showSection('cart'),
-        'favoritesBtn': () => showSection('favorites'),
-        'profileBtn': () => showSection('profile'),
+        'continueShoppingBtn': () => navigateTo('products'),
+        'browseProductsBtn': () => navigateTo('products'),
+        'homeBtn': () => navigateTo('home'),
+        'cartBtn': () => navigateTo('cart'),
+        'favoritesBtn': () => navigateTo('favorites'),
+        'profileBtn': () => navigateTo('profile'),
         'logoutBtn': signOutUser,
         'editProfileBtn': (typeof editProfile === 'function') ? editProfile : null,
         'saveProfileBtn': (typeof saveProfileChanges === 'function') ? saveProfileChanges : null,
@@ -811,17 +1003,6 @@ function setupAppEventListeners() {
         if (btn && action && typeof action === 'function') {
             btn.addEventListener('click', action);
         }
-    }
-    
-    const searchBtn = document.getElementById('searchBtn');
-    const searchInput = document.getElementById('searchInput');
-    
-    if (searchBtn && searchInput) {
-        searchBtn.addEventListener('click', performSearch);
-        searchInput.addEventListener('input', debounce(performSearch, 500));
-        searchInput.addEventListener('keypress', (e) => {
-            if (e.key === 'Enter') performSearch();
-        });
     }
 }
 
@@ -866,29 +1047,32 @@ function setupFilterEventListeners() {
         categoryFilter.addEventListener('change', function(e) {
             e.preventDefault();
             const categoryId = this.value;
-            console.log('📁 تغيير فلتر الفئة من القائمة:', categoryId);
+            console.log('📁 تغيير فلتر الفئة:', categoryId);
             
             if (typeof window.filterByCategory === 'function') {
                 window.filterByCategory(categoryId);
-            } else {
-                if (typeof window.resetProductsState === 'function') {
-                    window.resetProductsState();
-                }
-                if (typeof window.loadProducts === 'function') {
-                    window.currentCategoryId = categoryId;
-                    window.loadProducts(false);
-                }
             }
         });
     }
     
-    document.querySelectorAll('.category-btn').forEach(btn => {
+    document.querySelectorAll('.filter-btn').forEach(btn => {
         btn.addEventListener('click', function(e) {
             e.preventDefault();
-            const categoryId = this.getAttribute('data-category-id') || '';
-            if (typeof window.filterByCategory === 'function') window.filterByCategory(categoryId);
+            const filterType = this.getAttribute('data-filter');
+            if (typeof window.toggleFilter === 'function') {
+                window.toggleFilter(filterType);
+            }
         });
     });
+    
+    const sortFilter = document.getElementById('sortFilter');
+    if (sortFilter) {
+        sortFilter.addEventListener('change', function(e) {
+            if (typeof window.changeSort === 'function') {
+                window.changeSort(this.value);
+            }
+        });
+    }
     
     console.log('✅ تم إعداد جميع مستمعات أحداث الفلاتر');
 }
@@ -903,36 +1087,6 @@ function debounce(func, wait) {
         clearTimeout(timeout);
         timeout = setTimeout(later, wait);
     };
-}
-
-function performSearch() {
-    const searchInput = document.getElementById('searchInput');
-    if (!searchInput) return;
-    
-    const searchTerm = searchInput.value.trim().toLowerCase();
-    
-    clearTimeout(window.searchDebounceTimer);
-    window.searchDebounceTimer = setTimeout(() => {
-        const currentSection = document.querySelector('.section.active');
-        if (!currentSection || currentSection.id !== 'products') {
-            showSection('products');
-        }
-
-        if (typeof window.resetProductsState === 'function') {
-            window.resetProductsState();
-        }
-        
-        const categoryFilter = document.getElementById('categoryFilter');
-        if (categoryFilter) categoryFilter.value = '';
-        
-        if (typeof window.filterByCategory === 'function') {
-            window.filterByCategory('');
-        } else {
-            if (typeof loadProducts === 'function') {
-                loadProducts(false);
-            }
-        }
-    }, 300);
 }
 
 function setupSmartHeader() {
@@ -1013,6 +1167,10 @@ window.addEventListener('load', function() {
             window.updateCategoriesOnLoad();
         }
     }, 500);
+    
+    if (window.location.hash) {
+        window.dispatchEvent(new Event('hashchange'));
+    }
 });
 
 window.addEventListener('error', function(e) {
@@ -1032,7 +1190,11 @@ window.addEventListener('unhandledrejection', function(e) {
 // تصدير الدوال العامة
 window.initializeAppSafely = initializeAppSafely;
 window.showSection = showSection;
+window.navigateTo = navigateTo;
+window.shareProduct = shareProduct;
 window.performSearch = performSearch;
+window.executeSearch = executeSearch;
+window.initSearchSystem = initSearchSystem;
 window.goBack = goBack;
 window.signOutUser = signOutUser;
 window.checkAdminPermissions = checkAdminPermissions;

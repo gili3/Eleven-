@@ -105,7 +105,6 @@ function setupMessagesInfiniteScroll() {
     messagesObserver.observe(sentinel);
 }
 
-// ✅ إصلاح: دعم التحميل الإضافي
 function displayMessages(append = false) {
     const tbody = document.getElementById('messagesBody');
     if (!tbody) return;
@@ -149,7 +148,6 @@ function displayMessages(append = false) {
         `;
     }).join('');
 
-    // ✅ إصلاح: دعم الإضافة
     if (append) {
         tbody.insertAdjacentHTML('beforeend', html);
     } else {
@@ -157,7 +155,6 @@ function displayMessages(append = false) {
     }
 }
 
-// ✅ عرض الرسالة
 window.viewMessage = function(messageId) {
     if (!window.checkAdmin()) return;
     const message = allMessages.find(m => m.id === messageId);
@@ -216,7 +213,6 @@ async function updateMessageStatus(messageId, status) {
     }
 }
 
-// ✅ الرد على الرسالة
 window.replyMessage = function(messageId) {
     const message = allMessages.find(m => m.id === messageId);
     if (!message) return;
@@ -258,7 +254,6 @@ window.replyMessage = function(messageId) {
     });
 };
 
-// ✅ حذف الرسالة
 window.deleteMessage = async function(messageId) {
     if (!window.checkAdmin()) return;
     
@@ -352,7 +347,6 @@ function setupReviewsInfiniteScroll() {
     reviewsObserver.observe(sentinel);
 }
 
-// ✅ إصلاح: دعم التحميل الإضافي مع window. في الأزرار
 function displayReviews(append = false) {
     const tbody = document.getElementById('reviewsBody');
     if (!tbody) return;
@@ -402,7 +396,6 @@ function displayReviews(append = false) {
     }
 }
 
-// ✅ تحديث حالة التقييم
 window.updateReviewStatus = async function(reviewId, status) {
     if (!window.checkAdmin()) return;
     
@@ -425,7 +418,6 @@ window.updateReviewStatus = async function(reviewId, status) {
     }
 };
 
-// ✅ حذف التقييم
 window.deleteReview = async function(reviewId) {
     if (!window.checkAdmin()) return;
     
@@ -445,31 +437,16 @@ window.deleteReview = async function(reviewId) {
     });
 };
 
-// --- تحميل الفئات ---
-async function loadCategories() {
-    try {
-        const { db, firebaseModules } = window;
-        const q = firebaseModules.query(
-            firebaseModules.collection(db, 'categories'), 
-            firebaseModules.orderBy('createdAt', 'desc')
-        );
-        const snapshot = await firebaseModules.getDocs(q);
-        
-        window.allCategories = [];
-        snapshot.forEach(doc => window.allCategories.push({ id: doc.id, ...doc.data() }));
-        
-        console.log(`✅ تم تحميل ${window.allCategories.length} فئة`);
-    } catch (error) { 
-        console.error('❌ خطأ في تحميل الفئات:', error);
-        ErrorHandler.handle(error, 'loadCategories');
-    }
-}
-
 // ==================== التهيئة ====================
 
 document.addEventListener('DOMContentLoaded', () => {
     if (document.getElementById('messagesBody')) loadMessages();
     if (document.getElementById('reviewsBody')) loadReviews();
+    
+    // ✅ إذا كانت صفحة التقييمات تحتاج الفئات، نعتمد على categories.js فقط
+    if (document.getElementById('reviewsBody') && !window.loadCategories) {
+        console.warn('⚠️ انتظر تحميل categories.js أولاً');
+    }
 });
 
 // ✅ تعريض الدوال
@@ -480,4 +457,3 @@ window.deleteMessage = window.deleteMessage;
 window.loadReviews = loadReviews;
 window.updateReviewStatus = window.updateReviewStatus;
 window.deleteReview = window.deleteReview;
-window.loadCategories = loadCategories;
